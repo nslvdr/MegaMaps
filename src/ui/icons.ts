@@ -5,6 +5,7 @@ export const icons = {
     '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15M15 6v15"/>',
   ),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  share: svg('<path d="M12 16V3m-4 4 4-4 4 4M5 12v8h14v-8"/>'),
   close: svg('<path d="m6 6 12 12M18 6 6 18"/>'),
   invert: svg(
     '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/>',

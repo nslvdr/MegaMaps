@@ -124,6 +124,14 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 
 Notes, routes, camera and display settings are saved locally in a separate IndexedDB store. Camera writes are throttled and flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
 
+## Sharing maps and annotations
+
+Use a map's **Share** icon in the library, **Saved → Share map or selected items** in the viewer, or a place/route's **⋯ → Share**. Choose annotations, optionally include the original map image, and send the `.megamap` file through the device's share sheet or **Save file**. The export shows its size before sending.
+
+Friends use **Import shared** in the library to review the file and choose an existing map or a separate copy. Annotation-only files require a locally available map; a new copy requires the exact original image. Exact image fingerprints identify renamed maps. Other existing maps of the same dimensions require an alignment preview and confirmation.
+
+Received items are independently editable. Reimporting skips previously imported items, preserves edits and deletions, and adds new items. Export/import work offline without accounts or a sharing server. See [sharing.md](docs/sharing.md) for the format and verification limits.
+
 ## Test
 
 ```sh

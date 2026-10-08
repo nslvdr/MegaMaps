@@ -47,6 +47,8 @@ export interface NavigationState {
   touchLocked: boolean;
   markers: MapMarker[];
   routes: PlannedRoute[];
+  /** Stable imported identities, retained when an imported item is deleted. */
+  importedItems?: string[];
   layers: Layers;
 }
 /** Slightly dimmed by default so routes and places stand out from the map. */

@@ -5,6 +5,7 @@ import {
   type NavigationState,
 } from "../viewer/navigation";
 import type { MapRecord } from "../types";
+import { preserveUnseenImports } from "../sharing/annotations";
 export async function loadNavigation(mapId: string) {
   const stored = await transact<NavigationState | undefined>(
     "navigation",
@@ -29,8 +30,11 @@ export async function saveNavigation(state: NavigationState) {
       .objectStore("maps")
       .get(state.mapId);
     request.onsuccess = () => {
-      if (request.result?.status === "ready")
-        tx.objectStore("navigation").put(state);
+      if (request.result?.status === "ready") {
+        const navigation = tx.objectStore("navigation");
+        const saved: IDBRequest<NavigationState | undefined> = navigation.get(state.mapId);
+        saved.onsuccess = () => navigation.put(preserveUnseenImports(state, saved.result));
+      }
     };
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(tx.error);

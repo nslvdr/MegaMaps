@@ -51,7 +51,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     jumps: Point[] = [];
   // A touch lock saved by an older version must not trap the map.
   state.touchLocked = true;
-  const controls = new ViewerControls(root, map, state);
+  const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
+  const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   controls.attach({
     setTool(tool: string) {
@@ -288,9 +289,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(popover()?.getAttribute("role"), "menu");
     assert.deepEqual(
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
-      ["Edit", "Move", "Delete"],
+      ["Edit", "Move", "Share", "Delete"],
     );
     assert.equal(placeMore().getAttribute("aria-expanded"), "true");
+    [...popover()!.querySelectorAll("button")].find((button) => button.textContent === "Share")!
+      .dispatchEvent(new window.Event("click"));
+    assert.deepEqual(shares.at(-1), { kind: "marker", id: state.markers[0]!.id });
+    assert.equal(state.markers.length, 1, "sharing does not modify the selected place");
+    placeMore().dispatchEvent(new window.Event("click"));
     // Tapping elsewhere closes it; so does Escape, before the panel.
     document.body.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
     assert.equal(popover(), null);
@@ -440,8 +446,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     openMenu();
     assert.deepEqual(
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
-      ["Edit points", "Rename", "Delete"],
+      ["Edit points", "Rename", "Share", "Delete"],
     );
+    rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
+    assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
+    click("share-saved");
+    assert.equal(shares.at(-1), undefined, "the map-level action opens selection of all annotations");
+    openMenu();
     rowButton(/Rename/).dispatchEvent(new window.Event("click"));
     input("name-input", "Exit plan");
     submit("name-form");

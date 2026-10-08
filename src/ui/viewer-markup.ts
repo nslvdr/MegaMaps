@@ -63,6 +63,7 @@ export const viewerMarkup = `
       <button id="spotlight" class="panel-action spotlight-action">${icons.sparkle}<span>Highlight</span></button>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>
+      <button id="share-saved" class="panel-action">${icons.share}<span>Share map or selected items</span></button>
       <h3 class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>
       <div id="route-list" class="panel-card navigation-list"></div>
       <h3 class="section-title places">${icons.pin}<span>Places</span><small id="saved-places-count"></small></h3>
