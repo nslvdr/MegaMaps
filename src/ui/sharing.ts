@@ -9,14 +9,14 @@ import { formatBytes } from "./format";
 export const sharingMarkup = `
 <input id="shared-file-input" type="file" accept=".megamap,application/octet-stream" hidden>
 <dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><h2 id="share-title">Share map</h2><p id="share-map-name"></p><p id="share-loading" role="status">Preparing share…</p>
-<div id="share-content" hidden><div class="share-selection-actions"><button id="share-all" class="secondary">Select all</button><button id="share-none" class="secondary">Clear selection</button></div><div id="share-items" class="share-items" role="group" aria-label="Annotations to share"></div>
+<div id="share-content" hidden><div id="share-selection" class="share-selection-actions"><button id="share-all" class="secondary">Select all</button><button id="share-none" class="secondary">Clear selection</button></div><div id="share-items" class="share-items" role="group" aria-label="Annotations to share"></div>
 <label class="share-choice"><input id="share-image" type="checkbox"><span>Include map image<small>Your friend can import it without finding the original.</small></span></label><p id="share-size" role="status" aria-live="polite"></p><p class="dialog-note">Your friend receives an editable copy. Sending it again adds new items and keeps their edits.</p></div>
-<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-cancel" class="secondary">Cancel</button><button id="share-save" class="secondary" disabled>Save file</button><button id="share-send" class="primary" disabled>Share file</button></div></dialog>
+<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>Share file</button><button id="share-save" class="secondary" disabled>Save file</button><button id="share-cancel" class="quiet">Cancel</button></div></dialog>
 <dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title"><h2 id="receive-title">Import shared map</h2><p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
 <div id="receive-content" hidden><label class="share-field">Destination<select id="receive-destination"></select></label><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label>
 <p id="receive-match" class="dialog-note"></p><div id="receive-preview" class="share-preview" aria-label="Preview of shared annotations on the selected map" hidden><img id="receive-preview-image" alt="Selected map"><svg id="receive-preview-overlay" aria-hidden="true"></svg></div>
 <label id="receive-confirm-field" class="share-choice" hidden><input id="receive-confirm" type="checkbox"><span>I checked that the annotations line up</span></label><p class="dialog-note">Existing annotations stay intact. Previously imported items are skipped, including items you edited or deleted.</p></div>
-<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-cancel" class="secondary">Cancel</button><button id="receive-import" class="primary" disabled>Import</button></div></dialog>`;
+<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>Import</button><button id="receive-cancel" class="quiet">Cancel</button></div></dialog>`;
 
 export interface ShareDestination { mapId?: string; image?: File; allowDifferentImage: boolean }
 export interface ShareImportResult { map: MapRecord; added: number; skipped: number }
@@ -319,6 +319,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
             label.append(input, span);
             items.append(label);
           }
+        el("share-selection").hidden = !items.childElementCount;
         if (!items.childElementCount) {
           const note = root.ownerDocument.createElement("p");
           note.textContent = "No saved annotations yet. You can share the map image.";
