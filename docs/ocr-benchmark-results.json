@@ -1,0 +1,49 @@
+{
+  "recordedAt": "2026-10-08",
+  "host": "Apple M4 Pro",
+  "node": "v24.9.0",
+  "architecture": "arm64",
+  "baselineCommit": "d5fd29a",
+  "runtime": "ONNX Runtime Web 1.30.0 WASM, numThreads=1; Tesseract.js 7.0.0, English best_int LSTM",
+  "methodology": "Serial initial scan timings; both engines already initialized. Native-canvas/IndexedDB fixtures exercise production scan code. Recognition calls measured on a subsequent baseline verification. No browser, GPU or device timings.",
+  "fixtures": [
+    {
+      "name": "light",
+      "width": 1024,
+      "height": 1024,
+      "labels": 5,
+      "anglesDegrees": [0, 37, 90, 173, 254],
+      "baselineScanMs": 2551.904334,
+      "regionFirstScanMs": 450.965084,
+      "baselineRecognitionCalls": 24,
+      "regionFirstRecognitionCalls": 10,
+      "labelsRetained": 5
+    },
+    {
+      "name": "dark",
+      "width": 512,
+      "height": 512,
+      "labels": 1,
+      "anglesDegrees": [-58],
+      "baselineScanMs": 660.971333,
+      "regionFirstScanMs": 105.9565,
+      "baselineRecognitionCalls": 24,
+      "regionFirstRecognitionCalls": 2,
+      "labelsRetained": 1
+    }
+  ],
+  "regionFirstDetectorSetupMs": 125.60175,
+  "rssSnapshotsMiB": {
+    "baseline": {
+      "light": 380.25,
+      "dark": 393.484375
+    },
+    "regionFirst": {
+      "light": 533.1875,
+      "dark": 548.078125
+    },
+    "note": "Subsequent desktop process snapshots, including Node/native canvas/WASM and allocator retention; not peaks or browser/device measurements."
+  },
+  "offlineAssetIncreaseBytes": 19090796,
+  "rerun": "npm run benchmark:ocr"
+}

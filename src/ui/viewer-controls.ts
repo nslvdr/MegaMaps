@@ -17,7 +17,13 @@ import {
 import { icons } from "./icons";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
-const sheets = ["display", "saved"] as const;
+import {
+  normalizeText,
+  searchOcr,
+  type OcrIndex,
+  type OcrMatch,
+} from "../ocr/index";
+const sheets = ["display", "saved", "search"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number];
 const SPOTLIGHT_MS = 4500;
@@ -31,12 +37,13 @@ const darkMessages: Record<DarkMode["kind"], string> = {
 export class ViewerControls {
   private viewer?: Pick<
     Viewer,
-    | "setTool"
-    | "updateNavigation"
-    | "rotateTo"
-    | "jumpTo"
-    | "fitPoints"
-  >;
+    "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
+  > &
+    Partial<Pick<Viewer, "setSearch">>;
+  private ocr?: OcrIndex;
+  private ocrMessage = "Preparing text detection…";
+  private searchMatches: OcrMatch[] = [];
+  private searchPosition = 0;
   private controller = new AbortController();
   private persistence: NavigationPersistence;
   private tool: Tool = "browse";
@@ -106,6 +113,7 @@ export class ViewerControls {
     return {
       navigation: this.state,
       overlay: this.root.querySelector<SVGSVGElement>("#map-overlay")!,
+      searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
       onView: () => {
         this.persistence.changed();
         this.renderView();
@@ -136,6 +144,8 @@ export class ViewerControls {
   }
   attach(viewer: NonNullable<ViewerControls["viewer"]>) {
     this.viewer = viewer;
+    this.input("map-search").value = "";
+    this.renderSearch();
     this.render();
   }
   private changed() {
@@ -152,6 +162,10 @@ export class ViewerControls {
   }
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;
+    if (previous === "search" && name !== "search") {
+      this.input("map-search").value = "";
+      this.renderSearch();
+    }
     this.choosing = false;
     this.openSheet = name;
     // Row menus start closed each time a panel opens.
@@ -173,7 +187,7 @@ export class ViewerControls {
     }
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
     this.renderTool();
-    if (name) this.el("close-sheet").focus();
+    if (name) this.el(name === "search" ? "map-search" : "close-sheet").focus();
     else if (returnFocus && previous) this.el(`open-${previous}`).focus();
   }
   private choose(open: boolean) {
@@ -213,11 +227,7 @@ export class ViewerControls {
     ))
       input.checked = input.value === kind;
   }
-  private openMarker(
-    title: string,
-    point: Point,
-    marker?: MapMarker,
-  ) {
+  private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? "landmark";
@@ -233,9 +243,9 @@ export class ViewerControls {
     this.notes(!!marker?.note);
     this.dialog("marker-dialog").showModal();
     // The name is prefilled; don't pop the keyboard just to accept it.
-    this.el("marker-dialog").querySelector<HTMLInputElement>(
-      "input[name=marker-kind]:checked",
-    )?.focus();
+    this.el("marker-dialog")
+      .querySelector<HTMLInputElement>("input[name=marker-kind]:checked")
+      ?.focus();
   }
   private notes(open: boolean) {
     this.el("marker-note-field").hidden = !open;
@@ -361,7 +371,9 @@ export class ViewerControls {
       const moved = marker.point.x !== from.x || marker.point.y !== from.y;
       if (!keep) marker.point = from;
       if (moved) {
-        this.toast(keep ? `${marker.label} moved` : `${marker.label} not moved`);
+        this.toast(
+          keep ? `${marker.label} moved` : `${marker.label} not moved`,
+        );
         this.changed();
       }
     }
@@ -390,6 +402,21 @@ export class ViewerControls {
     }, SPOTLIGHT_MS);
   }
   private bind() {
+    this.on(this.input("map-search"), "input", () => this.renderSearch());
+    this.click("clear-search", () => {
+      this.input("map-search").value = "";
+      this.renderSearch();
+      this.input("map-search").focus();
+    });
+    this.click("search-next", () => this.focusSearch(1));
+    this.click("search-previous", () => this.focusSearch(-1));
+    this.on(this.input("map-search"), "keydown", (event) => {
+      const key = event as KeyboardEvent;
+      if (key.key === "Enter") {
+        key.preventDefault();
+        this.focusSearch(key.shiftKey ? -1 : 1);
+      }
+    });
     for (const sheet of sheets)
       this.click(`open-${sheet}`, () =>
         this.sheet(this.openSheet === sheet ? undefined : sheet, true),
@@ -626,7 +653,10 @@ export class ViewerControls {
     const count = route?.points.length ?? 0;
     const texts: Record<Tool, [string, string]> = {
       browse: ["", ""],
-      move: [this.movingPlace()?.label ?? "Place", "Drag the pin, or tap where it goes"],
+      move: [
+        this.movingPlace()?.label ?? "Place",
+        "Drag the pin, or tap where it goes",
+      ],
       marker: ["New place", "Tap the map where it goes"],
       route: [
         `${route?.name ?? "Route"} · ${count} point${count === 1 ? "" : "s"}`,
@@ -795,7 +825,10 @@ export class ViewerControls {
   }
   private render() {
     const rotationLock = this.el("rotation-lock");
-    rotationLock.setAttribute("aria-pressed", String(this.state.rotationLocked));
+    rotationLock.setAttribute(
+      "aria-pressed",
+      String(this.state.rotationLocked),
+    );
     rotationLock.setAttribute(
       "aria-label",
       this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
@@ -933,6 +966,54 @@ export class ViewerControls {
   }
   refreshMetadata() {
     this.render();
+  }
+  // Progress/failures are visible while the map remains usable during indexing.
+  updateOcr(index: OcrIndex | undefined, message = "") {
+    const sameIndex = this.ocr === index;
+    this.ocr = index;
+    this.ocrMessage = message;
+    this.renderSearch(sameIndex);
+  }
+  private renderSearch(statusOnly = false) {
+    const query = this.input("map-search").value;
+    const active = !!normalizeText(query);
+    if (!statusOnly) {
+      this.searchMatches = searchOcr(this.ocr, query);
+      this.searchPosition = -1;
+      this.viewer?.setSearch?.(this.searchMatches, active && !!this.ocr);
+      this.el("search-result").textContent = this.searchMatches.length
+        ? "Show a result"
+        : "";
+    }
+    const count = this.searchMatches.length;
+    const message = !this.ocr
+      ? this.ocrMessage ||
+        "Text detection is not ready. Open the map’s Advanced settings to retry."
+      : active
+        ? count
+          ? `${count} ${count === 1 ? "match" : "matches"}`
+          : "No matching text found."
+        : this.ocr.lines.length
+          ? "Type to highlight matching text. Drag and zoom to explore."
+          : "No text detected. You can rerun detection in the map’s Advanced settings.";
+    this.el("search-status").textContent =
+      this.ocr && this.ocrMessage ? `${message} · ${this.ocrMessage}` : message;
+    this.el("search-navigation").hidden = !count;
+    this.el<HTMLButtonElement>("clear-search").disabled = !query;
+  }
+  private focusSearch(delta: number) {
+    const count = this.searchMatches.length;
+    if (!count) return;
+    this.searchPosition =
+      this.searchPosition < 0
+        ? delta > 0
+          ? 0
+          : count - 1
+        : (this.searchPosition + delta + count) % count;
+    const match = this.searchMatches[this.searchPosition]!;
+    this.viewer?.fitPoints(match.polygons.flat());
+    this.el("search-result").textContent =
+      `${this.searchPosition + 1} / ${count} · ${match.text}`;
   }
   async flush() {
     await this.persistence.flush();

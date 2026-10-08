@@ -26,10 +26,18 @@ import {
   type MapMarker,
 } from "./navigation";
 import { NavigationOverlay } from "./overlays";
-import { darkMode, measureTone, type DarkMode, type MapTone } from "./appearance";
+import {
+  darkMode,
+  measureTone,
+  type DarkMode,
+  type MapTone,
+} from "./appearance";
+import { SearchOverlay } from "./search-overlay";
+import type { OcrMatch } from "../ocr/index";
 export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
+  searchOverlay?: SVGSVGElement;
   onView(): void;
   onTap(point: Point): void;
   onMarker(marker: MapMarker): void;
@@ -44,6 +52,7 @@ export interface ViewerOptions {
 export class Viewer {
   private navigation: NavigationState;
   private overlay?: NavigationOverlay;
+  private searchOverlay?: SearchOverlay;
   private tool: Tool = "browse";
   /** The route being edited or the place being moved. */
   private target?: string;
@@ -76,6 +85,8 @@ export class Viewer {
     if (options) {
       this.overlay = new NavigationOverlay(options.overlay);
       this.overlay.rebuild(this.navigation);
+      if (options.searchOverlay)
+        this.searchOverlay = new SearchOverlay(options.searchOverlay);
     }
     this.cache = new TileCache(
       payloadStore(map.backend),
@@ -261,6 +272,10 @@ export class Viewer {
       tool === "route" ? targetId : undefined,
       tool === "move" ? targetId : undefined,
     );
+    this.invalidate();
+  }
+  setSearch(matches: OcrMatch[], active: boolean) {
+    this.searchOverlay?.set(matches, active);
     this.invalidate();
   }
   updateNavigation(state: NavigationState) {
@@ -564,6 +579,7 @@ export class Viewer {
         height,
       );
     }
+    this.searchOverlay?.draw(this.camera, this.viewport());
     this.overlay?.draw(this.camera, this.viewport());
     if (this.lastFrame && now - this.lastFrame < 100) {
       this.frameTimes.push(now - this.lastFrame);
@@ -601,6 +617,7 @@ export class Viewer {
     this.cache.dispose();
     this.base?.close();
     this.overlay?.dispose();
+    this.searchOverlay?.dispose();
     this.canvas.width = this.canvas.height = 1;
   }
 }

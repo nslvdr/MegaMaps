@@ -297,6 +297,7 @@ h2 {
   flex-direction: column;
   flex-shrink: 0;
 }
+.map-more,
 .rename-map,
 .delete-map {
   display: grid;
@@ -311,6 +312,8 @@ h2 {
 .rename-map {
   color: var(--neon-saved);
 }
+.map-more:hover,
+.map-more:active,
 .rename-map:hover,
 .rename-map:active {
   background: color-mix(in srgb, var(--neon-saved) 12%, #000);
@@ -320,6 +323,7 @@ h2 {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, #000);
 }
+.map-more svg,
 .rename-map svg,
 .delete-map svg {
   width: 20px;
@@ -708,6 +712,14 @@ dialog textarea {
   overflow: hidden;
   transition: filter 0.4s;
 }
+.search-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
 .glass {
   background: var(--glass);
   border: 1px solid var(--glass-line);
@@ -812,6 +824,75 @@ button.glass:active:not(:disabled) {
 #open-display,
 .sheet[data-panel="display"] {
   --c: var(--neon-view);
+}
+#open-search,
+.sheet[data-panel="search"] {
+  --c: var(--neon-saved);
+}
+.search-label {
+  display: block;
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.search-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#map-search {
+  min-width: 0;
+  flex: 1;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--glass-line);
+  background: #000;
+  color: var(--text);
+  font-size: 16px;
+}
+.search-status {
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.search-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.search-navigation span {
+  flex: 1;
+  text-align: center;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.search-navigation button {
+  flex-shrink: 0;
+  padding: 10px;
+}
+.search-navigation svg {
+  width: 20px;
+  height: 20px;
+}
+#search-next svg {
+  transform: rotate(180deg);
+}
+.map-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+.map-options button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.map-options svg {
+  width: 20px;
+  height: 20px;
 }
 #open-add,
 .add-bar,

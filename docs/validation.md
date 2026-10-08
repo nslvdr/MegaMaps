@@ -6,6 +6,32 @@ Cave-tools milestone: **24 tests passed** and strict TypeScript + production Vit
 
 The production service-worker handlers were exercised in a Node VM with network fetching disabled: cold navigation, the module worker, and both codec resources came from the cache. This verifies handler behavior and cache inventory, **not** actual iOS installation/service-worker lifecycle.
 
+## OCR milestone — 2026-10-08
+
+**48 tests passed** and strict TypeScript + production build passed. The shell includes 21 assets, including the OCR owner worker, local Tesseract worker, three embedded-WASM cores and English model. The offline-handler test covers OCR code/model responses with network fetching disabled.
+
+Actual local Tesseract detection on native-canvas fixtures found labels at 0°, 37°, 90°, 173°, 254° and white-on-dark text at −58°, including text crossing native tile boundaries. Tests verify inverse polygon coordinates, bounded crop plans, one live tile decode, case/accent/phrase search, mask alignment under camera rotation, startup cancellation, failure preserving the old index, replacement commits, rename/deletion protection, search controls and upgrades from database versions 1 and 2. These are Node/DOM-adapter tests; no browser automation or physical-device OCR timing, keyboard layout or cold-offline OCR initialization was tested.
+
+## Region-first OCR optimization — 2026-10-08
+
+`npm test` passes all 50 tests, and `npm run build` passes TypeScript and the production build. The offline shell contains 26 assets, including one copy of the detector model and ONNX WebAssembly runtime.
+
+The region-first pipeline preserves the original synthetic labels at 0°, 37°, 90°, 173°, 254° and white-on-dark text at −58°. Additional tests cover model normalization, oriented probability-map decoding, labels crossing an internal section boundary, duplicate suppression, empty detector output, inverse coordinates and cancellation. Existing OCR indexes remain schema-compatible.
+
+On Apple M4 Pro / Node v24.9.0, serial initial scan measurements were 2,552 → 451 ms for the five-label 1024² fixture and 661 → 106 ms for the rotated dark 512² fixture. Detection plus label recognition is included; engine setup is excluded. Recognition calls fell from 24 full-section calls to 10 small label calls for the light fixture and 2 for the dark fixture. ONNX uses the same single-threaded WebAssembly backend shipped in the app, not native ONNX or a GPU. Run `npm run benchmark:ocr` to reproduce current timings while enforcing the accuracy checks; [raw results](ocr-benchmark-results.json) include measured setup and process-memory context.
+
+The detector adds about 19 MB of offline assets and increases inference memory. Node RSS snapshots include the test harness, native-canvas buffers, allocator retention and both engines; they are neither peaks nor Safari process budgets. No browser/physical-device initialization, memory or speed claim is made by these results.
+
+## Five further OCR optimizations — 2026-10-08
+
+All 53 tests and the strict TypeScript/production build pass. The 27-asset offline shell includes the pinned fast English model and its license. Smaller detector input (768 instead of 960), confidence-based reverse reads, `tessdata_fast`, concurrent engine startup and a 4 MiB decoded-tile LRU cache are enabled together. Tiles are drawn column-first to retain the next overlapping section's shared edge.
+
+Three serial runs per variant on the same desktop fixture gave median main scan times of 461 → 277 ms (40% faster), dark scan times of 115 → 97 ms, and startup times of 254 → 200 ms. Main recognition calls fell from 10 to 5; the dark label uses one instead of two. A 2560² overlap fixture checked exact pixels in all nine sections with empty detection to isolate tile assembly: decodes fell from 49 to 35, assembly time from 50.7 to 48.9 ms, and peak decoded tile pixels rose from 1 to the bounded 4 MiB budget. The cache's measured time benefit is modest; decode-count savings do not imply equal total-time savings. [Raw samples and medians](ocr-optimization-results.json) include methodology and limits. `npm run benchmark:ocr` reproduces the current startup, scan and cache checks.
+
+The original rotated labels, the clipped internal section-edge label, 14 px light-background labels in all five tested orientations and 16 px diagonal dark-background text remain searchable. Tests force empty output, low page confidence and low word confidence to verify reverse-direction retries. They also check cache refresh/eviction, transient decode memory, abort after decoding, scan cancellation, missing payloads, concurrent startup failure cleanup and cleanup errors preserving the startup failure.
+
+The fast model and reduced detection resolution can miss or misread text outside these fixtures. Process RSS medians decreased in the desktop runs, but include Node/native canvas/allocator retention and are not process peaks or phone budgets. Physical-device speed, memory and representative-map accuracy remain pending; no browser automation was used.
+
 ## Full image preprocessing benchmarks
 
 Host: Apple M4 Pro, macOS 27.0.1, Node v24.9.0. Each table row used a separate process. Values are rounded.
@@ -57,5 +83,6 @@ Use the **production** HTTPS preview and keep the same origin. No browser/comput
 10. Test default map rotation lock with pinch/twist; unlock, rotate with two fingers and buttons, fit, resize, relock and reopen.
 11. Add/edit notes, plan a return route, close with an unfinished draft, reopen and continue. Jump between saved places and confirm that a map saved with checkpoints by an older version shows them as landmark places. Drag route points while editing (including a second finger mid-drag, which should put the point back and pinch), move a place from its ⋯ menu, and check the ⋯ menu opens upward near the bottom of the panel. Verify overlay alignment through rotation/native zoom and persistence after restart.
 12. Tap **Lock** in the bottom pill: with it on (orange), drag, pinch and double tap still move/zoom but a two-finger twist must not rotate; with it off, twisting rotates and View shows the rotation slider. Reopen the map and confirm the lock state is kept.
+13. Open an older map and verify background text detection starts. In Search, check the phone keyboard, matching words, clear/close, previous/next results and alignment while panning/zooming/rotating. Use ⋯ to rename, stop/rerun detection and delete. Repeat a fresh OCR scan in Airplane Mode after the shell is cached; record detection time and native memory on a large map.
 
 The next engineering decision should follow these device results: tune scanline/cache budgets and import tile encoding before increasing supported formats or implementing future map features.

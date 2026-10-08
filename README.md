@@ -20,6 +20,14 @@ npm run preview
 
 Production preview: **http://localhost:4173**. Import a map, wait for **Available offline** in the footer, then go offline and reload. Keep the same origin/port: browser storage belongs to the origin. Build output is in `dist/` and can be served by any static HTTPS host.
 
+## Search map text
+
+Importing a map also runs local OCR. **Search** in the viewer’s bottom bar opens a text box: matching words remain clear while the rest of the map darkens. Search ignores case and accents, supports phrases and partial words, and offers previous/next controls to frame results. Clearing the query or closing Search restores the normal view.
+
+Older maps automatically run detection when opened if they have no current OCR index. In the library, **Advanced settings (tools icon) → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. Share, Rename and Delete are also available on each map card.
+
+Detection runs a bundled PaddleOCR mobile text detector once per overlapping section, estimates each label’s angle, then straightens and reads only those label crops with Tesseract's fast English LSTM model. A second recognition pass checks the opposite reading direction when the first result has low confidence. The engines start together, detector input is capped at 768 pixels, and a 4 MiB tile cache reuses shared section edges. This supports angled, vertical and upside-down labels; detection is best-effort for tiny, curved, stylized or low-contrast text. Large maps may take several minutes or longer on a phone. Keep the app open until detection finishes. Both engines and models are included in the offline shell; map pixels and detected text never leave the device.
+
 ## Deploy to Cloudflare
 
 The `mega-maps` Worker serves the production files from `dist/` at **https://mega-maps.natan-slvdr.fr** using Cloudflare static assets. The service worker, image-processing workers, and JPEG WASM codec are included in the deployment.
@@ -53,6 +61,7 @@ src/
     database.ts             IndexedDB metadata + transaction commits
     payloads.ts             OPFS / IndexedDB payload abstraction, deletion
     navigation.ts           Saved camera, notes/routes, settings, throttled writes
+    ocr.ts                  Atomic text indexes and deletion protection
     verify.ts / .worker.ts  Offline tile inventory + sequential decode checks
   processing/
     headers.ts              Container metadata without decoding pixels
@@ -69,6 +78,13 @@ src/
     viewer.ts               Viewport canvas, level selection, diagnostics
     navigation.ts           Map tools data in original-image coordinates
     overlays.ts             SVG markers/routes, independent of color inversion
+    search-overlay.ts       Rotated search polygons and screen-space dimming mask
+  ocr/
+    detect.ts / .worker.ts  Background detection lifecycle and cancellation
+    scan.ts                 Bounded sections, straightened labels and coordinates
+    detector.ts             Local ONNX text detector, normalization and disposal
+    regions.ts              Oriented text boxes and overlap suppression
+    index.ts                Text normalization, phrase matching, duplicate removal
   ui/
     viewer-markup.ts         Touch controls, tools panel, local note forms
     viewer-controls.ts       Navigation commands, dialogs and persistence
@@ -77,6 +93,7 @@ public/
   manifest.webmanifest
   icons/                    Local PNG home-screen icons + SVG favicon
   codecs/                   Shipped JPEG JS/WASM + third-party license
+  ocr/                      Generated local OCR workers, WASM cores and models
 native/                     Rebuildable libjpeg wrapper and OPFS memory manager
 scripts/                    SW build, icons, fixtures, decoder rebuild, benchmarks
 tests/                      Decoder, tile, camera, cache, storage, offline tests
@@ -185,4 +202,8 @@ The generated codec is included, so normal development needs no C toolchain. Wit
 npm run build
 ```
 
-The script pins libjpeg-turbo 3.1.2. The source wrappers are in `native/`; licensing is included in `public/codecs/LICENSE-libjpeg.txt`. There are zero production npm dependencies; the canvas and IndexedDB adapters are test-only development dependencies.
+The script pins libjpeg-turbo 3.1.2. The source wrappers are in `native/`; licensing is included in `public/codecs/LICENSE-libjpeg.txt`. OCR uses Tesseract.js and ONNX Runtime Web; the canvas and IndexedDB adapters are test-only development dependencies.
+
+### OCR performance check
+
+Run `npm run benchmark:ocr` to time concurrent engine startup, the real local detector/recognizer, and overlapping tile assembly against accuracy fixtures. The initial region-first change was about six times faster than the 24-angle sweep. The five further optimizations reduced the main fixture by another 40% (461 → 277 ms, median of three runs), with all tested labels retained, including 14–16 px text. See [initial results](docs/ocr-benchmark-results.json) and [combined optimization results](docs/ocr-optimization-results.json). These are desktop synthetic measurements, not phone timings. The fast model and smaller detector input can reduce accuracy on other maps; the 4 MiB tile cache adds bounded decoded memory. The detector/runtime adds about 19 MB to the cached shell and increases inference memory; physical-device checks remain pending. Existing indexes remain valid; rerun detection in Advanced settings to use the new pipeline.

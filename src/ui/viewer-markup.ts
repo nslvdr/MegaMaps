@@ -22,12 +22,13 @@ const kindPicks = Object.entries(markerKinds)
 //                   cancel) while Place / Route, then the tap hint, float above
 // Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom; long-press to add a place. Arrows pan, plus and minus zoom, F fits."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom; long-press to add a place. Arrows pan, plus and minus zoom, F fits."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library">${icons.arrow}</button>
 <p id="toast" class="toast glass" role="status" aria-live="polite" hidden></p>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-controls="sheet" aria-expanded="false">${icons.list}<span>Saved</span></button>
   <button id="open-display" data-sheet="display" aria-controls="sheet" aria-expanded="false">${icons.layers}<span>View</span></button>
+  <button id="open-search" data-sheet="search" aria-controls="sheet" aria-expanded="false">${icons.search}<span>Search</span></button>
   <button id="open-add" aria-controls="add-bar" aria-expanded="false">${icons.plus}<span id="open-add-label">Add</span></button>
   <button id="rotation-lock" aria-label="Unlock rotation" aria-pressed="true">${icons.rotationLock}<span>Lock</span></button>
 </nav>
@@ -47,6 +48,12 @@ export const viewerMarkup = `
   <div class="sheet-grabber" id="sheet-grabber"><span></span></div>
   <div class="sheet-header"><h2 id="sheet-title"></h2><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
+    <div id="sheet-search" data-panel="search" data-title="Search map text" hidden>
+      <label class="search-label" for="map-search">Find text on this map</label>
+      <div class="search-input-row"><input id="map-search" type="search" placeholder="Search map labels…" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="clear-search" class="sheet-close" aria-label="Clear search">${icons.close}</button></div>
+      <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
+      <div class="search-navigation" id="search-navigation" hidden><button id="search-previous" class="secondary" aria-label="Previous result">${icons.arrow}</button><span id="search-result"></span><button id="search-next" class="secondary" aria-label="Next result">${icons.arrow}</button></div>
+    </div>
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
       <h3>Map</h3>
       <div class="panel-card">
