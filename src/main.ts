@@ -13,12 +13,14 @@ import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { initLibraryFooter } from "./ui/library-footer";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
+import { initSharing, sharingMarkup } from "./ui/sharing";
+import { importAnnotations, importNewCopy } from "./sharing/storage";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger">${icons.plus}<span>Import map</span></button></div>
+    <div class="library-actions"><button class="library-action import-trigger">${icons.plus}<span>Import map</span></button><button class="library-action" id="import-shared">${icons.folder}<span>Import shared</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map.<br>Keep it with you, even offline.</p></div></section>
     <footer class="library-footer"><div class="app-updated"><span>Last app update</span><time id="app-updated-at">Checking…</time></div><div class="connection-status" role="status" aria-live="polite"><span id="internet-status">Checking connection…</span><span id="app-availability">Checking live app…</span><span id="offline-availability">Checking offline app…</span></div></footer>
   </main>
@@ -28,6 +30,7 @@ app.innerHTML = `
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">Got it</button></dialog>
   <dialog id="delete-dialog"><h2>Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the local copy and its tiles from this device.</p><div class="dialog-actions"><button class="secondary" id="delete-cancel">Keep map</button><button class="danger" id="delete-confirm">Delete map</button></div></dialog>
   ${mapRenameMarkup}
+  ${sharingMarkup}
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -69,8 +72,64 @@ function showMessage(title: string, message: string) {
   element("message-body").textContent = message;
   if (!messageDialog.open) messageDialog.showModal();
 }
+const sharing = initSharing(app, {
+  maps: listMaps,
+  import: async (share, destination) => {
+    if (importing || updating) throw new Error("Finish the current operation before importing a share.");
+    await pendingViewSave;
+    const controller = new AbortController();
+    importing = controller;
+    element("progress-title").textContent = "Importing shared map";
+    element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
+    element("cancel-import").textContent = "Cancel import";
+    element("import-name").textContent = share.manifest.map.name;
+    element("progress-fill").style.width = "0%";
+    element("progress-percent").textContent = "0%";
+    element("progress-message").textContent = "Checking shared map…";
+    progressDialog.showModal();
+    try {
+      const result = await mutate(async () => {
+        if (destination.mapId) {
+          controller.signal.throwIfAborted();
+          const counts = await importAnnotations(destination.mapId, share.manifest, destination.allowDifferentImage, controller.signal);
+          const map = (await listMaps()).find((map) => map.id === destination.mapId);
+          if (!map) throw new Error("This map is no longer available.");
+          return { map, ...counts };
+        }
+        if (!destination.image) throw new Error("Choose the original map image to create a copy.");
+        return importNewCopy(share, destination.image, (progress) => {
+          element("progress-fill").style.width = `${progress.fraction * 100}%`;
+          element("progress-percent").textContent = `${Math.round(progress.fraction * 100)}%`;
+          element("progress-message").textContent = progress.message;
+        }, controller.signal);
+      });
+      channel?.postMessage({ type: "annotations", mapId: result.map.id });
+      return result;
+    } finally {
+      progressDialog.close();
+      importing = undefined;
+    }
+  },
+  imported: async (result) => {
+    await refresh();
+    await openMap(result.map);
+    showMessage("Share imported", `${result.added} items added · ${result.skipped} already imported and skipped.\nYour existing annotations and local edits were kept.`);
+  },
+});
+element("import-shared").addEventListener("click", () => sharing.importFile());
+
+// Flush pending edits before taking the independent export snapshot.
+async function shareMap(map: MapRecord, item?: { kind: "marker" | "route"; id: string }) {
+  try {
+    await pendingViewSave;
+    await controls?.prepareForUpdate();
+    await sharing.openExport(map, await loadNavigation(map.id), item);
+  } catch (error) {
+    showMessage("Could not prepare share", error instanceof Error ? error.message : String(error));
+  }
+}
 // An origin-wide lock prevents launch cleanup from racing another tab's import.
-async function mutate<T>(work: () => Promise<T>): Promise<T | undefined> {
+async function mutate<T>(work: () => Promise<T>): Promise<T> {
   if (navigator.locks)
     return navigator.locks.request(
       "map-viewer-storage",
@@ -120,7 +179,7 @@ async function openMap(map: MapRecord) {
     if (version !== openVersion) return;
     const state = await loadNavigation(map.id);
     if (version !== openVersion) return;
-    controls = new ViewerControls(viewerSection, map, state);
+    controls = new ViewerControls(viewerSection, map, state, (item) => { void shareMap(map, item); });
     viewer = new Viewer(
       element<HTMLCanvasElement>("map-canvas"),
       map,
@@ -168,7 +227,7 @@ async function refresh() {
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><div class="map-actions"><button class="rename-map" title="Rename map">${icons.edit}</button><button class="delete-map" title="Delete map">${icons.trash}</button></div>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><div class="map-actions"><button class="share-map" title="Share map">${icons.share}</button><button class="rename-map" title="Rename map">${icons.edit}</button><button class="delete-map" title="Delete map">${icons.trash}</button></div>`;
     card.querySelector("h3")!.textContent = map.name;
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
@@ -180,6 +239,9 @@ async function refresh() {
     const rename = card.querySelector<HTMLButtonElement>(".rename-map")!;
     rename.setAttribute("aria-label", `Rename ${map.name}`);
     rename.addEventListener("click", () => openRenameMap(map));
+    const share = card.querySelector<HTMLButtonElement>(".share-map")!;
+    share.setAttribute("aria-label", `Share ${map.name}`);
+    share.addEventListener("click", () => { void shareMap(map); });
     card
       .querySelector(".delete-map")!
       .setAttribute("aria-label", `Delete ${map.name}`);
@@ -325,7 +387,11 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !controls?.escape()) closeViewer();
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
 });
-channel?.addEventListener("message", () => {
+channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
+  const data = event.data;
+  if (typeof data === "object" && data !== null && "type" in data && data.type === "annotations" &&
+      "mapId" in data && data.mapId === currentMap?.id)
+    void controls?.refreshImports().catch((error) => showMessage("Could not refresh shared items", String(error)));
   if (!importing)
     void refresh().catch((error) =>
       showMessage("Storage unavailable", String(error)),

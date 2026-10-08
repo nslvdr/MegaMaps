@@ -1,7 +1,8 @@
 import type { MapRecord } from "../types";
 import type { Point } from "../viewer/camera";
 import type { DarkMode } from "../viewer/appearance";
-import { NavigationPersistence } from "../storage/navigation";
+import { NavigationPersistence, loadNavigation } from "../storage/navigation";
+import { preserveUnseenImports } from "../sharing/annotations";
 import { Viewer, type ViewerOptions } from "../viewer/viewer";
 import {
   insideImage,
@@ -69,6 +70,7 @@ export class ViewerControls {
     private root: HTMLElement,
     private map: MapRecord,
     private state: NavigationState,
+    private onShare?: (item?: { kind: "marker" | "route"; id: string }) => void,
   ) {
     this.persistence = new NavigationPersistence(
       () => this.state,
@@ -77,6 +79,7 @@ export class ViewerControls {
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
     this.bind();
+    this.el("share-saved").hidden = !onShare;
     this.sheet(undefined);
     this.render();
   }
@@ -461,6 +464,7 @@ export class ViewerControls {
       else this.choose(!this.choosing);
     });
     this.click("add-marker", () => this.mode("marker"));
+    this.click("share-saved", () => this.onShare?.());
     // Start drawing immediately; the default name can be changed from Saved.
     this.click("add-route", () => {
       const route: PlannedRoute = {
@@ -845,6 +849,8 @@ export class ViewerControls {
             icon: icons.move,
             action: () => this.moveMarker(marker),
           },
+          ...(this.onShare ? [{ label: "Share", icon: icons.share,
+            action: () => this.onShare?.({ kind: "marker", id: marker.id }) }] : []),
           {
             label: this.deleteLabel(marker.id),
             icon: icons.trash,
@@ -886,6 +892,8 @@ export class ViewerControls {
                 this.changed();
               }),
           },
+          ...(this.onShare && !route.draft ? [{ label: "Share", icon: icons.share,
+            action: () => this.onShare?.({ kind: "route", id: route.id }) }] : []),
           {
             label: this.deleteLabel(route.id),
             icon: icons.trash,
@@ -931,6 +939,13 @@ export class ViewerControls {
   }
   async prepareForUpdate() {
     await this.persistence.flushForReload();
+  }
+  /** Add imports made in another window while keeping this window's local edits. */
+  async refreshImports() {
+    const stored = await loadNavigation(this.map.id);
+    if (this.controller.signal.aborted) return;
+    Object.assign(this.state, preserveUnseenImports(this.state, stored));
+    this.changed();
   }
   dispose() {
     // Leaving mid-route keeps a usable route rather than an orphan draft.
