@@ -101,7 +101,12 @@ svg {
   align-items: center;
   gap: 12px;
 }
-.library-logo,
+.library-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
 .empty-icon {
   display: grid;
   place-items: center;
