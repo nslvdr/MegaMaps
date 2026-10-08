@@ -25,6 +25,7 @@
     "wrangler": "^4.147.0"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "onnxruntime-web": "^1.30.0",
     "tesseract.js": "^7.0.0"
   }

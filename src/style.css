@@ -1,20 +1,24 @@
 :root {
   --bg: #000;
-  --surface: #111316;
-  --surface-raised: #1a1d21;
-  --control: #23272c;
   --line: #ffffff14;
   --text: #f2f4f6;
   --muted: #9aa2ab;
-  --accent: #a6e38f;
-  --accent-ink: #10200a;
+  --accent: var(--neon-add);
   --danger: #ff8f7a;
-  --radius: 16px;
   /* Shared by the map controls and the library. */
   --neon-saved: #2ef2ff;
   --neon-view: #ff4fd8;
   --neon-add: #b6ff3b;
   --neon-lock: #ff9a3c;
+  --kind-route: #38d6ff;
+  --kind-place: #ff9a5c;
+  /* Inputs, panels, and cards / dialogs / sheets. */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --button-h: 50px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -51,6 +55,8 @@ button {
   transition:
     transform 0.08s,
     background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
     opacity 0.15s;
 }
 button:active:not(:disabled) {
@@ -158,7 +164,7 @@ svg {
   min-height: 64px;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  border-radius: 26px;
+  border-radius: var(--radius-lg);
   background: #000;
   font-size: 14px;
   font-weight: 650;
@@ -174,52 +180,13 @@ svg {
 .library-action:active:not(:disabled) {
   background: color-mix(in srgb, var(--c) 18%, #000);
 }
-.primary {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 22px;
-  min-height: 52px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 650;
-  font-size: 16px;
-  border-radius: 14px;
-}
-.primary svg {
-  width: 20px;
-  height: 20px;
-}
-.secondary,
-.danger {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 550;
-  border-radius: 14px;
-  min-height: 48px;
-}
-.secondary {
-  background: var(--control);
-  color: var(--text);
-}
-.danger {
-  background: var(--danger);
-  color: #2a0d07;
-  font-weight: 650;
-}
-.text-button {
-  background: none;
-  color: var(--accent);
-  font-size: 14px;
-  padding: 10px 4px;
-}
-.wide {
-  width: 100%;
+@media (hover: hover) {
+  .library-action:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  }
+  .update-app:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--neon-view) 12%, #000);
+  }
 }
 .library {
   flex: 1;
@@ -258,7 +225,7 @@ h2 {
   padding-right: 6px;
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
-  border-radius: 26px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .map-open {
@@ -282,7 +249,7 @@ h2 {
   position: relative;
   background: #0d0e11;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .thumbnail > img {
@@ -325,26 +292,46 @@ h2 {
 .map-size {
   margin-top: 3px;
 }
-.map-more {
+.map-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.map-more,
+.rename-map,
+.delete-map {
   display: grid;
   place-items: center;
   flex-shrink: 0;
   background: none;
   color: var(--muted);
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
 }
-.map-more:hover {
+.rename-map {
   color: var(--neon-saved);
 }
-.map-more svg {
+.map-more:hover,
+.map-more:active,
+.rename-map:hover,
+.rename-map:active {
+  background: color-mix(in srgb, var(--neon-saved) 12%, #000);
+}
+.delete-map:hover,
+.delete-map:active {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, #000);
+}
+.map-more svg,
+.rename-map svg,
+.delete-map svg {
   width: 20px;
   height: 20px;
 }
 .empty {
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
-  border-radius: 30px;
+  border-radius: var(--radius-lg);
   padding: 36px 20px;
   text-align: center;
 }
@@ -410,52 +397,123 @@ h2 {
 }
 
 /* ---------- Dialogs ---------- */
+/* Phones: a card floating just above the home indicator, within thumb reach,
+   like the place card. Wider screens: centered. Dialogs rise in and fade out
+   (exit only where the browser can animate leaving the top layer). */
 dialog {
-  width: min(440px, calc(100% - 32px));
-  padding: 24px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  --accent: var(--neon-add);
+  --dialog-from: 10px;
+  width: min(440px, calc(100% - 20px));
+  max-height: calc(
+    100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+  margin: auto;
+  padding: 22px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text);
-  border-radius: 24px;
-  box-shadow: 0 20px 80px #000c;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 80px #000c,
+    0 0 28px color-mix(in srgb, var(--accent) 22%, transparent);
+  opacity: 0;
+  transform: translateY(var(--dialog-from)) scale(0.98);
+  transition:
+    opacity 0.16s var(--ease-in),
+    transform 0.16s var(--ease-in);
+  transition:
+    opacity 0.16s var(--ease-in),
+    transform 0.16s var(--ease-in),
+    overlay 0.16s allow-discrete,
+    display 0.16s allow-discrete;
+}
+dialog[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 0.26s;
+  transition-timing-function: var(--ease-out);
+}
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(var(--dialog-from)) scale(0.98);
+  }
 }
 dialog::backdrop {
-  background: #000b;
+  background: rgb(0 0 0 / 0);
+  transition: background-color 0.16s;
+  transition:
+    background-color 0.16s,
+    overlay 0.16s allow-discrete,
+    display 0.16s allow-discrete;
+}
+dialog[open]::backdrop {
+  background: rgb(0 0 0 / 0.72);
+  transition-duration: 0.26s;
+}
+@starting-style {
+  dialog[open]::backdrop {
+    background: rgb(0 0 0 / 0);
+  }
+}
+@media (max-width: 599px) {
+  dialog {
+    --dialog-from: 32px;
+    margin-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+#message-dialog {
+  --accent: var(--neon-view);
+}
+#rename-map-dialog,
+#name-dialog {
+  --accent: var(--neon-saved);
+}
+#delete-dialog {
+  --accent: var(--danger);
 }
 dialog h2 {
-  font-size: 21px;
+  font-size: 20px;
   line-height: 1.3;
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 dialog p {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.6;
+  margin: 0 0 12px;
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
 .dialog-icon {
   color: var(--accent);
   margin-bottom: 14px;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 65%, transparent));
 }
 .dialog-icon svg {
   height: 32px;
   width: 32px;
 }
-.dialog-note {
-  font-size: 13px !important;
-  margin: 18px 0;
+dialog .dialog-note {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 16px 0;
+}
+dialog .dialog-error {
+  color: var(--danger);
 }
 .progress-track {
   height: 6px;
-  background: var(--control);
+  background: color-mix(in srgb, var(--accent) 16%, #000);
   border-radius: 6px;
-  margin: 24px 0 12px;
+  margin: 20px 0 12px;
   overflow: hidden;
 }
 #progress-fill {
   height: 100%;
   background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
   transition: width 0.12s;
 }
 .progress-info {
@@ -467,20 +525,94 @@ dialog p {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* Main action first and full width; the rest share the row beneath it. */
 .dialog-actions {
   display: flex;
-  gap: 10px;
-  justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 8px;
   margin-top: 20px;
 }
 .dialog-actions > button {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+}
+.dialog-actions > :first-child {
+  flex-basis: 100%;
+}
+.primary,
+.secondary,
+.danger,
+.quiet {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--button-h);
+  padding: 12px 18px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  font-size: 16px;
+  font-weight: 650;
+}
+.primary,
+.danger {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, #000);
+  color: var(--accent);
+}
+.danger {
+  --accent: var(--danger);
+}
+.secondary {
+  border-color: var(--line);
+  background: #ffffff12;
+  color: var(--text);
+}
+.quiet {
+  background: none;
+  color: var(--muted);
+}
+.primary svg,
+.secondary svg,
+.danger svg,
+.quiet svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.quiet.danger {
+  border-color: transparent;
+  background: none;
+  color: var(--danger);
+}
+.primary:active:not(:disabled),
+.danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, #000);
+}
+.secondary:active:not(:disabled),
+.quiet:active:not(:disabled) {
+  background: #ffffff1f;
+}
+@media (hover: hover) {
+  .primary:hover:not(:disabled),
+  .danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 22%, #000);
+  }
+  .secondary:hover:not(:disabled),
+  .quiet:hover:not(:disabled) {
+    background: #ffffff1a;
+    color: var(--text);
+  }
+  .quiet.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 12%, #000);
+    color: var(--danger);
+  }
 }
 #message-dialog .primary {
   width: 100%;
   margin-top: 8px;
 }
+
 dialog form > label {
   display: block;
   color: var(--muted);
@@ -498,17 +630,22 @@ dialog textarea {
   background: var(--bg);
   border: 1px solid #ffffff26;
   color: var(--text);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   font: inherit;
   font-size: 17px;
   padding: 12px 14px;
   margin-top: 6px;
   min-height: 50px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 dialog input:focus,
+dialog select:focus,
 dialog textarea:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 dialog textarea {
   resize: vertical;
@@ -605,8 +742,8 @@ button.glass:active:not(:disabled) {
   top: var(--hud-top);
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
 }
@@ -786,7 +923,7 @@ button.glass:active:not(:disabled) {
   line-height: 1.5;
   color: #ffd4c0;
   background: #34201aee;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   padding: 12px;
   max-width: 500px;
   margin: auto;
@@ -851,10 +988,10 @@ button.glass:active:not(:disabled) {
   stroke-width: 2;
 }
 .add-choice.places svg {
-  color: #ff9a5c;
+  color: var(--kind-place);
 }
 .add-choice.routes svg {
-  color: #38d6ff;
+  color: var(--kind-route);
 }
 .add-choice:active {
   background: color-mix(in srgb, var(--c) 22%, #000);
@@ -876,11 +1013,8 @@ button.glass:active:not(:disabled) {
   margin: 0;
   padding: 0 12px;
   font-size: 14px;
-  line-height: 20px;
+  line-height: 18px;
   color: #c9ced4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .tool-hint strong {
   color: var(--text);
@@ -926,25 +1060,22 @@ button.glass:active:not(:disabled) {
 /* New / edit place: a card at the bottom, within thumb reach. Kinds are the
    map's own pins; the name is prefilled so Save works without typing. */
 .place-card {
-  margin: auto auto max(12px, env(safe-area-inset-bottom));
-  padding: 18px 16px 16px;
-  border-color: color-mix(in srgb, var(--c) 40%, transparent);
-  animation: card-up 0.2s ease-out;
+  --accent: var(--c);
+  --dialog-from: 32px;
+  margin-bottom: max(10px, env(safe-area-inset-bottom));
 }
-@keyframes card-up {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
+/* Lighter scrim: the spot being marked stays visible above the card. */
+.place-card[open]::backdrop {
+  background: rgb(0 0 0 / 0.35);
 }
 .place-card h2 {
-  font-size: 18px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .kind-picker {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
+  margin-inline: -8px;
 }
 .kind-pick {
   position: relative;
@@ -952,8 +1083,9 @@ button.glass:active:not(:disabled) {
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  padding: 8px 0 6px;
-  border-radius: 16px;
+  min-width: 0;
+  padding: 6px 2px 5px;
+  border-radius: var(--radius-md);
   border: 1.5px solid transparent;
   font-size: 11px;
   font-weight: 600;
@@ -966,8 +1098,26 @@ button.glass:active:not(:disabled) {
   pointer-events: none;
 }
 .kind-pick svg {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
+}
+.kind-pick span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+.kind-pick {
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+.kind-pick svg {
+  transition: transform 0.2s var(--ease-out);
+}
+.kind-pick:has(input:checked) svg {
+  transform: scale(1.08);
 }
 .kind-pick:has(input:checked) {
   border-color: var(--c);
@@ -980,7 +1130,7 @@ button.glass:active:not(:disabled) {
 }
 dialog form > label.place-name,
 dialog form > label.place-note {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
 }
 .add-note {
   display: flex;
@@ -990,15 +1140,16 @@ dialog form > label.place-note {
   margin-top: 4px;
   padding: 0 4px;
   background: none;
-  color: var(--muted);
-  font-size: 14px;
+  color: var(--c);
+  font-size: 15px;
+  font-weight: 600;
 }
 .add-note svg {
   width: 18px;
   height: 18px;
 }
 .place-card .dialog-actions {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 /* ---------- Panels (open above the bottom pill) ---------- */
@@ -1027,15 +1178,15 @@ dialog form > label.place-note {
   display: flex;
   flex-direction: column;
   padding: 0 14px 14px;
-  border-radius: 30px;
+  border-radius: var(--radius-lg);
   background: var(--glass-strong);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   box-shadow:
     0 20px 60px rgb(0 0 0 / 0.5),
     0 0 28px color-mix(in srgb, var(--c) 22%, transparent);
   z-index: 4;
-  animation: sheet-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-  transition: transform 0.2s ease;
+  animation: sheet-in 0.24s var(--ease-out);
+  transition: transform 0.2s var(--ease-out);
 }
 .sheet.dragging {
   transition: none;
@@ -1089,6 +1240,17 @@ dialog form > label.place-note {
   height: 18px;
   stroke-width: 2.2;
 }
+/* Small round buttons keep their look but get a 44px touch target. */
+.sheet-close,
+.slider-step {
+  position: relative;
+}
+.sheet-close::after,
+.slider-step::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
 .sheet-content {
   min-height: 0;
   overflow: auto;
@@ -1113,7 +1275,7 @@ dialog form > label.place-note {
 
 /* View and Saved: stacked cards of rows (icon · label · control). */
 .panel-card {
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   background: var(--fill);
   border: 1px solid var(--line);
   overflow: hidden;
@@ -1155,10 +1317,10 @@ label.panel-row {
   height: 20px;
 }
 .row-icon.routes {
-  --c: #38d6ff;
+  --c: var(--kind-route);
 }
 .row-icon.places {
-  --c: #ff9a5c;
+  --c: var(--kind-place);
 }
 .row-icon.labels {
   --c: #e3e3e3;
@@ -1273,8 +1435,8 @@ input[type="range"] {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 50px;
-  border-radius: 18px;
+  min-height: var(--button-h);
+  border-radius: var(--radius-md);
   background: var(--fill);
   border: 1px solid var(--line);
   font-size: 15px;
@@ -1307,10 +1469,10 @@ input[type="range"] {
   height: 16px;
 }
 .section-title.routes svg {
-  color: #38d6ff;
+  color: var(--kind-route);
 }
 .section-title.places svg {
-  color: #ff9a5c;
+  color: var(--kind-place);
 }
 .section-title small {
   margin-left: auto;
@@ -1345,8 +1507,8 @@ input[type="range"] {
 .row-more {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   padding: 0;
   border-radius: 50%;
@@ -1369,7 +1531,7 @@ input[type="range"] {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 6px;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   background: #0d0e11;
   border: 1px solid var(--glass-line);
   box-shadow: 0 18px 44px rgb(0 0 0 / 0.65);
@@ -1390,7 +1552,7 @@ input[type="range"] {
   width: 100%;
   min-height: 46px;
   padding: 0 16px 0 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: none;
   font-size: 15px;
   font-weight: 600;
@@ -1549,3 +1711,54 @@ input[type="range"] {
     animation: none !important;
   }
 }
+
+/* Sharing stays in menus and dialogs, leaving the map controls compact. */
+.library-actions { gap: 10px; flex-wrap: wrap; }
+.share-map {
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--neon-view);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+}
+.share-map:hover,
+.share-map:active { background: color-mix(in srgb, var(--neon-view) 12%, #000); }
+.share-map svg { width: 20px; height: 20px; }
+.sharing-dialog {
+  --accent: var(--neon-view);
+}
+.share-selection-actions { display: flex; gap: 8px; margin: 16px 0 12px; }
+.share-selection-actions button { flex: 1; gap: 6px; font-size: 14px; padding: 10px 8px; min-height: 44px; }
+.share-selection-actions svg { width: 18px; height: 18px; }
+.share-items {
+  max-height: 30dvh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  margin: 16px 0;
+}
+/* Nothing to pick: the hint reads as a plain note, not an empty list. */
+.share-items:not(:has(.share-choice)) { border: 0; }
+.share-items:not(:has(.share-choice)) > p { padding: 0; margin: 0; font-size: 14px; }
+.share-selection-actions:not([hidden]) + .share-items { margin-top: 0; }
+.share-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  min-height: 48px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.share-items .share-choice { padding: 12px 14px; }
+.share-choice input { flex-shrink: 0; width: 22px; height: 22px; accent-color: var(--accent); }
+.share-choice small, .share-field small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.share-items .share-choice + .share-choice { border-top: 1px solid var(--line); }
+.share-items > p { padding: 12px 14px; margin: 0; }
+.share-field { display: block; margin: 16px 0; font-size: 14px; color: var(--muted); }
+.share-preview { position: relative; width: 100%; max-height: none; border-radius: var(--radius-sm); overflow: hidden; background: #111; }
+.share-preview img, .share-preview svg { display: block; width: 100%; height: 100%; }
+.share-preview svg { position: absolute; inset: 0; }
+#share-saved { margin-bottom: 18px; }

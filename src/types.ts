@@ -24,6 +24,8 @@ export interface MapRecord {
   tileBytes?: number;
   decoder?: string;
   offlineVerifiedAt?: number;
+  /** SHA-256 of the original image, calculated lazily for sharing. */
+  fingerprint?: string;
 }
 export interface ImageHeader {
   width: number;

@@ -24,7 +24,7 @@ Production preview: **http://localhost:4173**. Import a map, wait for **Availabl
 
 Importing a map also runs local OCR. **Search** in the viewer’s bottom bar opens a text box: matching words remain clear while the rest of the map darkens. Search ignores case and accents, supports phrases and partial words, and offers previous/next controls to frame results. Clearing the query or closing Search restores the normal view.
 
-Older maps automatically run detection when opened if they have no current OCR index. In the library, **⋯ → Advanced settings → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. **⋯** also contains Rename and Delete.
+Older maps automatically run detection when opened if they have no current OCR index. In the library, **Advanced settings (tools icon) → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. Share, Rename and Delete are also available on each map card.
 
 Detection runs a bundled PaddleOCR mobile text detector once per overlapping section, estimates each label’s angle, then straightens and reads only those label crops with Tesseract's fast English LSTM model. A second recognition pass checks the opposite reading direction when the first result has low confidence. The engines start together, detector input is capped at 768 pixels, and a 4 MiB tile cache reuses shared section edges. This supports angled, vertical and upside-down labels; detection is best-effort for tiny, curved, stylized or low-contrast text. Large maps may take several minutes or longer on a phone. Keep the app open until detection finishes. Both engines and models are included in the offline shell; map pixels and detected text never leave the device.
 
@@ -140,6 +140,14 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 **Phone orientation is separate from map rotation.** The app does not control the phone's screen orientation; use your phone's own rotation lock for that. **Lock** only controls map rotation.
 
 Notes, routes, camera and display settings are saved locally in a separate IndexedDB store. Camera writes are throttled and flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
+
+## Sharing maps and annotations
+
+Use a map's **Share** icon in the library, **Saved → Share map or selected items** in the viewer, or a place/route's **⋯ → Share**. Choose annotations, optionally include the original map image, and send the `.megamap` file through the device's share sheet or **Save file**. The export shows its size before sending.
+
+Friends use **Import shared** in the library to review the file and choose an existing map or a separate copy. Annotation-only files require a locally available map; a new copy requires the exact original image. Exact image fingerprints identify renamed maps. Other existing maps of the same dimensions require an alignment preview and confirmation.
+
+Received items are independently editable. Reimporting skips previously imported items, preserves edits and deletions, and adds new items. Export/import work offline without accounts or a sharing server. See [sharing.md](docs/sharing.md) for the format and verification limits.
 
 ## Test
 
