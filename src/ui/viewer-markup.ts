@@ -48,11 +48,9 @@ export const viewerMarkup = `
   <div class="sheet-grabber" id="sheet-grabber"><span></span></div>
   <div class="sheet-header"><h2 id="sheet-title"></h2><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
-    <div id="sheet-search" data-panel="search" data-title="Search map text" hidden>
-      <label class="search-label" for="map-search">Find text on this map</label>
-      <div class="search-input-row"><input id="map-search" type="search" placeholder="Search map labels…" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="clear-search" class="sheet-close" aria-label="Clear search">${icons.close}</button></div>
+    <div id="sheet-search" data-panel="search" data-title="Search this map" hidden>
+      <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><span id="search-count" class="search-count" hidden></span></div>
       <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
-      <div class="search-navigation" id="search-navigation" hidden><button id="search-previous" class="secondary" aria-label="Previous result">${icons.arrow}</button><span id="search-result"></span><button id="search-next" class="secondary" aria-label="Next result">${icons.arrow}</button></div>
     </div>
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
       <h3>Map</h3>

@@ -33,11 +33,14 @@ import {
   type MapTone,
 } from "./appearance";
 import { SearchOverlay } from "./search-overlay";
-import type { OcrMatch } from "../ocr/index";
+import { CalloutLayout, type CalloutBounds } from "./callout-layout";
+import type { MapSearchMatch } from "./map-search";
 export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
   searchOverlay?: SVGSVGElement;
+  /** Visible controls/panels that map labels must not sit underneath. */
+  labelObstacles?(): CalloutBounds[];
   onView(): void;
   onTap(point: Point): void;
   onMarker(marker: MapMarker): void;
@@ -274,8 +277,13 @@ export class Viewer {
     );
     this.invalidate();
   }
-  setSearch(matches: OcrMatch[], active: boolean) {
-    this.searchOverlay?.set(matches, active);
+  setSearch(matches: MapSearchMatch[], active: boolean, selected = 0) {
+    this.searchOverlay?.set(matches, active, selected);
+    this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
+    this.invalidate();
+  }
+  // Floating controls can move while the map itself is idle.
+  refreshLabels() {
     this.invalidate();
   }
   updateNavigation(state: NavigationState) {
@@ -579,8 +587,13 @@ export class Viewer {
         height,
       );
     }
-    this.searchOverlay?.draw(this.camera, this.viewport());
-    this.overlay?.draw(this.camera, this.viewport());
+    const viewport = this.viewport();
+    const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
+    this.searchOverlay?.reserve(this.camera, labels);
+    this.overlay?.reserve(this.camera, labels);
+    // The current search result gets space first, then saved items share it.
+    this.searchOverlay?.draw(this.camera, viewport, labels);
+    this.overlay?.draw(this.camera, viewport, labels);
     if (this.lastFrame && now - this.lastFrame < 100) {
       this.frameTimes.push(now - this.lastFrame);
       if (this.frameTimes.length > 120) this.frameTimes.shift();

@@ -1,4 +1,7 @@
 import { worldToScreen, type Camera, type Point, type Size } from "./camera";
+import { icons } from "../ui/icons";
+import { MapCallout } from "./map-callout";
+import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
   markerKinds,
   routeColor,
@@ -27,6 +30,11 @@ export const glyphs: Record<MapMarker["kind"], { d: string; fill?: boolean }> = 
   bookmark: { d: "M-3,6V-6H5L3,-3L5,0H-3" },
   note: { d: "M-4,-3H4M-4,0H4M-4,3H1" },
 };
+// Trusted app glyphs shared by saved-place and search callouts.
+export const markerCalloutIcon = (kind: MapMarker["kind"]) => {
+  const glyph = glyphs[kind] ?? glyphs.bookmark;
+  return `<svg viewBox="-9 -9 18 18" aria-hidden="true"><path d="${glyph.d}" fill="${glyph.fill ? "currentColor" : "none"}" stroke="currentColor" stroke-width="${glyph.fill ? 0.8 : 2}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+};
 export const CASING = "#05070a";
 type Layer = keyof Layers;
 interface PathItem {
@@ -40,6 +48,9 @@ interface PathItem {
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point }[] = [];
   private paths: PathItem[] = [];
+  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string }[] = [];
+  private searchMarkers = new Set<string>();
+  private anchors: CalloutBounds[] = [];
   private editing?: string;
   private moving?: string;
   private state?: NavigationState;
@@ -50,6 +61,10 @@ export class NavigationOverlay {
     this.moving = markerId;
     if (this.state) this.rebuild(this.state);
   }
+  // Search owns matching place labels, avoiding duplicate callouts at the same pin.
+  setSearchMarkers(ids: string[]) {
+    this.searchMarkers = new Set(ids);
+  }
   setLayers(layers: Layers) {
     for (const [name, visible] of Object.entries(layers))
       this.svg.classList.toggle(`hide-${name}`, !visible);
@@ -59,6 +74,7 @@ export class NavigationOverlay {
     this.svg.replaceChildren();
     this.points = [];
     this.paths = [];
+    this.callouts = [];
     this.setLayers(state.layers);
     const group = (layer: Layer, className = "") => {
       const element = node("g", { "data-layer": layer, class: className });
@@ -81,14 +97,15 @@ export class NavigationOverlay {
       this.paths.push({ element, points, dots });
       return element;
     };
-    const label = (parent: SVGGElement, text: string, x = 15, y = -13) => {
-      const element = node("text", {
-        x: String(x),
-        y: String(y),
-        class: "overlay-label",
-      });
-      element.textContent = text;
-      parent.append(element);
+    const label = (
+      parent: SVGGElement, text: string, point: Point,
+      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string,
+    ) => {
+      const callout = new MapCallout(icon, color);
+      callout.element.classList.add("overlay-label");
+      callout.setText(text);
+      parent.append(callout.element);
+      this.callouts.push({ callout, point, padding, layer, priority, markerId });
     };
     const pin = (parent: SVGGElement, point: Point) => {
       const element = node("g");
@@ -132,7 +149,7 @@ export class NavigationOverlay {
         body.append(
           node("circle", { r: "8", fill: color, stroke: CASING, "stroke-width": "3" }),
         );
-        label(element, route.name, 13, -11);
+        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
@@ -168,10 +185,35 @@ export class NavigationOverlay {
           "stroke-linejoin": "round",
         }),
       );
-      label(element, marker.label);
+      const moving = marker.id === this.moving;
+      label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, moving ? 18 : 12, "places", moving ? 2 : 0, marker.id);
     }
   }
-  draw(camera: Camera, viewport: Size) {
+  private visible(layer: Layer) {
+    return !!this.svg.parentElement?.classList.contains("spotlight") ||
+      !this.svg.classList.contains(`hide-${layer}`);
+  }
+  // Reserve every visible pin and route vertex before placing any label.
+  reserve(camera: Camera, layout: CalloutLayout) {
+    this.anchors = [];
+    const reservePoint = (point: Point, padding: number) => {
+      const p = worldToScreen(camera, point);
+      const bounds = { left: p.x - padding, right: p.x + padding,
+        top: p.y - padding, bottom: p.y + padding };
+      this.anchors.push(bounds);
+      layout.addObstacle(bounds);
+    };
+    if (this.visible("places"))
+      for (const marker of this.state?.markers ?? [])
+        reservePoint(marker.point, marker.id === this.moving ? 18 : 12);
+    if (this.visible("routes"))
+      for (const route of this.state?.routes ?? [])
+        for (const point of route.points)
+          reservePoint(point, route.id === this.editing ? 10 : 8);
+  }
+  draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
+    const labels = layout ?? new CalloutLayout(viewport);
+    if (!layout) this.reserve(camera, labels);
     this.svg.setAttribute(
       "viewBox",
       `0 0 ${viewport.width} ${viewport.height}`,
@@ -196,6 +238,23 @@ export class NavigationOverlay {
         p.y > viewport.height + 100;
       pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
       pin.element.style.display = outside ? "none" : "";
+    }
+    for (const { callout, point, padding, layer, markerId } of [...this.callouts].sort((a, b) => b.priority - a.priority)) {
+      if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
+        callout.element.setAttribute("hidden", "");
+        continue;
+      }
+      const p = worldToScreen(camera, point);
+      let bounds = {
+        left: p.x - padding, right: p.x + padding,
+        top: p.y - padding, bottom: p.y + padding,
+      };
+      // A route can start on a place: connect outside the combined symbols.
+      for (const anchor of this.anchors)
+        if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
+          bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
+            top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
+      callout.draw(p, viewport, bounds, labels);
     }
   }
   dispose() {

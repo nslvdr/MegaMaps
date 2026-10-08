@@ -715,10 +715,39 @@ dialog textarea {
 .search-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   pointer-events: none;
   overflow: hidden;
+}
+.search-match-connector {
+  stroke: var(--neon-saved);
+  stroke-width: 1px;
+  opacity: 0.55;
+}
+.map-callout {
+  color: var(--callout-color, var(--neon-saved));
+}
+.map-callout-connector {
+  stroke: currentColor;
+  stroke-width: 1px;
+}
+.map-callout > rect {
+  fill: #080c0c;
+  stroke: #445354;
+  stroke-width: 1px;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.6));
+}
+.map-callout > text {
+  fill: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+.map-callout-icon {
+  width: 16px;
+  height: 16px;
 }
 .glass {
   background: var(--glass);
@@ -726,7 +755,8 @@ dialog textarea {
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
 }
 /* Neon icons glow in their function's color (--c). */
-.dock svg {
+.dock svg,
+.search-field > svg {
   color: var(--c);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 65%, transparent));
 }
@@ -829,54 +859,71 @@ button.glass:active:not(:disabled) {
 .sheet[data-panel="search"] {
   --c: var(--neon-saved);
 }
-.search-label {
-  display: block;
-  margin: 8px 0 12px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.search-input-row {
+.search-field {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 10px;
+  min-height: var(--dock-h);
+  padding: 0 15px;
+  border-radius: 27px;
+}
+.search-field:focus-within {
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3),
+    inset 0 0 0 1px color-mix(in srgb, var(--c) 25%, transparent);
+}
+.search-field > svg {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
 }
 #map-search {
+  appearance: none;
+  -webkit-appearance: none;
   min-width: 0;
+  width: 100%;
   flex: 1;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--glass-line);
-  background: #000;
+  height: calc(var(--dock-h) - 8px);
+  padding: 0 10px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
+  font: inherit;
   font-size: 16px;
 }
-.search-status {
-  margin: 14px 0 4px;
+#map-search:focus-visible {
+  outline: none;
+}
+#map-search::-webkit-search-cancel-button,
+#map-search::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+#map-search::placeholder {
   color: var(--muted);
-  font-size: 13px;
 }
-.search-navigation {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
+.search-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
-.search-navigation span {
-  flex: 1;
-  text-align: center;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-}
-.search-navigation button {
+.search-count {
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
-  padding: 10px;
-}
-.search-navigation svg {
-  width: 20px;
-  height: 20px;
-}
-#search-next svg {
-  transform: rotate(180deg);
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 14%, var(--bg));
+  color: var(--c);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .map-options {
   display: flex;
@@ -1251,6 +1298,23 @@ dialog form > label.place-note {
   position: absolute;
   inset: -5px;
 }
+/* Search replaces the dock with the same black pill, outline, and footprint. */
+.sheet[data-panel="search"] {
+  bottom: var(--hud-bottom);
+  max-width: 340px;
+  padding: 0;
+  border: 0;
+  border-radius: 27px;
+  background: transparent;
+  box-shadow: none;
+}
+.sheet[data-panel="search"] .sheet-grabber,
+.sheet[data-panel="search"] .sheet-header {
+  display: none;
+}
+.sheet[data-panel="search"] .sheet-content {
+  overflow: visible;
+}
 .sheet-content {
   min-height: 0;
   overflow: auto;
@@ -1594,15 +1658,6 @@ input[type="range"] {
 }
 
 /* ---------- Overlay symbols ---------- */
-.overlay-label {
-  fill: #fff;
-  stroke: #05070a;
-  stroke-width: 4px;
-  paint-order: stroke;
-  stroke-linejoin: round;
-  font-size: 13px;
-  font-weight: 650;
-}
 .route-flow {
   display: none;
 }

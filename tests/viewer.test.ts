@@ -143,8 +143,8 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.match(canvas.style.filter, /^invert\(1\) hue-rotate\(180deg\) contrast\([\d.]+\) brightness\([\d.]+\) brightness\(0\.4\)$/);
     assert.equal(overlay.querySelector("text")!.textContent, "<Entrance>");
     assert.equal(
-      overlay.querySelector("text")!.getAttribute("class"),
-      "overlay-label",
+      overlay.querySelector("text")!.parentElement!.classList.contains("overlay-label"),
+      true,
     );
     assert.match(
       overlay.querySelector('[data-layer="places"] > g')!.getAttribute("transform")!,

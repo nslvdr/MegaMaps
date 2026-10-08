@@ -156,7 +156,7 @@ test("OCR storage preserves an old index during a rerun, rename preserves data, 
   assert.equal(await loadOcr(map.id), undefined);
 });
 
-test("search mask holes track pan, zoom, and camera rotation independently of display filters", () => {
+test("search callouts and mask holes track pan, zoom, and rotation independently of display filters", () => {
   const { document } = parseHTML("<html><body><svg></svg></body></html>");
   Object.defineProperty(globalThis, "document", {
     value: document,
@@ -180,6 +180,61 @@ test("search mask holes track pan, zoom, and camera rotation independently of di
       .join(" "),
   );
   assert.equal(svg.style.filter, "");
+  const matches = [
+    ...match,
+    { text: "<North>", polygons: [polygon(300)] },
+  ];
+  overlay.set(matches, true);
+  const viewport = { width: 390, height: 844 };
+  overlay.draw({ x: 50, y: 80, scale: 0.02 }, viewport);
+  const first = svg.querySelector(".search-highlight")!;
+  const tick = first.querySelector("line")!;
+  assert.equal(tick.hasAttribute("hidden"), true, "the selected match uses its callout connector");
+  assert.equal(first.hasAttribute("data-selected"), true);
+  assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "Nord");
+  const beforePan = tick.getAttribute("x2");
+  overlay.draw({ x: 70, y: 80, scale: 0.02 }, viewport);
+  assert.ok(Math.abs(Number(tick.getAttribute("x2")) - Number(beforePan) - 20) < 1e-9);
+  overlay.draw({ x: 10, y: 80, scale: 2 }, viewport);
+  assert.equal(tick.getAttribute("x2"), "250", "the connector follows the text center while zooming");
+  assert.equal(tick.getAttribute("y2"), "140", "the connector ends on the text's upper edge");
+  const label = svg.querySelector(".search-selected-label")!;
+  const connector = label.querySelector("line")!;
+  const labelPosition = () => label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+  const endpoint = { x: labelPosition()[0]! + Number(connector.getAttribute("x2")),
+    y: labelPosition()[1]! + Number(connector.getAttribute("y2")) };
+  assert.ok(endpoint.x >= 210 && endpoint.x <= 290 && endpoint.y >= 140 && endpoint.y <= 170);
+  assert.ok(endpoint.x === 210 || endpoint.x === 290 || endpoint.y === 140 || endpoint.y === 170,
+    "the connector ends on the text boundary from any available direction");
+  assert.equal(label.querySelector(".map-callout-icon")!.getAttribute("aria-hidden"), "true");
+  overlay.set(matches, true, 1);
+  overlay.draw({ x: 50, y: 80, scale: 0.02 }, viewport);
+  assert.equal(svg.querySelector(".search-highlight"), first, "selection changes reuse the geometry");
+  assert.equal(first.hasAttribute("data-selected"), false);
+  assert.equal(svg.querySelectorAll(".search-highlight .map-callout:not([hidden])").length, 2, "all visible matches keep callouts when navigating");
+  assert.equal(svg.querySelectorAll(".search-highlight[data-selected]").length, 1);
+  assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "<North>");
+  assert.equal(svg.querySelector(".search-selected-label North"), null, "OCR text is never markup");
+  overlay.set(matches, true, 0);
+  overlay.draw({ x: 0, y: 0, scale: 1 }, viewport);
+  assert.equal(labelPosition()[1], 67, "near the top edge, the callout moves below the text");
+  assert.equal(connector.getAttribute("y1"), "0", "a lower callout connects through its top edge");
+  overlay.draw({ x: 250, y: 80, scale: 1 }, viewport);
+  const calloutWidth = Number(label.querySelector("rect")!.getAttribute("width"));
+  assert.ok(labelPosition()[0]! + calloutWidth <= viewport.width - 8,
+    "the callout stays inside the screen near the right edge");
+  overlay.set([{ text: "W".repeat(60), polygons: [polygon(0)] }], true);
+  const labelText = svg.querySelector<SVGTextElement>(".map-callout text")!;
+  Object.defineProperty(labelText, "getComputedTextLength", {
+    value: () => Array.from(labelText.textContent!).length * 14,
+  });
+  overlay.draw({ x: 0, y: 80, scale: 1 }, { width: 120, height: 200 });
+  assert.ok(labelText.textContent!.endsWith("…"), "long labels are truncated");
+  assert.ok(labelText.getComputedTextLength() + 51 <= 104,
+    "wide proportional letters fit beside the text icon within the available callout width");
+  overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
+  assert.equal(svg.querySelector(".search-selected-label")!.hasAttribute("hidden"), true,
+    "offscreen matches do not leave a floating label over an unrelated location");
   overlay.set([], true);
   assert.equal(
     svg.hasAttribute("hidden"),

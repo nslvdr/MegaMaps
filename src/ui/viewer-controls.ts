@@ -19,13 +19,13 @@ import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
-  searchOcr,
   type OcrIndex,
-  type OcrMatch,
 } from "../ocr/index";
+import { searchMap, type MapSearchMatch } from "../viewer/map-search";
 const sheets = ["display", "saved", "search"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number];
+const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const darkMessages: Record<DarkMode["kind"], string> = {
   inverted: "Colors inverted, background pure black",
@@ -39,11 +39,13 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
-  private searchMatches: OcrMatch[] = [];
-  private searchPosition = 0;
+  private searchMatches: MapSearchMatch[] = [];
+  private searchPosition = -1;
+  private searchTimer?: ReturnType<typeof setTimeout>;
+  private searchQuery = "";
   private controller = new AbortController();
   private persistence: NavigationPersistence;
   private tool: Tool = "browse";
@@ -114,6 +116,18 @@ export class ViewerControls {
       navigation: this.state,
       overlay: this.root.querySelector<SVGSVGElement>("#map-overlay")!,
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
+      labelObstacles: () => {
+        const stage = this.el("map-stage").getBoundingClientRect();
+        return ["back", "dock", "sheet", "add-bar", "tool-bar"].flatMap(id => {
+          const element = this.el(id);
+          if (element.hidden) return [];
+          const rect = element.getBoundingClientRect();
+          return rect.width && rect.height ? [{
+            left: rect.left - stage.left, right: rect.right - stage.left,
+            top: rect.top - stage.top, bottom: rect.bottom - stage.top,
+          }] : [];
+        });
+      },
       onView: () => {
         this.persistence.changed();
         this.renderView();
@@ -151,6 +165,7 @@ export class ViewerControls {
   private changed() {
     this.persistence.changed();
     this.viewer?.updateNavigation(this.state);
+    if (this.openSheet === "search" && !this.searchTimer) this.renderSearch();
     this.render();
   }
   private toast(message: string) {
@@ -163,6 +178,7 @@ export class ViewerControls {
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;
     if (previous === "search" && name !== "search") {
+      this.input("map-search").blur();
       this.input("map-search").value = "";
       this.renderSearch();
     }
@@ -174,7 +190,8 @@ export class ViewerControls {
     // Tints the panel with its pill button's neon color.
     this.el("sheet").dataset.panel = name ?? "";
     this.el("sheet").style.transform = "";
-    this.el("sheet-dismiss").hidden = !name;
+    this.el("sheet-dismiss").hidden = !name || name === "search";
+    this.el("close-sheet").hidden = name === "search";
     for (const sheet of sheets) {
       const panel = this.el(`sheet-${sheet}`);
       panel.hidden = sheet !== name;
@@ -402,19 +419,20 @@ export class ViewerControls {
     }, SPOTLIGHT_MS);
   }
   private bind() {
-    this.on(this.input("map-search"), "input", () => this.renderSearch());
-    this.click("clear-search", () => {
-      this.input("map-search").value = "";
-      this.renderSearch();
-      this.input("map-search").focus();
+    this.on(this.root, "click", event => {
+      const target = event.target as Element;
+      if (this.openSheet === "search" && !target.closest(".search-field, #open-search"))
+        this.sheet(undefined);
     });
-    this.click("search-next", () => this.focusSearch(1));
-    this.click("search-previous", () => this.focusSearch(-1));
+    this.on(this.el("map-canvas"), "pointerdown", () => {
+      if (this.openSheet === "search") this.input("map-search").blur();
+    });
+    this.on(this.input("map-search"), "input", () => this.queueSearch());
     this.on(this.input("map-search"), "keydown", (event) => {
       const key = event as KeyboardEvent;
-      if (key.key === "Enter") {
+      if (key.key === "Enter" && !key.isComposing) {
         key.preventDefault();
-        this.focusSearch(key.shiftKey ? -1 : 1);
+        this.focusSearch(key.shiftKey ? -1 : this.searchPosition < 0 ? 0 : 1);
       }
     });
     for (const sheet of sheets)
@@ -476,7 +494,10 @@ export class ViewerControls {
     this.on(window, "resize", () => this.closeRowMenu());
     if (window.visualViewport)
       this.on(window.visualViewport, "resize", () => this.closeRowMenu());
-    this.on(this.el("sheet"), "animationend", () => this.positionRowMenu());
+    this.on(this.el("sheet"), "animationend", () => {
+      this.positionRowMenu();
+      this.viewer?.refreshLabels?.();
+    });
     this.on(document, "visibilitychange", () => {
       if (document.hidden) void this.flush();
     });
@@ -591,6 +612,7 @@ export class ViewerControls {
         if (start === undefined) return;
         offset = Math.max(0, (event as PointerEvent).clientY - start);
         sheet.style.transform = `translateY(${offset}px)`;
+        this.viewer?.refreshLabels?.();
       });
       for (const type of ["pointerup", "pointercancel"])
         this.on(handle, type, () => {
@@ -598,7 +620,10 @@ export class ViewerControls {
           start = undefined;
           sheet.classList.remove("dragging");
           if (offset > 70) this.sheet(undefined, true);
-          else sheet.style.transform = "";
+          else {
+            sheet.style.transform = "";
+            this.viewer?.refreshLabels?.();
+          }
         });
     }
   }
@@ -629,11 +654,12 @@ export class ViewerControls {
     return true;
   }
   private renderTool() {
+    this.viewer?.refreshLabels?.();
     this.root.dataset.tool = this.tool;
     const editing = this.tool !== "browse",
       sheetOpen = !!this.openSheet;
-    // The pill never leaves: panels open above it, and so do the Place /
-    // Route choice and the tap hint. Add's + turns into × for both.
+    // Search replaces the pill; the other panels and placing tools sit above it.
+    this.el("dock").hidden = this.openSheet === "search";
     this.el("add-bar").hidden = !this.choosing;
     const add = this.el("open-add");
     add.setAttribute("aria-expanded", String(this.choosing));
@@ -967,53 +993,63 @@ export class ViewerControls {
   refreshMetadata() {
     this.render();
   }
-  // Progress/failures are visible while the map remains usable during indexing.
+  // Keep detection status available to assistive technology while indexing.
   updateOcr(index: OcrIndex | undefined, message = "") {
     const sameIndex = this.ocr === index;
     this.ocr = index;
     this.ocrMessage = message;
-    this.renderSearch(sameIndex);
+    this.renderSearch(sameIndex || !!this.searchTimer);
+  }
+  // Typing coalesces into one search; clearing and result navigation apply immediately.
+  private queueSearch() {
+    clearTimeout(this.searchTimer);
+    this.searchTimer = undefined;
+    const query = this.input("map-search").value;
+    if (!normalizeText(query)) {
+      this.renderSearch();
+      return;
+    }
+    this.searchTimer = setTimeout(() => this.renderSearch(), SEARCH_DEBOUNCE_MS);
   }
   private renderSearch(statusOnly = false) {
-    const query = this.input("map-search").value;
-    const active = !!normalizeText(query);
     if (!statusOnly) {
-      this.searchMatches = searchOcr(this.ocr, query);
+      clearTimeout(this.searchTimer);
+      this.searchTimer = undefined;
+      this.searchQuery = this.input("map-search").value;
+      this.searchMatches = searchMap(this.ocr, this.state.markers, this.searchQuery);
       this.searchPosition = -1;
-      this.viewer?.setSearch?.(this.searchMatches, active && !!this.ocr);
-      this.el("search-result").textContent = this.searchMatches.length
-        ? "Show a result"
-        : "";
+      this.viewer?.setSearch?.(this.searchMatches,
+        !!normalizeText(this.searchQuery) && (!!this.ocr || !!this.searchMatches.length));
     }
+    const active = !!normalizeText(this.searchQuery);
     const count = this.searchMatches.length;
-    const message = !this.ocr
-      ? this.ocrMessage ||
-        "Text detection is not ready. Open the map’s Advanced settings to retry."
-      : active
-        ? count
-          ? `${count} ${count === 1 ? "match" : "matches"}`
-          : "No matching text found."
-        : this.ocr.lines.length
-          ? "Type to highlight matching text. Drag and zoom to explore."
-          : "No text detected. You can rerun detection in the map’s Advanced settings.";
-    this.el("search-status").textContent =
-      this.ocr && this.ocrMessage ? `${message} · ${this.ocrMessage}` : message;
-    this.el("search-navigation").hidden = !count;
-    this.el<HTMLButtonElement>("clear-search").disabled = !query;
+    const message = active
+      ? count ? `${count} ${count === 1 ? "match" : "matches"}`
+        : this.ocr ? "No matching text or saved places found." : "No matching saved places yet."
+      : "Search map text and saved places. Drag and zoom to explore.";
+    const progress = this.ocrMessage || (!this.ocr ? "Text detection is not ready. Open the map’s Advanced settings to retry." : "");
+    this.el("search-status").textContent = progress ? `${message} · ${progress}` : message;
+    const badge = this.el("search-count");
+    badge.textContent = String(count);
+    badge.hidden = !active;
+    badge.setAttribute("aria-label", `${count} ${count === 1 ? "result" : "results"}`);
+    badge.title = this.el("search-status").textContent ?? "";
+    this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {
+    // Enter never navigates the stale result of an earlier keystroke.
+    if (this.searchTimer) {
+      this.renderSearch();
+      delta = 0;
+    }
     const count = this.searchMatches.length;
     if (!count) return;
-    this.searchPosition =
-      this.searchPosition < 0
-        ? delta > 0
-          ? 0
-          : count - 1
-        : (this.searchPosition + delta + count) % count;
+    this.searchPosition = (Math.max(0, this.searchPosition) + delta + count) % count;
     const match = this.searchMatches[this.searchPosition]!;
-    this.viewer?.fitPoints(match.polygons.flat());
-    this.el("search-result").textContent =
-      `${this.searchPosition + 1} / ${count} · ${match.text}`;
+    this.input("map-search").blur();
+    this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
+    if (match.marker) this.viewer?.jumpTo(match.marker.point);
+    else this.viewer?.fitPoints(match.polygons.flat());
   }
   async flush() {
     await this.persistence.flush();
@@ -1032,6 +1068,7 @@ export class ViewerControls {
     // Leaving mid-route keeps a usable route rather than an orphan draft.
     if (this.tool === "route") this.finishRoute();
     this.sheet(undefined);
+    clearTimeout(this.searchTimer);
     clearTimeout(this.toastTimer);
     clearTimeout(this.spotlightTimer);
     clearTimeout(this.confirmTimer);

@@ -9,9 +9,9 @@ import { saveMap } from "../src/storage/database";
 import { loadNavigation } from "../src/storage/navigation";
 import type { Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
-import type { OcrMatch } from "../src/ocr/index";
+import type { MapSearchMatch } from "../src/viewer/map-search";
 
-test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotation lock, places and routes", async () => {
+test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotation lock, places and routes", async (t) => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -47,10 +47,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   await saveMap(map);
   const state = defaultNavigation("controls");
   let rotation = 0;
+  let labelRefreshes = 0;
   const tools: string[] = [],
     framed: Point[][] = [],
     jumps: Point[] = [];
-  let highlights: { matches: OcrMatch[]; active: boolean } | undefined;
+  let highlights: { matches: MapSearchMatch[]; active: boolean; selected: number } | undefined;
   // A touch lock saved by an older version must not trap the map.
   state.touchLocked = true;
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
@@ -70,8 +71,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     fitPoints(points: Point[]) {
       framed.push(points);
     },
-    setSearch(matches, active) {
-      highlights = { matches, active };
+    setSearch(matches, active, selected = 0) {
+      highlights = { matches, active, selected };
+    },
+    refreshLabels() {
+      labelRefreshes++;
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -144,7 +148,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
         "rotation-lock",
       ],
     );
+    const refreshesBeforeOpening = labelRefreshes;
     click("open-saved");
+    assert.ok(labelRefreshes > refreshesBeforeOpening, "opening a panel refreshes labels on an idle map");
     assert.equal(sheet.hidden, false);
     assert.equal(el("sheet-saved").hidden, false);
     assert.equal(el("sheet-display").hidden, true);
@@ -181,6 +187,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("close-sheet");
     click("open-display");
     assert.equal(el("sheet-title").textContent, "View");
+    assert.equal(el("sheet-dismiss").hidden, false);
     click("open-display");
     assert.equal(sheet.hidden, true);
     click("open-saved");
@@ -566,9 +573,17 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(stage.classList.contains("spotlight"), true);
     assert.equal(el("spotlight").classList.contains("active"), true);
 
-    // Search stays usable while OCR runs, then reveals only matching polygons.
-    click("open-search");
+    // Search stays usable while OCR runs, then reveals every matching location.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    el("open-search").dispatchEvent(new window.Event("click", { bubbles: true }));
     assert.equal(el("sheet-search").hidden, false);
+    assert.equal(dock.hidden, true, "search replaces the navbar");
+    assert.equal(el("close-sheet").hidden, true);
+    assert.equal(el("sheet-search").querySelectorAll("input").length, 1);
+    assert.equal(el("sheet-search").querySelectorAll("button").length, 0);
+    assert.equal(el("search-count").parentElement, el("map-search").parentElement);
+    assert.equal(el("search-count").hidden, true);
+    assert.equal(el("sheet-dismiss").hidden, true, "search leaves the canvas available for gestures");
     controls.updateOcr(undefined, "Detecting map text · 10%");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
@@ -589,28 +604,134 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       ],
     };
     controls.updateOcr(index);
+    assert.equal(highlights?.active, false, "OCR arriving during typing preserves the debounce");
+    t.mock.timers.tick(200);
     assert.equal(highlights?.active, true);
     assert.equal(highlights?.matches.length, 1);
+    el("map-canvas").dispatchEvent(new window.Event("pointerdown"));
+    assert.equal(sheet.hidden, false, "touching the map keeps search open");
+    assert.equal((el("map-search") as HTMLInputElement).value, "north");
+    assert.equal(highlights?.active, true, "map gestures keep the matches highlighted");
     assert.match(el("search-status").textContent!, /1 match/);
-    click("search-next");
+    assert.equal(el("search-count").textContent, "1");
+    assert.equal(el("search-count").hidden, false);
+    assert.equal(el("search-count").getAttribute("aria-label"), "1 result");
+    el("map-search").dispatchEvent(new window.Event("click", { bubbles: true }));
+    el("search-count").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(sheet.hidden, false, "clicking inside the search field keeps it open");
+    assert.equal(highlights?.active, true);
+    el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(sheet.hidden, true, "clicking outside closes search");
+    assert.equal(dock.hidden, false, "closing search restores the navbar");
+    assert.equal(highlights?.active, false, "closing removes search highlights");
+    assert.equal((el("map-search") as HTMLInputElement).value, "");
+    click("open-search");
+    input("map-search", "north");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(200);
+    key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), polygon);
     controls.updateOcr(index, "Detecting map text · 20%");
     assert.match(
-      el("search-result").textContent!,
-      /1 \/ 1/,
+      el("search-count").textContent!,
+      /^1$/,
       "progress keeps the selected result",
     );
+    const secondPolygon = polygon.map(({ x, y }) => ({ x: x + 500, y }));
+    const multiple = {
+      ...index,
+      lines: [...index.lines, {
+        text: "North entrance", confidence: 90,
+        words: [{ text: "North", polygon: secondPolygon }],
+      }],
+    };
+    const frameCount = framed.length;
+    controls.updateOcr(multiple);
+    assert.equal(framed.length, frameCount, "previewing a match leaves the map in place");
+    assert.equal(el("search-count").textContent, "2");
+    key(el("map-search"), "Enter");
+    key(el("map-search"), "Enter");
+    assert.deepEqual(framed.at(-1), secondPolygon);
+    assert.equal(highlights?.selected, 1, "the overlay emphasizes the navigated result");
+    assert.equal(el("search-count").textContent, "2");
+    controls.updateOcr(multiple, "Detecting map text · 30%");
+    assert.equal(highlights?.selected, 1, "OCR progress preserves the overlay selection");
+    assert.equal(el("search-count").textContent, "2", "progress keeps the current match");
+    key(el("map-search"), "Enter");
+    assert.deepEqual(framed.at(-1), polygon, "next wraps to the first match");
+    const previous = new window.Event("keydown", { cancelable: true });
+    Object.defineProperties(previous, { key: { value: "Enter" }, shiftKey: { value: true } });
+    el("map-search").dispatchEvent(previous);
+    assert.deepEqual(framed.at(-1), secondPolygon, "previous wraps to the last match");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
+    assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
+    t.mock.timers.tick(199);
+    assert.equal(highlights?.matches.length, 2);
+    t.mock.timers.tick(1);
     assert.equal(highlights?.matches.length, 0);
     assert.equal(highlights?.active, true);
     assert.match(el("search-status").textContent!, /No matching/);
-    click("clear-search");
+    assert.equal(el("search-count").textContent, "0");
+    assert.equal(el("search-count").hidden, false);
+    input("map-search", "");
+    el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.active, false);
+    assert.equal(el("search-count").hidden, true);
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
-    click("close-sheet");
+    stage.dispatchEvent(new window.Event("click", { bubbles: true }));
     assert.equal(highlights?.active, false, "closing search restores the map");
+    assert.equal(dock.hidden, false);
+    t.mock.timers.tick(200);
+    assert.equal(highlights?.active, false, "closing cancels the pending search");
+
+    // Saved places work independently of text detection and layer visibility.
+    const originalMarkers = [...state.markers];
+    const landmarks = Array.from({ length: 30 }, (_, i) => ({
+      id: `search-place-${i}`, kind: "landmark" as const,
+      label: i ? `Église ${i}` : "<Église>", note: "North entrance",
+      point: { x: 400 + i * 100, y: 500 }, created: i,
+    }));
+    state.markers.push(...landmarks);
+    controls.updateOcr(undefined, "Detecting map text · 40%");
+    click("open-search");
+    input("map-search", "egl");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(100);
+    input("map-search", "eglise");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(100);
+    assert.equal(highlights?.matches.length, 0, "each keystroke restarts the debounce");
+    t.mock.timers.tick(100);
+    assert.equal(highlights?.matches.length, 30);
+    assert.equal(highlights?.active, true, "saved places highlight while OCR is pending and Places is hidden");
+    assert.equal(el("search-count").textContent, "30", "the badge counts every matching location");
+    assert.equal(el("search-count").getAttribute("aria-label"), "30 results");
+    key(el("map-search"), "Enter");
+    assert.deepEqual(jumps.at(-1), landmarks[0]!.point);
+    key(el("map-search"), "Enter");
+    assert.deepEqual(jumps.at(-1), landmarks[1]!.point);
+    assert.equal(highlights?.selected, 1);
+    controls.updateOcr(undefined, "Detecting map text · 50%");
+    assert.equal(highlights?.selected, 1, "progress preserves saved-place selection");
+    input("map-search", "north");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    const enter = new window.Event("keydown", { cancelable: true });
+    Object.defineProperty(enter, "key", { value: "Enter" });
+    el("map-search").dispatchEvent(enter);
+    assert.equal(highlights?.matches.length, 30, "Enter immediately searches the latest query, including notes");
+    assert.equal(highlights?.selected, 0);
+    input("map-search", "unknown");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    input("map-search", "");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(200);
+    assert.equal(highlights?.active, false, "clear cancels a pending query");
+    key(root, "Escape");
+    assert.equal(dock.hidden, false, "Escape restores the navbar too");
+    state.markers = originalMarkers;
+    t.mock.timers.reset();
 
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
