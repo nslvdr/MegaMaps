@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, copyFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
@@ -18,6 +18,8 @@ import {
 } from "../src/ocr/index";
 import { OCR_WINDOW, ocrCrops, labelPoint, scanMap } from "../src/ocr/scan";
 import { createTextDetector } from "../src/ocr/detector";
+import { startOcrEngines } from "../src/ocr/engines";
+import { OCR_TILE_CACHE_BYTES } from "../src/ocr/tiles";
 import { regionPoint } from "../src/ocr/regions";
 import { pathToFileURL } from "node:url";
 import { detectMapText, type OcrReply } from "../src/ocr/detect";
@@ -293,27 +295,31 @@ test(
     };
     const store = payloadStore("indexeddb");
     const detectorStarted = performance.now();
-    const detector = await createTextDetector(
-      new Uint8Array(
-        await readFile(
-          new URL("../assets/ocr/pp-ocrv5-mobile-det.onnx", import.meta.url),
-        ),
+    const model = new Uint8Array(
+      await readFile(
+        new URL("../assets/ocr/pp-ocrv5-mobile-det.onnx", import.meta.url),
       ),
-      pathToFileURL(dirname(require.resolve("onnxruntime-web/wasm")) + "/")
-        .href,
     );
-    const detectorSetupMs = performance.now() - detectorStarted;
-    const worker = await createWorker("eng", OEM.LSTM_ONLY, {
-      langPath: join(
-        dirname(require.resolve("@tesseract.js-data/eng/package.json")),
-        "4.0.0_best_int",
+    await copyFile(
+      new URL("../assets/ocr/eng-fast.traineddata.gz", import.meta.url),
+      join(root, "eng.traineddata.gz"),
+    );
+    const { detector, recognizer: worker } = await startOcrEngines(
+      createWorker("eng", OEM.LSTM_ONLY, {
+        langPath: root,
+        cacheMethod: "none",
+      }),
+      createTextDetector(
+        model,
+        pathToFileURL(dirname(require.resolve("onnxruntime-web/wasm")) + "/")
+          .href,
       ),
-      cacheMethod: "none",
-    });
+    );
+    const setupMs = performance.now() - detectorStarted;
     if (process.env.OCR_BENCHMARK)
       console.log(
         "OCR_BENCHMARK",
-        JSON.stringify({ fixture: "setup", ms: detectorSetupMs }),
+        JSON.stringify({ fixture: "setup", ms: setupMs }),
       );
     try {
       await worker.setParameters({
@@ -360,8 +366,8 @@ test(
         );
       assert.equal(
         recognitionCalls,
-        10,
-        "only the five label crops are recognized, in both reading directions",
+        5,
+        "confident label crops skip the opposite reading direction",
       );
       for (const label of labels) {
         const matches = searchOcr(detected, label.text);
@@ -382,9 +388,51 @@ test(
       assert.equal(progress.at(-1), 1);
       assert.equal(nativeStats.decodedBytes, 0);
       assert.ok(
-        nativeStats.peakDecodedBytes <= 512 * 512 * 4,
-        "only one tile decode is alive at a time",
+        nativeStats.peakDecodedBytes <= OCR_TILE_CACHE_BYTES,
+        "decoded overlap tiles stay within the scan cache budget",
       );
+      // A high page score alone cannot skip empty output or a weak word.
+      for (const mode of ["page", "word", "empty"]) {
+        let directionCalls = 0;
+        const retried = await scanMap(
+          record,
+          store,
+          async () => [
+            {
+              center: { x: 512, y: 130 },
+              width: 260,
+              height: 60,
+              angle: mode === "empty" ? Math.PI : 0,
+              score: 1,
+            },
+          ],
+          async (image) => {
+            directionCalls++;
+            if (directionCalls === 1 && mode === "empty")
+              return { blocks: null, confidence: 99 };
+            const data = await recognize(image);
+            if (directionCalls === 1) {
+              if (mode === "page") data.confidence = 80;
+              if (mode === "word") {
+                data.confidence = 99;
+                const word =
+                  data.blocks?.[0]?.paragraphs[0]?.lines[0]?.words[0];
+                assert.ok(word);
+                word.confidence = 60;
+              }
+            }
+            return data;
+          },
+          () => {},
+          new AbortController().signal,
+        );
+        assert.equal(
+          directionCalls,
+          2,
+          `${mode} retries the reverse direction`,
+        );
+        assert.ok(searchOcr(retried, "north gate").length > 0);
+      }
       const cancel = new AbortController();
       let calls = 0;
       await assert.rejects(
@@ -451,7 +499,7 @@ test(
             rssMiB: process.memoryUsage().rss / 1048576,
           }),
         );
-      assert.equal(recognitionCalls, 2);
+      assert.equal(recognitionCalls, 1);
       assert.ok(
         searchOcr(darkIndex, "dark cavern").length > 0,
         "rotated white labels on dark maps are searchable",
@@ -489,7 +537,7 @@ test(
       assert.equal(searchOcr(borderIndex, "border passage").length, 1);
       assert.equal(
         recognitionCalls,
-        2,
+        1,
         "a clipped fragment is skipped and the complete label is read once",
       );
       // Empty detector output performs no recognition work and still finishes a valid index.
@@ -507,6 +555,66 @@ test(
       );
       assert.equal(emptyCalls, 0);
       assert.deepEqual(emptyIndex.lines, []);
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, 1024, 1024);
+      ctx.font = "bold 14px sans-serif";
+      for (const label of labels) {
+        ctx.save();
+        ctx.translate(label.x, label.y);
+        ctx.rotate((label.degrees * Math.PI) / 180);
+        ctx.fillStyle = "#222";
+        ctx.fillText(label.text, 0, 0);
+        ctx.restore();
+      }
+      for (let y = 0; y < 2; y++)
+        for (let x = 0; x < 2; x++) {
+          const tile = createCanvas(512, 512);
+          tile.getContext("2d").drawImage(source, -x * 512, -y * 512);
+          await store.put(
+            record.id,
+            tileKey(0, x, y),
+            new Blob([new Uint8Array(await tile.encode("png"))]),
+          );
+        }
+      const smallIndex = await scanMap(
+        record,
+        store,
+        detector.detect,
+        recognize,
+        () => {},
+        new AbortController().signal,
+      );
+      for (const label of labels)
+        assert.ok(
+          searchOcr(smallIndex, label.text).length > 0,
+          `14px label at ${label.degrees}° remains searchable`,
+        );
+      dc.fillStyle = "#111";
+      dc.fillRect(0, 0, 512, 512);
+      dc.font = "bold 16px sans-serif";
+      dc.fillStyle = "white";
+      dc.save();
+      dc.translate(256, 256);
+      dc.rotate((-58 * Math.PI) / 180);
+      dc.fillText("DARK CAVERN", 0, 0);
+      dc.restore();
+      await store.put(
+        record.id,
+        tileKey(0, 0, 0),
+        new Blob([new Uint8Array(await dark.encode("png"))]),
+      );
+      const smallDark = await scanMap(
+        { ...record, width: 512, height: 512 },
+        store,
+        detector.detect,
+        recognize,
+        () => {},
+        new AbortController().signal,
+      );
+      assert.ok(
+        searchOcr(smallDark, "dark cavern").length > 0,
+        "16px diagonal white labels on dark maps remain searchable",
+      );
     } finally {
       await detector.dispose();
       await worker.terminate();

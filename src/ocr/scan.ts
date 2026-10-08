@@ -1,11 +1,7 @@
 import type { Page } from "tesseract.js";
-import {
-  tileKey,
-  TILE_SIZE,
-  type MapRecord,
-  type ImportProgress,
-} from "../types";
+import { TILE_SIZE, type MapRecord, type ImportProgress } from "../types";
 import type { PayloadStore } from "../storage/payloads";
+import { OcrTileCache } from "./tiles";
 import { addOcrLine, OCR_VERSION, type OcrIndex, type OcrLine } from "./index";
 import {
   regionPoint,
@@ -70,10 +66,9 @@ function checkAbort(signal: AbortSignal) {
   signal.throwIfAborted();
 }
 
-// Assemble only a bounded crop from native-resolution tiles, closing each decode.
+// Draw columns in order so the cache retains the next section's shared edge.
 async function readCrop(
-  map: MapRecord,
-  store: PayloadStore,
+  tiles: OcrTileCache,
   crop: OcrCrop,
   signal: AbortSignal,
 ) {
@@ -83,25 +78,19 @@ async function readCrop(
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, crop.width, crop.height);
     for (
-      let y = Math.floor(crop.y / TILE_SIZE);
-      y < Math.ceil((crop.y + crop.height) / TILE_SIZE);
-      y++
+      let x = Math.floor(crop.x / TILE_SIZE);
+      x < Math.ceil((crop.x + crop.width) / TILE_SIZE);
+      x++
     )
       for (
-        let x = Math.floor(crop.x / TILE_SIZE);
-        x < Math.ceil((crop.x + crop.width) / TILE_SIZE);
-        x++
+        let y = Math.floor(crop.y / TILE_SIZE);
+        y < Math.ceil((crop.y + crop.height) / TILE_SIZE);
+        y++
       ) {
         checkAbort(signal);
-        const bitmap = await createImageBitmap(
-          await store.get(map.id, tileKey(0, x, y)),
-        );
-        try {
-          checkAbort(signal);
-          ctx.drawImage(bitmap, x * TILE_SIZE - crop.x, y * TILE_SIZE - crop.y);
-        } finally {
-          bitmap.close();
-        }
+        const bitmap = await tiles.get(x, y);
+        checkAbort(signal);
+        ctx.drawImage(bitmap, x * TILE_SIZE - crop.x, y * TILE_SIZE - crop.y);
       }
     // Grayscale and invert dark backgrounds for the text recognizer only.
     const pixels = ctx.getImageData(0, 0, crop.width, crop.height);
@@ -147,11 +136,12 @@ export async function scanMap(
     lines: [],
   };
   const label = new OffscreenCanvas(1, 1);
+  const tiles = new OcrTileCache(map, store, signal);
   const seen: TextRegion[] = [];
   try {
     for (const [section, crop] of crops.entries()) {
       checkAbort(signal);
-      const source = await readCrop(map, store, crop, signal);
+      const source = await readCrop(tiles, crop, signal);
       try {
         onProgress({
           fraction: section / crops.length,
@@ -239,6 +229,23 @@ export async function scanMap(
                 }
             if (lines.length && (!best || data.confidence > best.confidence))
               best = { lines, confidence: data.confidence };
+            // Low-confidence or empty results still try the opposite direction.
+            if (
+              lines.length &&
+              data.confidence >= 90 &&
+              (data.blocks ?? []).every((block) =>
+                block.paragraphs.every((paragraph) =>
+                  paragraph.lines.every((line) =>
+                    line.words.every(
+                      (word) =>
+                        !/[\p{L}\p{N}]/u.test(word.text) ||
+                        word.confidence >= 85,
+                    ),
+                  ),
+                ),
+              )
+            )
+              break;
           }
           if (best) {
             seen.push(global);
@@ -262,6 +269,7 @@ export async function scanMap(
     index.completedAt = Date.now();
     return index;
   } finally {
+    tiles.dispose();
     label.width = label.height = 1;
   }
 }

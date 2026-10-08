@@ -1,7 +1,7 @@
 import { env, InferenceSession, Tensor } from "onnxruntime-web/wasm";
 import { probabilityRegions } from "./regions";
 
-export const DETECTOR_SIDE = 960;
+export const DETECTOR_SIDE = 768;
 
 // Normalize BGR channels exactly as the bundled PP-OCRv5 detector expects.
 export function detectorInput(

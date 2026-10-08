@@ -1,0 +1,235 @@
+{
+  "recordedAt": "2026-10-08",
+  "host": "Apple M4 Pro",
+  "node": "v24.9.0",
+  "architecture": "arm64",
+  "baselineCommit": "cdfd700",
+  "methodology": "Three separate serial runs per variant, median values. Same Node/native-canvas fixtures; single-threaded ONNX Runtime Web WASM. Before is the 960-pixel region-first pipeline with best_int, two directions, sequential startup and immediate tile disposal. After includes all five optimizations. Setup includes engine startup and local model reads; scan timings exclude setup. The 2560-square tile-cache fixture uses empty detection to isolate crop assembly, while checking exact pixels. No browser or phone timings.",
+  "optimizations": {
+    "detectorSide": 768,
+    "pageConfidenceForSinglePass": 90,
+    "minimumWordConfidenceForSinglePass": 85,
+    "languageModel": "tessdata_fast/eng at 87416418657359cb625c412a48b6e1d6d41c29bd",
+    "concurrentStartup": true,
+    "tileCacheBytes": 4194304,
+    "tileDrawingOrder": "column-first"
+  },
+  "results": [
+    {
+      "variant": "before",
+      "samples": [
+        [
+          {
+            "fixture": "setup",
+            "ms": 258.444708,
+            "detectorSetupMs": 125.40637499999997
+          },
+          {
+            "fixture": "light",
+            "ms": 468.180166,
+            "recognitionCalls": 10,
+            "rssMiB": 539.765625
+          },
+          {
+            "fixture": "dark",
+            "ms": 115.07475000000011,
+            "recognitionCalls": 2,
+            "rssMiB": 546.234375
+          },
+          {
+            "fixture": "tile-cache",
+            "ms": 50.42545799999999,
+            "sections": 9,
+            "tileDecodes": 49,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 1048576
+          }
+        ],
+        [
+          {
+            "fixture": "setup",
+            "ms": 253.74470800000003,
+            "detectorSetupMs": 123.48654200000001
+          },
+          {
+            "fixture": "light",
+            "ms": 459.637959,
+            "recognitionCalls": 10,
+            "rssMiB": 547.5
+          },
+          {
+            "fixture": "dark",
+            "ms": 112.43858399999999,
+            "recognitionCalls": 2,
+            "rssMiB": 554.125
+          },
+          {
+            "fixture": "tile-cache",
+            "ms": 50.68783299999998,
+            "sections": 9,
+            "tileDecodes": 49,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 1048576
+          }
+        ],
+        [
+          {
+            "fixture": "setup",
+            "ms": 249.1855,
+            "detectorSetupMs": 123.01266600000002
+          },
+          {
+            "fixture": "light",
+            "ms": 461.342708,
+            "recognitionCalls": 10,
+            "rssMiB": 541.640625
+          },
+          {
+            "fixture": "dark",
+            "ms": 117.16216600000007,
+            "recognitionCalls": 2,
+            "rssMiB": 543.5
+          },
+          {
+            "fixture": "tile-cache",
+            "ms": 50.66358299999999,
+            "sections": 9,
+            "tileDecodes": 49,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 1048576
+          }
+        ]
+      ],
+      "medians": {
+        "setup": {
+          "ms": 253.745,
+          "detectorSetupMs": 123.487
+        },
+        "light": {
+          "ms": 461.343,
+          "recognitionCalls": 10,
+          "rssMiB": 541.641
+        },
+        "dark": {
+          "ms": 115.075,
+          "recognitionCalls": 2,
+          "rssMiB": 546.234
+        },
+        "tile-cache": {
+          "ms": 50.664,
+          "sections": 9,
+          "tileDecodes": 49,
+          "uncachedTileDecodes": 49,
+          "peakDecodedBytes": 1048576
+        }
+      }
+    },
+    {
+      "variant": "after",
+      "samples": [
+        [
+          {
+            "fixture": "tile-cache",
+            "ms": 48.87824999999998,
+            "sections": 9,
+            "tileDecodes": 35,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 4194304
+          },
+          {
+            "fixture": "setup",
+            "ms": 199.841417
+          },
+          {
+            "fixture": "light",
+            "ms": 276.60033400000003,
+            "recognitionCalls": 5,
+            "rssMiB": 481.4375
+          },
+          {
+            "fixture": "dark",
+            "ms": 97.34399999999994,
+            "recognitionCalls": 1,
+            "rssMiB": 485.453125
+          }
+        ],
+        [
+          {
+            "fixture": "tile-cache",
+            "ms": 48.87441599999997,
+            "sections": 9,
+            "tileDecodes": 35,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 4194304
+          },
+          {
+            "fixture": "setup",
+            "ms": 199.646167
+          },
+          {
+            "fixture": "light",
+            "ms": 274.173792,
+            "recognitionCalls": 5,
+            "rssMiB": 483.375
+          },
+          {
+            "fixture": "dark",
+            "ms": 96.45037500000001,
+            "recognitionCalls": 1,
+            "rssMiB": 502.078125
+          }
+        ],
+        [
+          {
+            "fixture": "tile-cache",
+            "ms": 49.17320799999999,
+            "sections": 9,
+            "tileDecodes": 35,
+            "uncachedTileDecodes": 49,
+            "peakDecodedBytes": 4194304
+          },
+          {
+            "fixture": "setup",
+            "ms": 198.736083
+          },
+          {
+            "fixture": "light",
+            "ms": 276.75091699999996,
+            "recognitionCalls": 5,
+            "rssMiB": 483.546875
+          },
+          {
+            "fixture": "dark",
+            "ms": 98.29308299999991,
+            "recognitionCalls": 1,
+            "rssMiB": 491.96875
+          }
+        ]
+      ],
+      "medians": {
+        "setup": {
+          "ms": 199.646
+        },
+        "light": {
+          "ms": 276.6,
+          "recognitionCalls": 5,
+          "rssMiB": 483.375
+        },
+        "dark": {
+          "ms": 97.344,
+          "recognitionCalls": 1,
+          "rssMiB": 491.969
+        },
+        "tile-cache": {
+          "ms": 48.878,
+          "sections": 9,
+          "tileDecodes": 35,
+          "uncachedTileDecodes": 49,
+          "peakDecodedBytes": 4194304
+        }
+      }
+    }
+  ],
+  "accuracy": "All original light/dark rotated labels and the internal section-edge label retained. Additional production-path tests cover 14-pixel rotated labels and 16-pixel diagonal dark-background text, low page/word confidence and empty-result reverse retries, startup failure cleanup, cancellation, cache eviction and exact overlap pixels.",
+  "limits": "Faster recognition and smaller detector input may reduce accuracy on real maps. RSS snapshots include Node, native canvas and allocator retention and are not peaks or browser budgets. Cache byte budget counts decoded tile pixels only; tensors, encoders, canvas buffers and engines allocate separately."
+}

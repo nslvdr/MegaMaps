@@ -5,7 +5,14 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const output = execFileSync(
   process.execPath,
-  ["--import", require.resolve("tsx"), "--test", "tests/ocr.test.ts"],
+  [
+    "--import",
+    require.resolve("tsx"),
+    "--test",
+    "--test-concurrency=1",
+    "tests/ocr.test.ts",
+    "tests/ocr-optimizations.test.ts",
+  ],
   {
     env: { ...process.env, OCR_BENCHMARK: "1" },
     encoding: "utf8",
@@ -19,7 +26,7 @@ const results = [...output.matchAll(/OCR_BENCHMARK (\{[^\n]+\})/g)].map(
       recognitionCalls?: number;
     },
 );
-if (results.length !== 3)
+if (results.length !== 4)
   throw new Error("OCR benchmark did not produce all fixture results.");
 console.log(
   JSON.stringify(
@@ -27,7 +34,7 @@ console.log(
       node: process.version,
       architecture: process.arch,
       runtime: "ONNX Runtime Web WASM, one thread",
-      note: "Synthetic native-canvas fixtures; no browser or device timing. Setup excludes Tesseract startup; scan results exclude both engine startups.",
+      note: "Synthetic native-canvas fixtures; no browser or device timing. Setup includes both concurrent engine startups; scans exclude setup. Tile-cache fixture uses empty detection to isolate crop assembly and decoded memory.",
       results,
     },
     null,

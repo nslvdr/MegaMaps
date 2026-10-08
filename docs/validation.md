@@ -22,6 +22,16 @@ On Apple M4 Pro / Node v24.9.0, serial initial scan measurements were 2,552 → 
 
 The detector adds about 19 MB of offline assets and increases inference memory. Node RSS snapshots include the test harness, native-canvas buffers, allocator retention and both engines; they are neither peaks nor Safari process budgets. No browser/physical-device initialization, memory or speed claim is made by these results.
 
+## Five further OCR optimizations — 2026-10-08
+
+All 53 tests and the strict TypeScript/production build pass. The 27-asset offline shell includes the pinned fast English model and its license. Smaller detector input (768 instead of 960), confidence-based reverse reads, `tessdata_fast`, concurrent engine startup and a 4 MiB decoded-tile LRU cache are enabled together. Tiles are drawn column-first to retain the next overlapping section's shared edge.
+
+Three serial runs per variant on the same desktop fixture gave median main scan times of 461 → 277 ms (40% faster), dark scan times of 115 → 97 ms, and startup times of 254 → 200 ms. Main recognition calls fell from 10 to 5; the dark label uses one instead of two. A 2560² overlap fixture checked exact pixels in all nine sections with empty detection to isolate tile assembly: decodes fell from 49 to 35, assembly time from 50.7 to 48.9 ms, and peak decoded tile pixels rose from 1 to the bounded 4 MiB budget. The cache's measured time benefit is modest; decode-count savings do not imply equal total-time savings. [Raw samples and medians](ocr-optimization-results.json) include methodology and limits. `npm run benchmark:ocr` reproduces the current startup, scan and cache checks.
+
+The original rotated labels, the clipped internal section-edge label, 14 px light-background labels in all five tested orientations and 16 px diagonal dark-background text remain searchable. Tests force empty output, low page confidence and low word confidence to verify reverse-direction retries. They also check cache refresh/eviction, transient decode memory, abort after decoding, scan cancellation, missing payloads, concurrent startup failure cleanup and cleanup errors preserving the startup failure.
+
+The fast model and reduced detection resolution can miss or misread text outside these fixtures. Process RSS medians decreased in the desktop runs, but include Node/native canvas/allocator retention and are not process peaks or phone budgets. Physical-device speed, memory and representative-map accuracy remain pending; no browser automation was used.
+
 ## Full image preprocessing benchmarks
 
 Host: Apple M4 Pro, macOS 27.0.1, Node v24.9.0. Each table row used a separate process. Values are rounded.
