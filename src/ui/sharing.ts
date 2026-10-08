@@ -4,19 +4,20 @@ import { tileKey } from "../types";
 import { payloadStore } from "../storage/payloads";
 import { readShare, type SharedMap } from "../sharing/format";
 import { exportFile, matchingMaps, prepareExport, type PreparedExport, type ShareSelection } from "../sharing/storage";
-import { formatBytes } from "./format";
+import { displayName, formatBytes, plural } from "./format";
+import { icons } from "./icons";
 
 export const sharingMarkup = `
 <input id="shared-file-input" type="file" accept=".megamap,application/octet-stream" hidden>
 <dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><h2 id="share-title">Share map</h2><p id="share-map-name"></p><p id="share-loading" role="status">Preparing share…</p>
-<div id="share-content" hidden><div id="share-selection" class="share-selection-actions"><button id="share-all" class="secondary">Select all</button><button id="share-none" class="secondary">Clear selection</button></div><div id="share-items" class="share-items" role="group" aria-label="Annotations to share"></div>
+<div id="share-content" hidden><div id="share-selection" class="share-selection-actions"><button id="share-all" class="secondary">${icons.check}<span>Select all</span></button><button id="share-none" class="secondary">${icons.close}<span>Clear selection</span></button></div><div id="share-items" class="share-items" role="group" aria-label="Annotations to share"></div>
 <label class="share-choice"><input id="share-image" type="checkbox"><span>Include map image<small>Your friend can import it without finding the original.</small></span></label><p id="share-size" role="status" aria-live="polite"></p><p class="dialog-note">Your friend receives an editable copy. Sending it again adds new items and keeps their edits.</p></div>
-<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>Share file</button><button id="share-save" class="secondary" disabled>Save file</button><button id="share-cancel" class="quiet">Cancel</button></div></dialog>
+<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button><button id="share-save" class="secondary" disabled>${icons.download}<span>Save file</span></button><button id="share-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></dialog>
 <dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title"><h2 id="receive-title">Import shared map</h2><p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
 <div id="receive-content" hidden><label class="share-field">Destination<select id="receive-destination"></select></label><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label>
 <p id="receive-match" class="dialog-note"></p><div id="receive-preview" class="share-preview" aria-label="Preview of shared annotations on the selected map" hidden><img id="receive-preview-image" alt="Selected map"><svg id="receive-preview-overlay" aria-hidden="true"></svg></div>
 <label id="receive-confirm-field" class="share-choice" hidden><input id="receive-confirm" type="checkbox"><span>I checked that the annotations line up</span></label><p class="dialog-note">Existing annotations stay intact. Previously imported items are skipped, including items you edited or deleted.</p></div>
-<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>Import</button><button id="receive-cancel" class="quiet">Cancel</button></div></dialog>`;
+<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>Import</span></button><button id="receive-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></dialog>`;
 
 export interface ShareDestination { mapId?: string; image?: File; allowDifferentImage: boolean }
 export interface ShareImportResult { map: MapRecord; added: number; skipped: number }
@@ -74,7 +75,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       try {
         file = exportFile(prepared, selection());
         const picked = selection();
-        el("share-size").textContent = `${picked.markers.length} places · ${picked.routes.length} routes · ${formatBytes(file.size)}`;
+        el("share-size").textContent = `${plural(picked.markers.length, "place")} · ${plural(picked.routes.length, "route")} · ${formatBytes(file.size)}`;
       } catch (error) {
         el("share-size").textContent = "";
         showError("share-error", error);
@@ -254,7 +255,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       const parsed = await readShare(input);
       if (version !== receiveVersion) return;
       const share = parsed.manifest;
-      el("receive-summary").textContent = `${share.map.name}\n${share.markers.length} places · ${share.routes.length} routes · ${parsed.image ? "Map image included" : "Annotations only"}`;
+      el("receive-summary").textContent = `${share.map.name}\n${plural(share.markers.length, "place")} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
       const available = (await options.maps()).filter((map) => map.status === "ready" && map.width === share.map.width && map.height === share.map.height);
       const exact = await matchingMaps(share, available, controller.signal);
       if (version !== receiveVersion) return;
@@ -294,7 +295,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       prepared = undefined;
       file = undefined;
       items.replaceChildren();
-      el("share-map-name").textContent = map.name;
+      el("share-map-name").textContent = displayName(map.name);
       el("share-loading").hidden = false;
       el("share-content").hidden = true;
       el("share-error").hidden = true;

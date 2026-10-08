@@ -568,6 +568,14 @@ dialog .dialog-error {
   background: none;
   color: var(--muted);
 }
+.primary svg,
+.secondary svg,
+.danger svg,
+.quiet svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
 .quiet.danger {
   border-color: transparent;
   background: none;
@@ -722,8 +730,8 @@ button.glass:active:not(:disabled) {
   top: var(--hud-top);
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
 }
@@ -924,11 +932,8 @@ button.glass:active:not(:disabled) {
   margin: 0;
   padding: 0 12px;
   font-size: 14px;
-  line-height: 20px;
+  line-height: 18px;
   color: #c9ced4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .tool-hint strong {
   color: var(--text);
@@ -983,7 +988,7 @@ button.glass:active:not(:disabled) {
   background: rgb(0 0 0 / 0.35);
 }
 .place-card h2 {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .kind-picker {
   display: grid;
@@ -997,7 +1002,8 @@ button.glass:active:not(:disabled) {
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  padding: 8px 2px 6px;
+  min-width: 0;
+  padding: 6px 2px 5px;
   border-radius: var(--radius-md);
   border: 1.5px solid transparent;
   font-size: 11px;
@@ -1011,8 +1017,14 @@ button.glass:active:not(:disabled) {
   pointer-events: none;
 }
 .kind-pick svg {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
+}
+.kind-pick span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  letter-spacing: -0.02em;
 }
 .kind-pick {
   transition:
@@ -1037,7 +1049,7 @@ button.glass:active:not(:disabled) {
 }
 dialog form > label.place-name,
 dialog form > label.place-note {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
 }
 .add-note {
   display: flex;
@@ -1047,15 +1059,16 @@ dialog form > label.place-note {
   margin-top: 4px;
   padding: 0 4px;
   background: none;
-  color: var(--muted);
-  font-size: 14px;
+  color: var(--c);
+  font-size: 15px;
+  font-weight: 600;
 }
 .add-note svg {
   width: 18px;
   height: 18px;
 }
 .place-card .dialog-actions {
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 /* ---------- Panels (open above the bottom pill) ---------- */
@@ -1145,6 +1158,17 @@ dialog form > label.place-note {
   width: 18px;
   height: 18px;
   stroke-width: 2.2;
+}
+/* Small round buttons keep their look but get a 44px touch target. */
+.sheet-close,
+.slider-step {
+  position: relative;
+}
+.sheet-close::after,
+.slider-step::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
 }
 .sheet-content {
   min-height: 0;
@@ -1402,8 +1426,8 @@ input[type="range"] {
 .row-more {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   padding: 0;
   border-radius: 50%;
@@ -1625,7 +1649,8 @@ input[type="range"] {
   --accent: var(--neon-view);
 }
 .share-selection-actions { display: flex; gap: 8px; margin: 16px 0 12px; }
-.share-selection-actions button { flex: 1; font-size: 14px; padding: 10px; min-height: 44px; }
+.share-selection-actions button { flex: 1; gap: 6px; font-size: 14px; padding: 10px 8px; min-height: 44px; }
+.share-selection-actions svg { width: 18px; height: 18px; }
 .share-items {
   max-height: 30dvh;
   overflow-y: auto;

@@ -1,6 +1,7 @@
 import type { MapRecord } from "../types";
+import { icons } from "./icons";
 
-export const mapRenameMarkup = `<dialog id="rename-map-dialog" aria-labelledby="rename-map-title"><form id="rename-map-form"><h2 id="rename-map-title">Rename map</h2><label>Name<input id="rename-map-name" required autocomplete="off" enterkeyhint="done" aria-describedby="rename-map-error"></label><p id="rename-map-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="submit" class="primary">Save</button><button type="button" id="rename-map-cancel" class="quiet">Cancel</button></div></form></dialog>`;
+export const mapRenameMarkup = `<dialog id="rename-map-dialog" aria-labelledby="rename-map-title"><form id="rename-map-form"><h2 id="rename-map-title">Rename map</h2><label>Name<input id="rename-map-name" required autocomplete="off" enterkeyhint="done" aria-describedby="rename-map-error"></label><p id="rename-map-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="rename-map-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></form></dialog>`;
 
 // Keep the dialog open on save failure so the name can be retried.
 export function initMapRename(

@@ -49,6 +49,7 @@ export const icons = {
     '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   ),
   text: svg('<path d="M4 19 9 5l5 14M5.8 14h6.4"/><path d="M15.5 12.5a3 3 0 0 1 5 1.5v5M20.5 15.5h-2.7a2 2 0 0 0 0 4c1.6 0 2.7-1 2.7-3"/>'),
+  download: svg('<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>'),
   rotationLock: svg(
     '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11"/>',
   ),
