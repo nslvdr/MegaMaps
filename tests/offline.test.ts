@@ -21,6 +21,9 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       "/ocr/worker.min.js": "ocr worker",
       "/ocr/tesseract-core-lstm.wasm.js": "ocr wasm",
       "/ocr/eng.traineddata.gz": "ocr model",
+      "/ocr/ort-wasm-simd-threaded.mjs": "detector runtime module",
+      "/ocr/ort-wasm-simd-threaded.wasm": "detector runtime wasm",
+      "/ocr/pp-ocrv5-mobile-det.onnx": "text detector model",
       "/manifest.webmanifest": "{}",
       "/app-status.json": '{"app":"mega-maps"}',
     };
@@ -177,6 +180,9 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       "/ocr/worker.min.js",
       "/ocr/tesseract-core-lstm.wasm.js",
       "/ocr/eng.traineddata.gz",
+      "/ocr/ort-wasm-simd-threaded.mjs",
+      "/ocr/ort-wasm-simd-threaded.wasm",
+      "/ocr/pp-ocrv5-mobile-det.onnx",
     ])
       assert.equal(
         await request(url, "cors"),

@@ -1,4 +1,5 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -35,5 +36,26 @@ export function prepareOcrAssets() {
       "4.0.0_best_int/eng.traineddata.gz",
     ),
     resolve(root, "eng.traineddata.gz"),
+  );
+  const model = resolve("assets/ocr/pp-ocrv5-mobile-det.onnx");
+  if (
+    createHash("sha256").update(readFileSync(model)).digest("hex") !==
+    "a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d"
+  )
+    throw new Error("OCR text detector model failed its integrity check.");
+  copyFileSync(model, resolve(root, "pp-ocrv5-mobile-det.onnx"));
+  copyFileSync(
+    resolve("assets/ocr/PADDLE-LICENSE"),
+    resolve(root, "PADDLE-LICENSE"),
+  );
+  const ortRoot = dirname(require.resolve("onnxruntime-web/wasm"));
+  for (const name of [
+    "ort-wasm-simd-threaded.mjs",
+    "ort-wasm-simd-threaded.wasm",
+  ])
+    copyFileSync(resolve(ortRoot, name), resolve(root, name));
+  copyFileSync(
+    resolve("assets/ocr/ONNX-LICENSE"),
+    resolve(root, "ONNX-LICENSE"),
   );
 }

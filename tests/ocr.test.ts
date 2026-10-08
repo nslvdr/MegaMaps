@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
@@ -16,14 +16,10 @@ import {
   type OcrIndex,
   type OcrLine,
 } from "../src/ocr/index";
-import {
-  OCR_ANGLES,
-  OCR_WINDOW,
-  ocrCrops,
-  ocrPoint,
-  rotatedSize,
-  scanMap,
-} from "../src/ocr/scan";
+import { OCR_WINDOW, ocrCrops, labelPoint, scanMap } from "../src/ocr/scan";
+import { createTextDetector } from "../src/ocr/detector";
+import { regionPoint } from "../src/ocr/regions";
+import { pathToFileURL } from "node:url";
 import { detectMapText, type OcrReply } from "../src/ocr/detect";
 import { saveOcr, loadOcr } from "../src/storage/ocr";
 import { saveMap, renameMap, listMaps } from "../src/storage/database";
@@ -102,22 +98,33 @@ test("OCR search matches accents, phrases, and partial words without revealing u
   );
 });
 
-test("OCR coordinates round-trip every scan angle and crop plan stays bounded over huge maps", () => {
+test("straightened label coordinates round-trip both directions at arbitrary angles and crop plans stay bounded", () => {
   const crop = { x: 1250, y: 2700, width: 700, height: 400 };
-  for (const angle of OCR_ANGLES) {
-    const size = rotatedSize(crop, angle);
-    const x = 81,
-      y = 193;
-    const dx = x - crop.width / 2,
-      dy = y - crop.height / 2;
-    const p = ocrPoint(
-      size.width / 2 + Math.cos(angle) * dx - Math.sin(angle) * dy,
-      size.height / 2 + Math.sin(angle) * dx + Math.cos(angle) * dy,
-      crop,
+  for (const angle of [0, 0.127, Math.PI / 2, 2.53, -2.4]) {
+    const region = {
+      center: { x: 300, y: 200 },
+      width: 220,
+      height: 30,
       angle,
-    );
-    assert.ok(Math.abs(p.x - (crop.x + x)) < 1e-8);
-    assert.ok(Math.abs(p.y - (crop.y + y)) < 1e-8);
+      score: 1,
+    };
+    const size = { width: 440, height: 60, scale: 2 };
+    for (const reversed of [false, true]) {
+      const x = 31,
+        y = 9,
+        direction = reversed ? -1 : 1;
+      const world = regionPoint(region, direction * x, direction * y);
+      const p = labelPoint(
+        size.width / 2 + x * size.scale,
+        size.height / 2 + y * size.scale,
+        region,
+        crop,
+        size,
+        reversed,
+      );
+      assert.ok(Math.abs(p.x - (crop.x + world.x)) < 1e-8);
+      assert.ok(Math.abs(p.y - (crop.y + world.y)) < 1e-8);
+    }
   }
   const crops = ocrCrops(15001, 9001);
   assert.ok(
@@ -203,6 +210,7 @@ test("OCR worker cancellation during startup and worker errors preserve the save
   Object.defineProperty(globalThis, "Worker", {
     value: FakeWorker,
     configurable: true,
+    writable: true,
   });
   await saveMap(map);
   await saveOcr(index);
@@ -256,13 +264,6 @@ test(
       },
     });
     const require = createRequire(import.meta.url);
-    const worker = await createWorker("eng", OEM.LSTM_ONLY, {
-      langPath: join(
-        dirname(require.resolve("@tesseract.js-data/eng/package.json")),
-        "4.0.0_best_int",
-      ),
-      cacheMethod: "none",
-    });
     const labels = [
       { text: "NORTH GATE", x: 512, y: 130, degrees: 0 },
       { text: "RIVER ROAD", x: 300, y: 365, degrees: 37 },
@@ -291,9 +292,32 @@ test(
       levels: [{ width: 1024, height: 1024, scale: 1, cols: 2, rows: 2 }],
     };
     const store = payloadStore("indexeddb");
+    const detectorStarted = performance.now();
+    const detector = await createTextDetector(
+      new Uint8Array(
+        await readFile(
+          new URL("../assets/ocr/pp-ocrv5-mobile-det.onnx", import.meta.url),
+        ),
+      ),
+      pathToFileURL(dirname(require.resolve("onnxruntime-web/wasm")) + "/")
+        .href,
+    );
+    const detectorSetupMs = performance.now() - detectorStarted;
+    const worker = await createWorker("eng", OEM.LSTM_ONLY, {
+      langPath: join(
+        dirname(require.resolve("@tesseract.js-data/eng/package.json")),
+        "4.0.0_best_int",
+      ),
+      cacheMethod: "none",
+    });
+    if (process.env.OCR_BENCHMARK)
+      console.log(
+        "OCR_BENCHMARK",
+        JSON.stringify({ fixture: "setup", ms: detectorSetupMs }),
+      );
     try {
       await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_pageseg_mode: PSM.SINGLE_LINE,
         user_defined_dpi: "150",
       });
       for (let y = 0; y < 2; y++)
@@ -307,20 +331,37 @@ test(
           );
         }
       const progress: number[] = [];
+      let recognitionCalls = 0;
+      const scanStarted = performance.now();
       const recognize = async (image: Blob) =>
-        (
-          await worker.recognize(
-            Buffer.from(await image.arrayBuffer()),
-            {},
-            { blocks: true, text: false },
-          )
-        ).data;
+        (recognitionCalls++,
+        await worker.recognize(
+          Buffer.from(await image.arrayBuffer()),
+          {},
+          { blocks: true, text: false },
+        )).data;
       const detected = await scanMap(
         record,
         store,
+        detector.detect,
         recognize,
         (p) => progress.push(p.fraction),
         new AbortController().signal,
+      );
+      if (process.env.OCR_BENCHMARK)
+        console.log(
+          "OCR_BENCHMARK",
+          JSON.stringify({
+            fixture: "light",
+            ms: performance.now() - scanStarted,
+            recognitionCalls,
+            rssMiB: process.memoryUsage().rss / 1048576,
+          }),
+        );
+      assert.equal(
+        recognitionCalls,
+        10,
+        "only the five label crops are recognized, in both reading directions",
       );
       for (const label of labels) {
         const matches = searchOcr(detected, label.text);
@@ -350,10 +391,19 @@ test(
         scanMap(
           record,
           store,
+          async () => [
+            {
+              center: { x: 100, y: 100 },
+              width: 60,
+              height: 20,
+              angle: 0,
+              score: 1,
+            },
+          ],
           async () => {
             calls++;
             cancel.abort();
-            return { blocks: null };
+            return { blocks: null, confidence: 0 };
           },
           () => {},
           cancel.signal,
@@ -381,18 +431,84 @@ test(
         tileKey(0, 0, 0),
         new Blob([new Uint8Array(await dark.encode("png"))]),
       );
+      recognitionCalls = 0;
+      const darkStarted = performance.now();
       const darkIndex = await scanMap(
         { ...record, width: 512, height: 512 },
         store,
+        detector.detect,
         recognize,
         () => {},
         new AbortController().signal,
       );
+      if (process.env.OCR_BENCHMARK)
+        console.log(
+          "OCR_BENCHMARK",
+          JSON.stringify({
+            fixture: "dark",
+            ms: performance.now() - darkStarted,
+            recognitionCalls,
+            rssMiB: process.memoryUsage().rss / 1048576,
+          }),
+        );
+      assert.equal(recognitionCalls, 2);
       assert.ok(
         searchOcr(darkIndex, "dark cavern").length > 0,
         "rotated white labels on dark maps are searchable",
       );
+      // Labels clipped by an internal section edge are supplied by its overlap.
+      const wide = createCanvas(1280, 512),
+        wc = wide.getContext("2d");
+      wc.fillStyle = "white";
+      wc.fillRect(0, 0, 1280, 512);
+      wc.font = "bold 28px sans-serif";
+      wc.textAlign = "center";
+      wc.textBaseline = "middle";
+      wc.translate(1020, 256);
+      wc.rotate((37 * Math.PI) / 180);
+      wc.fillStyle = "black";
+      wc.fillText("BORDER PASSAGE", 0, 0);
+      for (let x = 0; x < 3; x++) {
+        const tile = createCanvas(Math.min(512, 1280 - x * 512), 512);
+        tile.getContext("2d").drawImage(wide, -x * 512, 0);
+        await store.put(
+          record.id,
+          tileKey(0, x, 0),
+          new Blob([new Uint8Array(await tile.encode("png"))]),
+        );
+      }
+      recognitionCalls = 0;
+      const borderIndex = await scanMap(
+        { ...record, width: 1280, height: 512 },
+        store,
+        detector.detect,
+        recognize,
+        () => {},
+        new AbortController().signal,
+      );
+      assert.equal(searchOcr(borderIndex, "border passage").length, 1);
+      assert.equal(
+        recognitionCalls,
+        2,
+        "a clipped fragment is skipped and the complete label is read once",
+      );
+      // Empty detector output performs no recognition work and still finishes a valid index.
+      let emptyCalls = 0;
+      const emptyIndex = await scanMap(
+        { ...record, width: 512, height: 512 },
+        store,
+        async () => [],
+        async () => {
+          emptyCalls++;
+          return { blocks: null, confidence: 0 };
+        },
+        () => {},
+        new AbortController().signal,
+      );
+      assert.equal(emptyCalls, 0);
+      assert.deepEqual(emptyIndex.lines, []);
     } finally {
+      await detector.dispose();
       await worker.terminate();
       await store.deleteMap(record.id);
       await rm(root, { recursive: true, force: true });

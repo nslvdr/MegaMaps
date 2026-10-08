@@ -11,7 +11,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "tsx --test tests/*.test.ts",
     "fixtures": "python3 scripts/generate-fixtures.py",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "benchmark:ocr": "tsx scripts/benchmark-ocr.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",
@@ -25,6 +26,7 @@
     "wrangler": "^4.147.0"
   },
   "dependencies": {
+    "onnxruntime-web": "^1.30.0",
     "tesseract.js": "^7.0.0"
   }
 }

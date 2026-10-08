@@ -26,7 +26,7 @@ Importing a map also runs local OCR. **Search** in the viewer’s bottom bar ope
 
 Older maps automatically run detection when opened if they have no current OCR index. In the library, **⋯ → Advanced settings → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. **⋯** also contains Rename and Delete.
 
-Detection uses a bundled English/Latin-script Tesseract model, overlapping native-resolution sections, and 24 rotation passes at 15° intervals around a full turn. This supports angled, vertical and upside-down labels; detection is best-effort for tiny, curved, stylized or low-contrast text. Large maps may take several minutes or longer on a phone. Keep the app open until detection finishes. The engine and model are included in the offline shell; map pixels and detected text never leave the device.
+Detection runs a bundled PaddleOCR mobile text detector once per overlapping section, estimates each label’s angle, then straightens and reads only those label crops with the English/Latin-script Tesseract model. Two small recognition passes resolve normal versus upside-down reading direction. This supports angled, vertical and upside-down labels; detection is best-effort for tiny, curved, stylized or low-contrast text. Large maps may take several minutes or longer on a phone. Keep the app open until detection finishes. Both engines and models are included in the offline shell; map pixels and detected text never leave the device.
 
 ## Deploy to Cloudflare
 
@@ -81,7 +81,9 @@ src/
     search-overlay.ts       Rotated search polygons and screen-space dimming mask
   ocr/
     detect.ts / .worker.ts  Background detection lifecycle and cancellation
-    scan.ts                 Bounded tile crops, rotation passes and coordinates
+    scan.ts                 Bounded sections, straightened labels and coordinates
+    detector.ts             Local ONNX text detector, normalization and disposal
+    regions.ts              Oriented text boxes and overlap suppression
     index.ts                Text normalization, phrase matching, duplicate removal
   ui/
     viewer-markup.ts         Touch controls, tools panel, local note forms
@@ -91,7 +93,7 @@ public/
   manifest.webmanifest
   icons/                    Local PNG home-screen icons + SVG favicon
   codecs/                   Shipped JPEG JS/WASM + third-party license
-  ocr/                      Generated local OCR worker, WASM cores and model
+  ocr/                      Generated local OCR workers, WASM cores and models
 native/                     Rebuildable libjpeg wrapper and OPFS memory manager
 scripts/                    SW build, icons, fixtures, decoder rebuild, benchmarks
 tests/                      Decoder, tile, camera, cache, storage, offline tests
@@ -193,3 +195,7 @@ npm run build
 ```
 
 The script pins libjpeg-turbo 3.1.2. The source wrappers are in `native/`; licensing is included in `public/codecs/LICENSE-libjpeg.txt`. There are zero production npm dependencies; the canvas and IndexedDB adapters are test-only development dependencies.
+
+### OCR performance check
+
+Run `npm run benchmark:ocr` to time the real local detector/recognizer against the accuracy fixtures. The first implementation scanned every section at 24 angles; the region-first implementation was about six times faster on the recorded desktop synthetic fixtures while retaining every tested label. See [OCR benchmark results](docs/ocr-benchmark-results.json). These measurements are not phone timings. The new detector/runtime adds about 19 MB to the cached app shell and increases inference memory; physical-device timing and memory checks remain pending. Existing saved indexes remain valid; rerun detection in Advanced settings to use the new pipeline.

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, defaultClientConditions } from "vite";
 import { readFileSync } from "node:fs";
 import { prepareOcrAssets } from "./scripts/ocr-assets";
 prepareOcrAssets();
@@ -12,6 +12,10 @@ const https =
     ? { cert: readFileSync(cert), key: readFileSync(key) }
     : undefined;
 export default defineConfig({
+  // Resolve ONNX's external-WASM entry; one local runtime copy is precached below.
+  resolve: {
+    conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions],
+  },
   server: { host: "0.0.0.0", https },
   preview: { host: "0.0.0.0", https },
 });

@@ -12,6 +12,16 @@ The production service-worker handlers were exercised in a Node VM with network 
 
 Actual local Tesseract detection on native-canvas fixtures found labels at 0°, 37°, 90°, 173°, 254° and white-on-dark text at −58°, including text crossing native tile boundaries. Tests verify inverse polygon coordinates, bounded crop plans, one live tile decode, case/accent/phrase search, mask alignment under camera rotation, startup cancellation, failure preserving the old index, replacement commits, rename/deletion protection, search controls and upgrades from database versions 1 and 2. These are Node/DOM-adapter tests; no browser automation or physical-device OCR timing, keyboard layout or cold-offline OCR initialization was tested.
 
+## Region-first OCR optimization — 2026-10-08
+
+`npm test` passes all 50 tests, and `npm run build` passes TypeScript and the production build. The offline shell contains 26 assets, including one copy of the detector model and ONNX WebAssembly runtime.
+
+The region-first pipeline preserves the original synthetic labels at 0°, 37°, 90°, 173°, 254° and white-on-dark text at −58°. Additional tests cover model normalization, oriented probability-map decoding, labels crossing an internal section boundary, duplicate suppression, empty detector output, inverse coordinates and cancellation. Existing OCR indexes remain schema-compatible.
+
+On Apple M4 Pro / Node v24.9.0, serial initial scan measurements were 2,552 → 451 ms for the five-label 1024² fixture and 661 → 106 ms for the rotated dark 512² fixture. Detection plus label recognition is included; engine setup is excluded. Recognition calls fell from 24 full-section calls to 10 small label calls for the light fixture and 2 for the dark fixture. ONNX uses the same single-threaded WebAssembly backend shipped in the app, not native ONNX or a GPU. Run `npm run benchmark:ocr` to reproduce current timings while enforcing the accuracy checks; [raw results](ocr-benchmark-results.json) include measured setup and process-memory context.
+
+The detector adds about 19 MB of offline assets and increases inference memory. Node RSS snapshots include the test harness, native-canvas buffers, allocator retention and both engines; they are neither peaks nor Safari process budgets. No browser/physical-device initialization, memory or speed claim is made by these results.
+
 ## Full image preprocessing benchmarks
 
 Host: Apple M4 Pro, macOS 27.0.1, Node v24.9.0. Each table row used a separate process. Values are rounded.

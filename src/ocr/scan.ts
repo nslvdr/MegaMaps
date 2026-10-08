@@ -6,27 +6,39 @@ import {
   type ImportProgress,
 } from "../types";
 import type { PayloadStore } from "../storage/payloads";
-import { addOcrLine, OCR_VERSION, type OcrIndex } from "./index";
+import { addOcrLine, OCR_VERSION, type OcrIndex, type OcrLine } from "./index";
+import {
+  regionPoint,
+  regionPolygon,
+  sameRegion,
+  type TextRegion,
+} from "./regions";
 
-export const OCR_WINDOW = 1536;
+export const OCR_WINDOW = 1024;
 export const OCR_OVERLAP = 256;
-// Cover a full turn, including upside-down labels and both vertical directions.
-export const OCR_ANGLES = Array.from(
-  { length: 24 },
-  (_, i) => (i * Math.PI) / 12,
-);
 export interface OcrCrop {
   x: number;
   y: number;
   width: number;
   height: number;
 }
-export type Recognizer = (image: Blob) => Promise<Pick<Page, "blocks">>;
+export type Recognizer = (
+  image: Blob,
+) => Promise<Pick<Page, "blocks" | "confidence">>;
+export type RegionDetector = (image: OffscreenCanvas) => Promise<TextRegion[]>;
 
 export function ocrCrops(width: number, height: number): OcrCrop[] {
+  const starts = (length: number) => {
+    const positions = [0];
+    while (positions[positions.length - 1]! + OCR_WINDOW < length)
+      positions.push(
+        positions[positions.length - 1]! + OCR_WINDOW - OCR_OVERLAP,
+      );
+    return positions;
+  };
   const crops: OcrCrop[] = [];
-  for (let y = 0; y < height; y += OCR_WINDOW - OCR_OVERLAP)
-    for (let x = 0; x < width; x += OCR_WINDOW - OCR_OVERLAP)
+  for (const y of starts(height))
+    for (const x of starts(width))
       crops.push({
         x,
         y,
@@ -36,29 +48,22 @@ export function ocrCrops(width: number, height: number): OcrCrop[] {
   return crops;
 }
 
-export function rotatedSize(
-  crop: Pick<OcrCrop, "width" | "height">,
-  angle: number,
+// Map a word in a straightened label back through its orientation and map section.
+export function labelPoint(
+  x: number,
+  y: number,
+  region: TextRegion,
+  crop: OcrCrop,
+  size: { width: number; height: number; scale: number },
+  reversed: boolean,
 ) {
-  const c = Math.abs(Math.cos(angle)),
-    s = Math.abs(Math.sin(angle));
-  return {
-    width: Math.ceil(c * crop.width + s * crop.height),
-    height: Math.ceil(s * crop.width + c * crop.height),
-  };
-}
-
-// Inverse of the padded canvas rotation: all stored polygons use original pixels.
-export function ocrPoint(x: number, y: number, crop: OcrCrop, angle: number) {
-  const size = rotatedSize(crop, angle),
-    c = Math.cos(angle),
-    s = Math.sin(angle);
-  const dx = x - size.width / 2,
-    dy = y - size.height / 2;
-  return {
-    x: crop.x + crop.width / 2 + c * dx + s * dy,
-    y: crop.y + crop.height / 2 - s * dx + c * dy,
-  };
+  const direction = reversed ? -1 : 1;
+  const point = regionPoint(
+    region,
+    (direction * (x - size.width / 2)) / size.scale,
+    (direction * (y - size.height / 2)) / size.scale,
+  );
+  return { x: point.x + crop.x, y: point.y + crop.y };
 }
 
 function checkAbort(signal: AbortSignal) {
@@ -125,10 +130,11 @@ async function readCrop(
   }
 }
 
-// Sequential OCR bounds image memory independently of total map dimensions.
+// Read only detected, straightened labels; ambiguous reading direction needs two small passes.
 export async function scanMap(
   map: MapRecord,
   store: PayloadStore,
+  detect: RegionDetector,
   recognize: Recognizer,
   onProgress: (progress: ImportProgress) => void,
   signal: AbortSignal,
@@ -140,69 +146,115 @@ export async function scanMap(
     completedAt: 0,
     lines: [],
   };
-  const rotated = new OffscreenCanvas(1, 1);
-  let completed = 0;
+  const label = new OffscreenCanvas(1, 1);
+  const seen: TextRegion[] = [];
   try {
-    for (const crop of crops) {
+    for (const [section, crop] of crops.entries()) {
       checkAbort(signal);
       const source = await readCrop(map, store, crop, signal);
       try {
-        for (const angle of OCR_ANGLES) {
+        onProgress({
+          fraction: section / crops.length,
+          message: `Finding text · section ${section + 1} of ${crops.length}`,
+        });
+        const regions = await detect(source);
+        checkAbort(signal);
+        for (const [position, region] of regions.entries()) {
           checkAbort(signal);
-          const size = rotatedSize(crop, angle);
-          rotated.width = size.width;
-          rotated.height = size.height;
-          const ctx = rotated.getContext("2d")!;
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, rotated.width, rotated.height);
-          ctx.translate(rotated.width / 2, rotated.height / 2);
-          ctx.rotate(angle);
-          ctx.drawImage(source, -crop.width / 2, -crop.height / 2);
-          const data = await recognize(
-            await rotated.convertToBlob({ type: "image/png" }),
+          // An overlapping section supplies complete labels clipped by an internal edge.
+          const polygon = regionPolygon(region);
+          if (
+            polygon.some(
+              (p) =>
+                (crop.x > 0 && p.x < 0) ||
+                (crop.y > 0 && p.y < 0) ||
+                (crop.x + crop.width < map.width && p.x > crop.width) ||
+                (crop.y + crop.height < map.height && p.y > crop.height),
+            )
+          )
+            continue;
+          const global = {
+            ...region,
+            center: {
+              x: region.center.x + crop.x,
+              y: region.center.y + crop.y,
+            },
+          };
+          if (seen.some((previous) => sameRegion(previous, global))) continue;
+          const scale = Math.min(
+            Math.max(1, Math.min(2, 48 / region.height)),
+            Math.sqrt(2_000_000 / (region.width * region.height)),
           );
-          checkAbort(signal);
-          for (const block of data.blocks ?? [])
-            for (const paragraph of block.paragraphs)
-              for (const line of paragraph.lines) {
-                const words = line.words
-                  .filter(
-                    (word) =>
-                      word.confidence >= 45 && /[\p{L}\p{N}]/u.test(word.text),
-                  )
-                  .map((word) => {
-                    const b = word.bbox;
-                    return {
-                      text: word.text,
-                      polygon: [
-                        [b.x0, b.y0],
-                        [b.x1, b.y0],
-                        [b.x1, b.y1],
-                        [b.x0, b.y1],
-                      ].map(([x, y]) => ocrPoint(x!, y!, crop, angle)),
-                    };
-                  })
-                  .filter((word) =>
-                    word.polygon.every(
-                      (p) =>
-                        p.x >= -1 &&
-                        p.y >= -1 &&
-                        p.x <= map.width + 1 &&
-                        p.y <= map.height + 1,
-                    ),
-                  );
-                addOcrLine(index.lines, {
-                  text: words.map((word) => word.text).join(" "),
-                  confidence: line.confidence,
-                  words,
-                });
-              }
-          completed++;
+          const size = {
+            width: Math.max(1, Math.ceil(region.width * scale)),
+            height: Math.max(1, Math.ceil(region.height * scale)),
+            scale,
+          };
+          let best: { lines: OcrLine[]; confidence: number } | undefined;
+          for (const reversed of [false, true]) {
+            checkAbort(signal);
+            label.width = size.width;
+            label.height = size.height;
+            const ctx = label.getContext("2d")!;
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, label.width, label.height);
+            ctx.translate(label.width / 2, label.height / 2);
+            ctx.scale(scale, scale);
+            ctx.rotate(-region.angle + (reversed ? Math.PI : 0));
+            ctx.drawImage(source, -region.center.x, -region.center.y);
+            const data = await recognize(
+              await label.convertToBlob({ type: "image/png" }),
+            );
+            checkAbort(signal);
+            const lines: OcrLine[] = [];
+            for (const block of data.blocks ?? [])
+              for (const paragraph of block.paragraphs)
+                for (const line of paragraph.lines) {
+                  const words = line.words
+                    .filter(
+                      (word) =>
+                        word.confidence >= 45 &&
+                        /[\p{L}\p{N}]/u.test(word.text),
+                    )
+                    .map((word) => {
+                      const b = word.bbox;
+                      return {
+                        text: word.text,
+                        polygon: [
+                          [b.x0, b.y0],
+                          [b.x1, b.y0],
+                          [b.x1, b.y1],
+                          [b.x0, b.y1],
+                        ].map(([x, y]) =>
+                          labelPoint(x!, y!, region, crop, size, reversed),
+                        ),
+                      };
+                    });
+                  if (words.length)
+                    lines.push({
+                      text: words.map((word) => word.text).join(" "),
+                      confidence: line.confidence,
+                      words,
+                    });
+                }
+            if (lines.length && (!best || data.confidence > best.confidence))
+              best = { lines, confidence: data.confidence };
+          }
+          if (best) {
+            seen.push(global);
+            for (const line of best.lines) addOcrLine(index.lines, line);
+          }
           onProgress({
-            fraction: completed / (crops.length * OCR_ANGLES.length),
-            message: `Detecting map text · section ${Math.floor((completed - 1) / OCR_ANGLES.length) + 1} of ${crops.length} · ${Math.round((completed / (crops.length * OCR_ANGLES.length)) * 100)}%`,
+            fraction:
+              (section + (position + 1) / Math.max(1, regions.length)) /
+              crops.length,
+            message: `Reading labels · section ${section + 1} of ${crops.length} · label ${position + 1} of ${regions.length}`,
           });
         }
+        onProgress({
+          fraction: (section + 1) / crops.length,
+          message: `Text detection · ${Math.round(((section + 1) / crops.length) * 100)}%`,
+        });
       } finally {
         source.width = source.height = 1;
       }
@@ -210,6 +262,6 @@ export async function scanMap(
     index.completedAt = Date.now();
     return index;
   } finally {
-    rotated.width = rotated.height = 1;
+    label.width = label.height = 1;
   }
 }
