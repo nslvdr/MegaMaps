@@ -6,7 +6,7 @@
   --line: #ffffff14;
   --text: #f2f4f6;
   --muted: #9aa2ab;
-  --accent: #a6e38f;
+  --accent: var(--neon-add);
   --accent-ink: #10200a;
   --danger: #ff8f7a;
   --radius: 16px;
@@ -325,6 +325,12 @@ h2 {
 .map-size {
   margin-top: 3px;
 }
+.map-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.rename-map,
 .delete-map {
   display: grid;
   place-items: center;
@@ -332,12 +338,19 @@ h2 {
   background: none;
   color: var(--muted);
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
+}
+.rename-map {
+  color: var(--neon-saved);
+}
+.rename-map:hover {
+  background: color-mix(in srgb, var(--neon-saved) 12%, #000);
 }
 .delete-map:hover {
   color: var(--danger);
 }
+.rename-map svg,
 .delete-map svg {
   width: 20px;
   height: 20px;
@@ -411,13 +424,45 @@ h2 {
 
 /* ---------- Dialogs ---------- */
 dialog {
+  --accent: var(--neon-add);
   width: min(440px, calc(100% - 32px));
   padding: 24px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text);
   border-radius: 24px;
-  box-shadow: 0 20px 80px #000c;
+  box-shadow: 0 20px 80px #000c,
+    0 0 28px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+#message-dialog {
+  --accent: var(--neon-view);
+}
+#rename-map-dialog,
+#name-dialog {
+  --accent: var(--neon-saved);
+}
+#delete-dialog {
+  --accent: var(--danger);
+}
+dialog .primary,
+dialog .secondary,
+dialog .danger {
+  border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, #000);
+  color: var(--accent);
+}
+dialog .secondary {
+  border-color: var(--line);
+  background: #ffffff12;
+  color: var(--text);
+}
+dialog .danger {
+  --accent: var(--danger);
+}
+dialog .primary:hover,
+dialog .danger:hover {
+  background: color-mix(in srgb, var(--accent) 22%, #000);
 }
 dialog::backdrop {
   background: #000b;
@@ -437,6 +482,7 @@ dialog p {
 .dialog-icon {
   color: var(--accent);
   margin-bottom: 14px;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 65%, transparent));
 }
 .dialog-icon svg {
   height: 32px;
@@ -446,9 +492,12 @@ dialog p {
   font-size: 13px !important;
   margin: 18px 0;
 }
+dialog .dialog-error {
+  color: var(--danger);
+}
 .progress-track {
   height: 6px;
-  background: var(--control);
+  background: color-mix(in srgb, var(--accent) 16%, #000);
   border-radius: 6px;
   margin: 24px 0 12px;
   overflow: hidden;
