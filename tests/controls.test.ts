@@ -9,6 +9,7 @@ import { saveMap } from "../src/storage/database";
 import { loadNavigation } from "../src/storage/navigation";
 import type { Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
+import type { OcrMatch } from "../src/ocr/index";
 
 test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotation lock, places and routes", async () => {
   const { window, document } = parseHTML(
@@ -49,6 +50,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const tools: string[] = [],
     framed: Point[][] = [],
     jumps: Point[] = [];
+  let highlights: { matches: OcrMatch[]; active: boolean } | undefined;
   // A touch lock saved by an older version must not trap the map.
   state.touchLocked = true;
   const controls = new ViewerControls(root, map, state);
@@ -66,6 +68,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     fitPoints(points: Point[]) {
       framed.push(points);
+    },
+    setSearch(matches, active) {
+      highlights = { matches, active };
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -119,21 +124,35 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "placement-center",
     ])
       assert.equal(document.getElementById(gone), null);
-    assert.equal(el("rotation-lock").parentElement, dock, "Lock lives in the pill");
+    assert.equal(
+      el("rotation-lock").parentElement,
+      dock,
+      "Lock lives in the pill",
+    );
     assert.equal(toolBar.hidden, true);
     assert.equal(root.dataset.tool, "browse");
 
     // Panels open above the pill, which stays visible as tabs.
     assert.deepEqual(
       [...dock.querySelectorAll("button")].map((b) => b.id),
-      ["open-saved", "open-display", "open-add", "rotation-lock"],
+      [
+        "open-saved",
+        "open-display",
+        "open-search",
+        "open-add",
+        "rotation-lock",
+      ],
     );
     click("open-saved");
     assert.equal(sheet.hidden, false);
     assert.equal(el("sheet-saved").hidden, false);
     assert.equal(el("sheet-display").hidden, true);
     assert.equal(el("sheet-title").textContent, "Saved");
-    assert.equal(sheet.dataset.panel, "saved", "panel takes its button's color");
+    assert.equal(
+      sheet.dataset.panel,
+      "saved",
+      "panel takes its button's color",
+    );
     assert.equal(el("open-saved").getAttribute("aria-expanded"), "true");
     assert.equal(dock.hidden, false);
     // Add opens no panel: Place / Route rise above the pill, and Add's
@@ -192,7 +211,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("rotation-lock");
     assert.equal(state.rotationLocked, false);
     assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "false");
-    assert.equal(el("rotation-lock").getAttribute("aria-label"), "Lock rotation");
+    assert.equal(
+      el("rotation-lock").getAttribute("aria-label"),
+      "Lock rotation",
+    );
     assert.match(el("toast").textContent!, /Rotation unlocked/);
     assert.equal(el("rotation-controls").hidden, false);
     click("rotate-right");
@@ -258,7 +280,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
     controls.options().onMarker(state.markers[0]!);
     assert.equal(entrance.checked, true);
-    assert.equal(el("marker-note-field").hidden, false, "an existing note shows");
+    assert.equal(
+      el("marker-note-field").hidden,
+      false,
+      "an existing note shows",
+    );
     assert.equal(el("marker-delete").hidden, false);
     input("marker-note", "Updated note");
     submit("marker-form");
@@ -280,11 +306,22 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       el("marker-list").querySelector<HTMLButtonElement>(".row-more")!;
     click("open-saved");
     assert.equal(popover(), null);
-    assert.match(placeMore().getAttribute("aria-label")!, /Actions for <Entrance>/);
+    assert.match(
+      placeMore().getAttribute("aria-label")!,
+      /Actions for <Entrance>/,
+    );
     const originalMore = placeMore();
     originalMore.dispatchEvent(new window.Event("click"));
-    assert.equal(placeMore(), originalMore, "opening a menu keeps the tapped row intact");
-    assert.equal(popover()?.parentElement, root, "the menu escapes the scroll container's clipping");
+    assert.equal(
+      placeMore(),
+      originalMore,
+      "opening a menu keeps the tapped row intact",
+    );
+    assert.equal(
+      popover()?.parentElement,
+      root,
+      "the menu escapes the scroll container's clipping",
+    );
     assert.equal(popover()?.getAttribute("role"), "menu");
     assert.deepEqual(
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
@@ -292,21 +329,37 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.equal(placeMore().getAttribute("aria-expanded"), "true");
     // Tapping elsewhere closes it; so does Escape, before the panel.
-    document.body.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    document.body.dispatchEvent(
+      new window.Event("pointerdown", { bubbles: true }),
+    );
     assert.equal(popover(), null);
-    assert.equal(placeMore(), originalMore, "outside pointerdown must not replace pending click targets");
+    assert.equal(
+      placeMore(),
+      originalMore,
+      "outside pointerdown must not replace pending click targets",
+    );
     placeMore().dispatchEvent(new window.Event("click"));
     const jump = el("marker-list").querySelector<HTMLButtonElement>(".navigation-jump")!;
     jump.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
     assert.equal(popover(), null);
     assert.equal(jump.isConnected, true);
     jump.dispatchEvent(new window.Event("click"));
-    assert.equal(sheet.hidden, true, "the same tap can still jump to the place");
+    assert.equal(
+      sheet.hidden,
+      true,
+      "the same tap can still jump to the place",
+    );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
-    root.querySelector(".sheet-content")!.dispatchEvent(new window.Event("scroll"));
-    assert.equal(popover(), null, "scrolling dismisses the menu instead of leaving it at a stale position");
+    root
+      .querySelector(".sheet-content")!
+      .dispatchEvent(new window.Event("scroll"));
+    assert.equal(
+      popover(),
+      null,
+      "scrolling dismisses the menu instead of leaving it at a stale position",
+    );
     placeMore().dispatchEvent(new window.Event("click"));
     window.dispatchEvent(new window.Event("resize"));
     assert.equal(popover(), null, "rotation/resize dismisses the menu");
@@ -325,13 +378,20 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(root.dataset.tool, "move");
     assert.equal(tools.at(-1), "move");
     assert.equal(sheet.hidden, true);
-    assert.equal(el("tool-message").textContent, "Drag the pin, or tap where it goes");
+    assert.equal(
+      el("tool-message").textContent,
+      "Drag the pin, or tap where it goes",
+    );
     assert.equal(el("route-undo").hidden, true);
     assert.equal((el("tool-done") as HTMLButtonElement).disabled, false);
     tap(700, 800);
     assert.deepEqual(state.markers[0]?.point, { x: 700, y: 800 });
     click("open-add");
-    assert.deepEqual(state.markers[0]?.point, { x: 500, y: 600 }, "× puts it back");
+    assert.deepEqual(
+      state.markers[0]?.point,
+      { x: 500, y: 600 },
+      "× puts it back",
+    );
     assert.equal(root.dataset.tool, "browse");
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
@@ -457,14 +517,33 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const routeRow = el("route-list").firstElementChild;
     rowButton(/^Delete$/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 1);
-    assert.equal(popover(), deleteMenu, "confirmation keeps the same menu in place");
-    assert.equal(el("route-list").firstElementChild, routeRow, "confirmation leaves the scrollable rows intact");
-    assert.notEqual(popover(), null, "the menu stays open for the second delete tap");
+    assert.equal(
+      popover(),
+      deleteMenu,
+      "confirmation keeps the same menu in place",
+    );
+    assert.equal(
+      el("route-list").firstElementChild,
+      routeRow,
+      "confirmation leaves the scrollable rows intact",
+    );
+    assert.notEqual(
+      popover(),
+      null,
+      "the menu stays open for the second delete tap",
+    );
     key(root, "Escape");
     openMenu();
-    assert.ok(rowButton(/^Delete$/), "reopening clears the pending delete label");
+    assert.ok(
+      rowButton(/^Delete$/),
+      "reopening clears the pending delete label",
+    );
     rowButton(/^Delete$/).dispatchEvent(new window.Event("click"));
-    assert.equal(state.routes.length, 1, "reopening must require a fresh confirmation");
+    assert.equal(
+      state.routes.length,
+      1,
+      "reopening must require a fresh confirmation",
+    );
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
 
@@ -476,13 +555,58 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(stage.classList.contains("spotlight"), true);
     assert.equal(el("spotlight").classList.contains("active"), true);
 
+    // Search stays usable while OCR runs, then reveals only matching polygons.
+    click("open-search");
+    assert.equal(el("sheet-search").hidden, false);
+    controls.updateOcr(undefined, "Detecting map text · 10%");
+    input("map-search", "north");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    assert.equal(highlights?.active, false, "no masking before OCR is ready");
+    assert.match(el("search-status").textContent!, /10%/);
+    const polygon = [
+      { x: 100, y: 200 },
+      { x: 180, y: 200 },
+      { x: 180, y: 220 },
+      { x: 100, y: 220 },
+    ];
+    const index = {
+      mapId: map.id,
+      version: 1,
+      completedAt: 1,
+      lines: [
+        { text: "North", confidence: 90, words: [{ text: "North", polygon }] },
+      ],
+    };
+    controls.updateOcr(index);
+    assert.equal(highlights?.active, true);
+    assert.equal(highlights?.matches.length, 1);
+    assert.match(el("search-status").textContent!, /1 match/);
+    click("search-next");
+    assert.deepEqual(framed.at(-1), polygon);
+    controls.updateOcr(index, "Detecting map text · 20%");
+    assert.match(
+      el("search-result").textContent!,
+      /1 \/ 1/,
+      "progress keeps the selected result",
+    );
+    input("map-search", "unknown");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    assert.equal(highlights?.matches.length, 0);
+    assert.equal(highlights?.active, true);
+    assert.match(el("search-status").textContent!, /No matching/);
+    click("clear-search");
+    assert.equal(highlights?.active, false);
+    input("map-search", "north");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    click("close-sheet");
+    assert.equal(highlights?.active, false, "closing search restores the map");
+
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 2");
     submit("marker-form");
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
-
   } finally {
     controls.dispose();
     await controls.flush();

@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import { database, listMaps } from "../src/storage/database";
 import { payloadStore } from "../src/storage/payloads";
 import { loadNavigation } from "../src/storage/navigation";
+import { loadOcr } from "../src/storage/ocr";
+import { needsOcr } from "../src/ocr/index";
 
-test("version 1 libraries and payloads survive the navigation-store upgrade", async () => {
+test("version 1 libraries and payloads survive the navigation and OCR upgrade", async () => {
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.open("map-viewer", 1);
     request.onupgradeneeded = () => {
@@ -33,11 +35,12 @@ test("version 1 libraries and payloads survive the navigation-store upgrade", as
     };
   });
   const db = await database();
-  assert.equal(db.version, 2);
+  assert.equal(db.version, 3);
   assert.equal((await listMaps())[0]?.name, "existing.png");
   assert.equal(
     await (await payloadStore("indexeddb").get("legacy", "original")).text(),
     "existing bytes",
   );
   assert.deepEqual((await loadNavigation("legacy")).markers, []);
+  assert.equal(needsOcr(await loadOcr("legacy")), true);
 });

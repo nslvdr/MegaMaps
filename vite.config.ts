@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 import { readFileSync } from "node:fs";
+import { prepareOcrAssets } from "./scripts/ocr-assets";
+prepareOcrAssets();
 // A phone needs trusted HTTPS for service workers; localhost works on desktop.
 const cert = process.env.MAP_VIEWER_HTTPS_CERT,
   key = process.env.MAP_VIEWER_HTTPS_KEY;

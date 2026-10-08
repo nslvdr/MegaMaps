@@ -20,6 +20,14 @@ npm run preview
 
 Production preview: **http://localhost:4173**. Import a map, wait for **Available offline** in the footer, then go offline and reload. Keep the same origin/port: browser storage belongs to the origin. Build output is in `dist/` and can be served by any static HTTPS host.
 
+## Search map text
+
+Importing a map also runs local OCR. **Search** in the viewer’s bottom bar opens a text box: matching words remain clear while the rest of the map darkens. Search ignores case and accents, supports phrases and partial words, and offers previous/next controls to frame results. Clearing the query or closing Search restores the normal view.
+
+Older maps automatically run detection when opened if they have no current OCR index. In the library, **⋯ → Advanced settings → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. **⋯** also contains Rename and Delete.
+
+Detection uses a bundled English/Latin-script Tesseract model, overlapping native-resolution sections, and 24 rotation passes at 15° intervals around a full turn. This supports angled, vertical and upside-down labels; detection is best-effort for tiny, curved, stylized or low-contrast text. Large maps may take several minutes or longer on a phone. Keep the app open until detection finishes. The engine and model are included in the offline shell; map pixels and detected text never leave the device.
+
 ## Deploy to Cloudflare
 
 The `mega-maps` Worker serves the production files from `dist/` at **https://mega-maps.natan-slvdr.fr** using Cloudflare static assets. The service worker, image-processing workers, and JPEG WASM codec are included in the deployment.
@@ -53,6 +61,7 @@ src/
     database.ts             IndexedDB metadata + transaction commits
     payloads.ts             OPFS / IndexedDB payload abstraction, deletion
     navigation.ts           Saved camera, notes/routes, settings, throttled writes
+    ocr.ts                  Atomic text indexes and deletion protection
     verify.ts / .worker.ts  Offline tile inventory + sequential decode checks
   processing/
     headers.ts              Container metadata without decoding pixels
@@ -69,6 +78,11 @@ src/
     viewer.ts               Viewport canvas, level selection, diagnostics
     navigation.ts           Map tools data in original-image coordinates
     overlays.ts             SVG markers/routes, independent of color inversion
+    search-overlay.ts       Rotated search polygons and screen-space dimming mask
+  ocr/
+    detect.ts / .worker.ts  Background detection lifecycle and cancellation
+    scan.ts                 Bounded tile crops, rotation passes and coordinates
+    index.ts                Text normalization, phrase matching, duplicate removal
   ui/
     viewer-markup.ts         Touch controls, tools panel, local note forms
     viewer-controls.ts       Navigation commands, dialogs and persistence
@@ -77,6 +91,7 @@ public/
   manifest.webmanifest
   icons/                    Local PNG home-screen icons + SVG favicon
   codecs/                   Shipped JPEG JS/WASM + third-party license
+  ocr/                      Generated local OCR worker, WASM cores and model
 native/                     Rebuildable libjpeg wrapper and OPFS memory manager
 scripts/                    SW build, icons, fixtures, decoder rebuild, benchmarks
 tests/                      Decoder, tile, camera, cache, storage, offline tests

@@ -2,6 +2,7 @@
 /dist/
 /.wrangler/
 /fixtures/
+/public/ocr/
 .DS_Store
 /native/build/
 .env

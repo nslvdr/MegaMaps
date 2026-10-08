@@ -1,6 +1,6 @@
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
-import { listMaps } from "./storage/database";
+import { listMaps, renameMap } from "./storage/database";
 import { payloadStore, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
 import { Viewer } from "./viewer/viewer";
@@ -12,6 +12,9 @@ import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { initLibraryFooter } from "./ui/library-footer";
+import { loadOcr } from "./storage/ocr";
+import { needsOcr, type OcrIndex } from "./ocr/index";
+import { detectMapText } from "./ocr/detect";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
@@ -26,6 +29,9 @@ app.innerHTML = `
   <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><button class="secondary" id="cancel-import">Cancel import</button></dialog>
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">Got it</button></dialog>
   <dialog id="delete-dialog"><h2>Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the local copy and its tiles from this device.</p><div class="dialog-actions"><button class="secondary" id="delete-cancel">Keep map</button><button class="danger" id="delete-confirm">Delete map</button></div></dialog>
+  <dialog id="map-options-dialog"><h2 id="map-options-name"></h2><div class="map-options"><button class="secondary" id="rename-map">${icons.edit}<span>Rename</span></button><button class="secondary" id="advanced-map">${icons.tools}<span>Advanced settings</span></button><button class="danger" id="remove-map">${icons.trash}<span>Delete</span></button></div><button class="secondary" id="map-options-close">Close</button></dialog>
+  <dialog id="rename-map-dialog"><form id="rename-map-form"><h2>Rename map</h2><label>Map name<input id="map-name" required maxlength="160" autocomplete="off"></label><div class="dialog-actions"><button type="button" class="secondary" id="rename-map-cancel">Cancel</button><button class="primary" type="submit">Save name</button></div></form></dialog>
+  <dialog id="advanced-map-dialog"><h2>Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>Stop detection</button></div><button class="secondary" id="advanced-map-close">Close</button></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -36,6 +42,19 @@ const fileInput = element<HTMLInputElement>("file-input");
 const progressDialog = element<HTMLDialogElement>("progress-dialog");
 const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
+const mapOptionsDialog = element<HTMLDialogElement>("map-options-dialog");
+const renameDialog = element<HTMLDialogElement>("rename-map-dialog");
+const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
+let selectedMap: MapRecord | undefined;
+let ocrJob:
+  | {
+      mapId: string;
+      controller: AbortController;
+      message: string;
+      done: Promise<void>;
+    }
+  | undefined;
+const ocrErrors = new Map<string, string>();
 const refreshFooter = initLibraryFooter(home);
 let controls: ViewerControls | undefined;
 let pendingViewSave = Promise.resolve();
@@ -120,6 +139,7 @@ async function openMap(map: MapRecord) {
       controls.options(),
     );
     controls.attach(viewer);
+    void prepareMapSearch(map, version);
     element("map-canvas").focus();
     await setLastMap(map.id);
   } catch (error) {
@@ -146,6 +166,17 @@ async function refresh() {
     if (updated) {
       Object.assign(currentMap, updated);
       controls?.refreshMetadata();
+      void loadOcr(updated.id)
+        .then((index) => {
+          if (currentMap?.id === updated.id)
+            controls?.updateOcr(
+              index,
+              ocrJob?.mapId === updated.id
+                ? ocrJob.message
+                : (ocrErrors.get(updated.id) ?? ""),
+            );
+        })
+        .catch(() => {});
     }
   }
   for (const url of thumbnailURLs) URL.revokeObjectURL(url);
@@ -156,7 +187,7 @@ async function refresh() {
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="delete-map" aria-label="Delete map">${icons.trash}</button>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-label="Map options">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = map.name;
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
@@ -166,12 +197,12 @@ async function refresh() {
       void openMap(map);
     });
     card
-      .querySelector(".delete-map")!
-      .setAttribute("aria-label", `Delete ${map.name}`);
-    card.querySelector(".delete-map")!.addEventListener("click", () => {
-      deleting = map;
-      element("delete-name").textContent = map.name;
-      deleteDialog.showModal();
+      .querySelector(".map-more")!
+      .setAttribute("aria-label", `Options for ${map.name}`);
+    card.querySelector(".map-more")!.addEventListener("click", () => {
+      selectedMap = map;
+      element("map-options-name").textContent = map.name;
+      mapOptionsDialog.showModal();
     });
     grid.append(card);
     void payloadStore(map.backend)
@@ -210,16 +241,34 @@ fileInput.addEventListener("change", () => {
   element("progress-message").textContent = "Reading image metadata…";
   progressDialog.showModal();
   void mutate(async () => {
-    await importMap(
+    const map = await importMap(
       file,
       (progress) => {
-        element("progress-fill").style.width = `${progress.fraction * 100}%`;
+        element("progress-fill").style.width = `${progress.fraction * 80}%`;
         element("progress-percent").textContent =
-          `${Math.round(progress.fraction * 100)}%`;
+          `${Math.round(progress.fraction * 80)}%`;
         element("progress-message").textContent = progress.message;
       },
       controller.signal,
     );
+    element("progress-title").textContent = "Detecting map text";
+    element("progress-note").textContent =
+      "Your map is saved. Keep the app open to finish search detection, or stop and do it later.";
+    element("cancel-import").textContent = "Stop detection";
+    try {
+      await runOcr(map, controller, (progress) => {
+        const percent = 80 + progress.fraction * 20;
+        element("progress-fill").style.width = `${percent}%`;
+        element("progress-percent").textContent = `${Math.round(percent)}%`;
+        element("progress-message").textContent = progress.message;
+      });
+    } catch (error) {
+      if (!controller.signal.aborted)
+        showMessage(
+          "Map saved; text detection failed",
+          `${String(error)} You can retry in the map’s Advanced settings.`,
+        );
+    }
     channel?.postMessage("changed");
   })
     .then(async () => {
@@ -253,23 +302,35 @@ element("update-app").addEventListener("click", () => void updateApp());
 // Keep the current map/session and wait for durable saves before reloading.
 async function updateApp() {
   if (updating) return;
-  if (importing) {
-    showMessage("App update", "Finish the current import, then try again.");
+  if (importing || ocrJob) {
+    showMessage(
+      "App update",
+      "Finish or stop the current map preparation, then try again.",
+    );
     return;
   }
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) {
-    showMessage("App update", "App updates are available in the installed app or on the live HTTPS site.");
+    showMessage(
+      "App update",
+      "App updates are available in the installed app or on the live HTTPS site.",
+    );
     return;
   }
   updating = true;
   const close = element<HTMLButtonElement>("message-close");
   close.disabled = true;
-  showMessage("Checking for updates", "Keep the app open while the update downloads. Your saved maps, places and routes are kept.");
+  showMessage(
+    "Checking for updates",
+    "Keep the app open while the update downloads. Your saved maps, places and routes are kept.",
+  );
   try {
     await mutate(async () => {
       const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
       if (!(await checkForAppUpdate(loadedVersion))) {
-        showMessage("You’re up to date", "You already have the latest version. Your saved data is unchanged.");
+        showMessage(
+          "You’re up to date",
+          "You already have the latest version. Your saved data is unchanged.",
+        );
         return;
       }
       await pendingViewSave;
@@ -278,7 +339,10 @@ async function updateApp() {
       window.location.reload();
     });
   } catch (error) {
-    showMessage("Couldn’t update the app", `${error instanceof Error ? error.message : String(error)} You can keep using the current app and try again later.`);
+    showMessage(
+      "Couldn’t update the app",
+      `${error instanceof Error ? error.message : String(error)} You can keep using the current app and try again later.`,
+    );
   } finally {
     updating = false;
     close.disabled = false;
@@ -290,10 +354,15 @@ element("delete-confirm").addEventListener("click", () => {
   if (!map) return;
   deleteDialog.close();
   deleting = undefined;
-  void mutate(async () => {
-    await deleteStoredMap(map);
-    channel?.postMessage("changed");
-  })
+  const job = ocrJob?.mapId === map.id ? ocrJob : undefined;
+  job?.controller.abort();
+  void (job?.done ?? Promise.resolve())
+    .then(() =>
+      mutate(async () => {
+        await deleteStoredMap(map);
+        channel?.postMessage("changed");
+      }),
+    )
     .then(() => refresh())
     .catch((error) => showMessage("Couldn’t delete map", String(error)));
 });
@@ -315,6 +384,164 @@ channel?.addEventListener("message", () => {
     void refresh().catch((error) =>
       showMessage("Storage unavailable", String(error)),
     );
+});
+
+// OCR shares the storage lock with imports/deletion, and commits only full scans.
+async function runOcr(
+  map: MapRecord,
+  controller: AbortController,
+  onProgress: (progress: {
+    fraction: number;
+    message: string;
+  }) => void = () => {},
+) {
+  if (ocrJob)
+    throw new Error(
+      "Text detection is already running. Let it finish or stop it first.",
+    );
+  let previous: OcrIndex | undefined;
+  let release = () => {};
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const job = {
+    mapId: map.id,
+    controller,
+    message: "Starting local text detection…",
+    done,
+  };
+  ocrJob = job;
+  ocrErrors.delete(map.id);
+  const update = () => {
+    if (currentMap?.id === map.id) controls?.updateOcr(previous, job.message);
+    if (selectedMap?.id === map.id) {
+      element("ocr-status").textContent = job.message;
+      element<HTMLButtonElement>("rerun-ocr").disabled = true;
+      element("stop-ocr").hidden = false;
+    }
+  };
+  try {
+    previous = await loadOcr(map.id);
+    update();
+    const index = await detectMapText(
+      map,
+      (progress) => {
+        job.message = progress.message;
+        update();
+        onProgress(progress);
+      },
+      controller.signal,
+    );
+    if (currentMap?.id === map.id) controls?.updateOcr(index);
+    channel?.postMessage("changed");
+    return index;
+  } catch (error) {
+    const message = controller.signal.aborted
+      ? "Text detection stopped. Rerun it in Advanced settings."
+      : "Text detection failed. Rerun it in Advanced settings.";
+    ocrErrors.set(map.id, message);
+    if (currentMap?.id === map.id) controls?.updateOcr(previous, message);
+    throw error;
+  } finally {
+    ocrJob = undefined;
+    release();
+    if (selectedMap?.id === map.id) void renderOcrSettings();
+    if (currentMap && currentMap.id !== map.id)
+      void prepareMapSearch(currentMap, openVersion);
+  }
+}
+
+// Old libraries need no reimport. Opening a map without an index starts a scan.
+async function prepareMapSearch(map: MapRecord, version: number) {
+  try {
+    const index = await loadOcr(map.id);
+    if (version !== openVersion) return;
+    controls?.updateOcr(index, ocrJob?.mapId === map.id ? ocrJob.message : "");
+    if (!needsOcr(index) || ocrJob?.mapId === map.id) return;
+    await mutate(() => runOcr(map, new AbortController()));
+  } catch (error) {
+    if (version === openVersion && !ocrErrors.has(map.id))
+      controls?.updateOcr(
+        undefined,
+        `${String(error)} Retry in the map’s Advanced settings.`,
+      );
+  }
+}
+
+async function renderOcrSettings() {
+  const map = selectedMap;
+  if (!map) return;
+  const index: OcrIndex | undefined = await loadOcr(map.id).catch(
+    () => undefined,
+  );
+  if (selectedMap?.id !== map.id) return;
+  const running = ocrJob?.mapId === map.id;
+  element("advanced-map-name").textContent = map.name;
+  element("ocr-status").textContent = running
+    ? ocrJob!.message
+    : (ocrErrors.get(map.id) ??
+      (index
+        ? `${index.lines.length} detected labels · Last scan ${new Date(index.completedAt).toLocaleString()}`
+        : "Text detection has not run yet."));
+  element<HTMLButtonElement>("rerun-ocr").disabled = !!ocrJob || !!importing;
+  element("stop-ocr").hidden = !running;
+}
+element("map-options-close").addEventListener("click", () =>
+  mapOptionsDialog.close(),
+);
+element("rename-map").addEventListener("click", () => {
+  if (!selectedMap) return;
+  mapOptionsDialog.close();
+  element<HTMLInputElement>("map-name").value = selectedMap.name;
+  renameDialog.showModal();
+  element<HTMLInputElement>("map-name").select();
+});
+element("rename-map-cancel").addEventListener("click", () =>
+  renameDialog.close(),
+);
+element("rename-map-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const map = selectedMap;
+  const name = element<HTMLInputElement>("map-name").value.trim();
+  if (!map || !name) return;
+  void renameMap(map.id, name)
+    .then(async () => {
+      map.name = name;
+      renameDialog.close();
+      channel?.postMessage("changed");
+      await refresh();
+    })
+    .catch((error) => showMessage("Couldn’t rename map", String(error)));
+});
+element("remove-map").addEventListener("click", () => {
+  if (!selectedMap) return;
+  mapOptionsDialog.close();
+  deleting = selectedMap;
+  element("delete-name").textContent = selectedMap.name;
+  deleteDialog.showModal();
+});
+element("advanced-map").addEventListener("click", () => {
+  mapOptionsDialog.close();
+  element("ocr-status").textContent = "Checking text detection…";
+  advancedDialog.showModal();
+  void renderOcrSettings();
+});
+element("advanced-map-close").addEventListener("click", () =>
+  advancedDialog.close(),
+);
+element("stop-ocr").addEventListener("click", () => {
+  if (ocrJob?.mapId === selectedMap?.id) ocrJob?.controller.abort();
+});
+element("rerun-ocr").addEventListener("click", () => {
+  const map = selectedMap;
+  if (!map || ocrJob || importing) return;
+  element<HTMLButtonElement>("rerun-ocr").disabled = true;
+  void mutate(() => runOcr(map, new AbortController()))
+    .catch((error) => {
+      if (!ocrErrors.has(map.id))
+        showMessage("Couldn’t start text detection", String(error));
+    })
+    .finally(() => void renderOcrSettings());
 });
 void registerOfflineShell().then(refreshFooter);
 async function start() {

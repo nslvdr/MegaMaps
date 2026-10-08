@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@types/node": "^24.7.0",
     "fake-indexeddb": "^6.2.5",
     "linkedom": "^0.18.13",
@@ -22,5 +23,8 @@
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
     "wrangler": "^4.147.0"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }

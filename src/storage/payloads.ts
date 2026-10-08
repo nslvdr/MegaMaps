@@ -1,6 +1,7 @@
 import type { Backend, MapRecord } from "../types";
 import { database, transact, removeRecord, saveMap } from "./database";
 import { deleteNavigation } from "./navigation";
+import { deleteOcr } from "./ocr";
 export interface PayloadStore {
   put(mapId: string, key: string, blob: Blob): Promise<void>;
   get(mapId: string, key: string): Promise<Blob>;
@@ -91,5 +92,6 @@ export async function deleteStoredMap(map: MapRecord) {
   await saveMap({ ...map, status: "deleting" });
   await payloadStore(map.backend).deleteMap(map.id);
   await deleteNavigation(map.id);
+  await deleteOcr(map.id);
   await removeRecord(map.id);
 }

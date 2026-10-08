@@ -12,11 +12,15 @@ test("generated service worker serves cold offline navigation, worker JS, and co
   try {
     await mkdir(path.join(root, "dist/assets"), { recursive: true });
     await mkdir(path.join(root, "dist/codecs"));
+    await mkdir(path.join(root, "dist/ocr"));
     const assets = {
       "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__">offline</html>',
       "/assets/import.worker.js": "worker",
       "/codecs/jpeg.js": "decoder",
       "/codecs/jpeg.wasm": "wasm",
+      "/ocr/worker.min.js": "ocr worker",
+      "/ocr/tesseract-core-lstm.wasm.js": "ocr wasm",
+      "/ocr/eng.traineddata.gz": "ocr model",
       "/manifest.webmanifest": "{}",
       "/app-status.json": '{"app":"mega-maps"}',
     };
@@ -28,9 +32,14 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       { cwd: root },
     );
     const script = await readFile(path.join(root, "dist/sw.js"), "utf8");
-    assets["/index.html"] = await readFile(path.join(root, "dist/index.html"), "utf8");
+    assets["/index.html"] = await readFile(
+      path.join(root, "dist/index.html"),
+      "utf8",
+    );
     assert.ok(!assets["/index.html"].includes("__APP_BUILD__"));
-    const builtAt = assets["/index.html"].match(/name="app-built-at" content="([^"]+)"/)?.[1];
+    const builtAt = assets["/index.html"].match(
+      /name="app-built-at" content="([^"]+)"/,
+    )?.[1];
     assert.ok(builtAt && Number.isFinite(new Date(builtAt).getTime()));
     const listeners = new Map<string, (event: unknown) => void>();
     const stores = new Map<string, Map<string, Response>>();
@@ -105,19 +114,38 @@ test("generated service worker serves cold offline navigation, worker JS, and co
     await lifecycle("install");
     assert.equal(skipped, true);
     assert.equal(fetched.length, Object.keys(assets).length - 1);
-    assert.ok(!fetched.includes("/app-status.json"), "live availability is never precached");
+    assert.ok(
+      !fetched.includes("/app-status.json"),
+      "live availability is never precached",
+    );
     let intercepted = false;
     listeners.get("fetch")!({
-      request: { url: "https://map.local/app-status.json?check=123", method: "GET", mode: "cors" },
-      respondWith: () => { intercepted = true; },
+      request: {
+        url: "https://map.local/app-status.json?check=123",
+        method: "GET",
+        mode: "cors",
+      },
+      respondWith: () => {
+        intercepted = true;
+      },
     });
-    assert.equal(intercepted, false, "availability probes go straight to the network");
+    assert.equal(
+      intercepted,
+      false,
+      "availability probes go straight to the network",
+    );
     stores.set("map-viewer-shell-old", new Map());
-    stores.set("unrelated-user-cache", new Map([["saved", new Response("keep me")]]));
+    stores.set(
+      "unrelated-user-cache",
+      new Map([["saved", new Response("keep me")]]),
+    );
     await lifecycle("activate");
     assert.equal(claimed, true);
     assert.equal(stores.has("map-viewer-shell-old"), false);
-    assert.equal(await stores.get("unrelated-user-cache")!.get("saved")!.text(), "keep me");
+    assert.equal(
+      await stores.get("unrelated-user-cache")!.get("saved")!.text(),
+      "keep me",
+    );
     online = false;
     network = 0;
     // An older worker may still hold a redirected shell: it must be cleaned.
@@ -146,6 +174,9 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       "/assets/import.worker.js",
       "/codecs/jpeg.js",
       "/codecs/jpeg.wasm",
+      "/ocr/worker.min.js",
+      "/ocr/tesseract-core-lstm.wasm.js",
+      "/ocr/eng.traineddata.gz",
     ])
       assert.equal(
         await request(url, "cors"),
@@ -154,12 +185,18 @@ test("generated service worker serves cold offline navigation, worker JS, and co
     assert.equal(network, 0);
     async function checkShell() {
       let done: Promise<unknown> | undefined;
-      let result: { ready: boolean; missing: string[]; version: string } | undefined;
+      let result:
+        | { ready: boolean; missing: string[]; version: string }
+        | undefined;
       listeners.get("message")!({
         data: { type: "verify-shell" },
         ports: [
           {
-            postMessage: (value: { ready: boolean; missing: string[]; version: string }) => {
+            postMessage: (value: {
+              ready: boolean;
+              missing: string[];
+              version: string;
+            }) => {
               result = value;
             },
           },
@@ -172,7 +209,11 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       return result!;
     }
     assert.equal((await checkShell()).ready, true);
-    assert.ok(assets["/index.html"].includes(`content="${(await checkShell()).version}"`));
+    assert.ok(
+      assets["/index.html"].includes(
+        `content="${(await checkShell()).version}"`,
+      ),
+    );
     stores.values().next().value!.delete("/codecs/jpeg.wasm");
     assert.deepEqual(
       Array.from((await checkShell()).missing, (value) => String(value)),

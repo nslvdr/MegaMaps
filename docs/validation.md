@@ -6,6 +6,12 @@ Cave-tools milestone: **24 tests passed** and strict TypeScript + production Vit
 
 The production service-worker handlers were exercised in a Node VM with network fetching disabled: cold navigation, the module worker, and both codec resources came from the cache. This verifies handler behavior and cache inventory, **not** actual iOS installation/service-worker lifecycle.
 
+## OCR milestone — 2026-10-08
+
+**48 tests passed** and strict TypeScript + production build passed. The shell includes 21 assets, including the OCR owner worker, local Tesseract worker, three embedded-WASM cores and English model. The offline-handler test covers OCR code/model responses with network fetching disabled.
+
+Actual local Tesseract detection on native-canvas fixtures found labels at 0°, 37°, 90°, 173°, 254° and white-on-dark text at −58°, including text crossing native tile boundaries. Tests verify inverse polygon coordinates, bounded crop plans, one live tile decode, case/accent/phrase search, mask alignment under camera rotation, startup cancellation, failure preserving the old index, replacement commits, rename/deletion protection, search controls and upgrades from database versions 1 and 2. These are Node/DOM-adapter tests; no browser automation or physical-device OCR timing, keyboard layout or cold-offline OCR initialization was tested.
+
 ## Full image preprocessing benchmarks
 
 Host: Apple M4 Pro, macOS 27.0.1, Node v24.9.0. Each table row used a separate process. Values are rounded.
@@ -57,5 +63,6 @@ Use the **production** HTTPS preview and keep the same origin. No browser/comput
 10. Test default map rotation lock with pinch/twist; unlock, rotate with two fingers and buttons, fit, resize, relock and reopen.
 11. Add/edit notes, plan a return route, close with an unfinished draft, reopen and continue. Jump between saved places and confirm that a map saved with checkpoints by an older version shows them as landmark places. Drag route points while editing (including a second finger mid-drag, which should put the point back and pinch), move a place from its ⋯ menu, and check the ⋯ menu opens upward near the bottom of the panel. Verify overlay alignment through rotation/native zoom and persistence after restart.
 12. Tap **Lock** in the bottom pill: with it on (orange), drag, pinch and double tap still move/zoom but a two-finger twist must not rotate; with it off, twisting rotates and View shows the rotation slider. Reopen the map and confirm the lock state is kept.
+13. Open an older map and verify background text detection starts. In Search, check the phone keyboard, matching words, clear/close, previous/next results and alignment while panning/zooming/rotating. Use ⋯ to rename, stop/rerun detection and delete. Repeat a fresh OCR scan in Airplane Mode after the shell is cached; record detection time and native memory on a large map.
 
 The next engineering decision should follow these device results: tune scanline/cache budgets and import tile encoding before increasing supported formats or implementing future map features.

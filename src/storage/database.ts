@@ -3,7 +3,7 @@ let opening: Promise<IDBDatabase> | undefined;
 export function database() {
   return (opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     // Keep the original database name so existing Mega Maps libraries stay accessible.
-    const request = indexedDB.open("map-viewer", 2);
+    const request = indexedDB.open("map-viewer", 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("maps"))
@@ -14,6 +14,8 @@ export function database() {
         db.createObjectStore("navigation", { keyPath: "mapId" });
       if (!db.objectStoreNames.contains("settings"))
         db.createObjectStore("settings");
+      if (!db.objectStoreNames.contains("ocr"))
+        db.createObjectStore("ocr", { keyPath: "mapId" });
     };
     request.onsuccess = () => {
       request.result.onversionchange = () => {
@@ -59,3 +61,22 @@ export const listMaps = () =>
   transact<MapRecord[]>("maps", "readonly", (s) => s.getAll());
 export const removeRecord = (id: string) =>
   transact("maps", "readwrite", (s) => s.delete(id));
+
+// Patch the current record so a rename cannot overwrite a concurrent update.
+export async function renameMap(id: string, name: string) {
+  const db = await database();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction("maps", "readwrite");
+    const store = tx.objectStore("maps");
+    const request = store.get(id);
+    request.onsuccess = () => {
+      const map = request.result as MapRecord | undefined;
+      if (map?.status !== "ready") return tx.abort();
+      store.put({ ...map, name });
+    };
+    tx.oncomplete = () => resolve();
+    tx.onabort = () =>
+      reject(tx.error ?? new Error("Map is no longer available."));
+    tx.onerror = () => reject(tx.error);
+  });
+}
