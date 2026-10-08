@@ -57,5 +57,30 @@ export const saveMap = (map: MapRecord) =>
   transact("maps", "readwrite", (s) => s.put(map));
 export const listMaps = () =>
   transact<MapRecord[]>("maps", "readonly", (s) => s.getAll());
+// Update only the name on the latest record, without restoring a removed map.
+export async function renameMap(id: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Enter a map name.");
+  const db = await database();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction("maps", "readwrite");
+    const store = tx.objectStore("maps");
+    const request: IDBRequest<MapRecord | undefined> = store.get(id);
+    let missing = false;
+    request.onsuccess = () => {
+      const map = request.result;
+      if (!map || map.status !== "ready") {
+        missing = true;
+        tx.abort();
+        return;
+      }
+      store.put({ ...map, name: trimmed });
+    };
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(missing
+      ? new Error("This map is no longer available.")
+      : tx.error ?? new Error("Could not save the map name."));
+  });
+}
 export const removeRecord = (id: string) =>
   transact("maps", "readwrite", (s) => s.delete(id));
