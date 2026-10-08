@@ -7,7 +7,7 @@ import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { checkForAppUpdate } from "./app-update";
 import { icons } from "./ui/icons";
-import { formatBytes } from "./ui/format";
+import { displayName, formatBytes } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
@@ -26,9 +26,9 @@ app.innerHTML = `
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
-  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">Cancel import</button></div></dialog>
-  <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">Got it</button></dialog>
-  <dialog id="delete-dialog"><h2>Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the local copy and its tiles from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">Delete map</button><button class="quiet" id="delete-cancel" autofocus>Keep map</button></div></dialog>
+  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
+  <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel" autofocus>${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
 `;
@@ -81,7 +81,7 @@ const sharing = initSharing(app, {
     importing = controller;
     element("progress-title").textContent = "Importing shared map";
     element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
-    element("cancel-import").textContent = "Cancel import";
+    element("cancel-import").querySelector("span")!.textContent = "Cancel import";
     element("import-name").textContent = share.manifest.map.name;
     element("progress-fill").style.width = "0%";
     element("progress-percent").textContent = "0%";
@@ -228,7 +228,7 @@ async function refresh() {
     const card = document.createElement("article");
     card.className = "map-card";
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><div class="map-actions"><button class="share-map" title="Share map">${icons.share}</button><button class="rename-map" title="Rename map">${icons.edit}</button><button class="delete-map" title="Delete map">${icons.trash}</button></div>`;
-    card.querySelector("h3")!.textContent = map.name;
+    card.querySelector("h3")!.textContent = displayName(map.name);
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
     card.querySelector(".map-size")!.textContent =
@@ -237,17 +237,17 @@ async function refresh() {
       void openMap(map);
     });
     const rename = card.querySelector<HTMLButtonElement>(".rename-map")!;
-    rename.setAttribute("aria-label", `Rename ${map.name}`);
+    rename.setAttribute("aria-label", `Rename ${displayName(map.name)}`);
     rename.addEventListener("click", () => openRenameMap(map));
     const share = card.querySelector<HTMLButtonElement>(".share-map")!;
-    share.setAttribute("aria-label", `Share ${map.name}`);
+    share.setAttribute("aria-label", `Share ${displayName(map.name)}`);
     share.addEventListener("click", () => { void shareMap(map); });
     card
       .querySelector(".delete-map")!
-      .setAttribute("aria-label", `Delete ${map.name}`);
+      .setAttribute("aria-label", `Delete ${displayName(map.name)}`);
     card.querySelector(".delete-map")!.addEventListener("click", () => {
       deleting = map;
-      element("delete-name").textContent = map.name;
+      element("delete-name").textContent = displayName(map.name);
       deleteDialog.showModal();
     });
     grid.append(card);
@@ -280,7 +280,7 @@ fileInput.addEventListener("change", () => {
   element("progress-title").textContent = "Preparing map";
   element("progress-note").textContent =
     "Keep Mega Maps open while your map is prepared.";
-  element("cancel-import").textContent = "Cancel import";
+  element("cancel-import").querySelector("span")!.textContent = "Cancel import";
   element("import-name").textContent = file.name;
   element("progress-fill").style.width = "0%";
   element("progress-percent").textContent = "0%";

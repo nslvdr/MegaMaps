@@ -22,8 +22,8 @@ const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number];
 const SPOTLIGHT_MS = 4500;
 const darkMessages: Record<DarkMode["kind"], string> = {
-  inverted: "Light map: inverted, background pure black",
-  deepened: "Dark map: background deepened to pure black",
+  inverted: "Colors inverted, background pure black",
+  deepened: "Background deepened to pure black",
   "already-dark": "Map is already dark",
 };
 
@@ -375,7 +375,7 @@ export class ViewerControls {
     const count = this.state.routes.length + this.state.markers.length;
     this.sheet(undefined);
     if (!count) {
-      this.toast("Nothing saved yet. Use + to create routes and places.");
+      this.toast("Nothing saved yet. Use Add to create routes and places.");
       return;
     }
     clearTimeout(this.spotlightTimer);
