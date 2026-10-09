@@ -16,6 +16,7 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
+import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
@@ -48,6 +49,7 @@ const progressDialog = element<HTMLDialogElement>("progress-dialog");
 const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
+const mapMenu = initMapMenu();
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
@@ -266,13 +268,14 @@ async function refresh() {
   }
   for (const url of thumbnailURLs) URL.revokeObjectURL(url);
   thumbnailURLs = [];
+  mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
   element("map-count").textContent = `${maps.length}`;
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><div class="map-actions"><button class="share-map" title="Share map">${icons.share}</button><button class="rename-map" title="Rename map">${icons.edit}</button><button class="delete-map" title="Delete map">${icons.trash}</button><button class="map-more" title="Advanced settings">${icons.tools}</button></div>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
@@ -281,28 +284,36 @@ async function refresh() {
     card.querySelector(".map-open")!.addEventListener("click", () => {
       void openMap(map);
     });
-    const rename = card.querySelector<HTMLButtonElement>(".rename-map")!;
-    rename.setAttribute("aria-label", `Rename ${displayName(map.name)}`);
-    rename.addEventListener("click", () => openRenameMap(map));
-    const share = card.querySelector<HTMLButtonElement>(".share-map")!;
-    share.setAttribute("aria-label", `Share ${displayName(map.name)}`);
-    share.addEventListener("click", () => { void shareMap(map); });
-    card
-      .querySelector(".delete-map")!
-      .setAttribute("aria-label", `Delete ${displayName(map.name)}`);
-    card.querySelector(".delete-map")!.addEventListener("click", () => {
-      deleting = map;
-      element("delete-name").textContent = displayName(map.name);
-      deleteDialog.showModal();
-    });
-    const advanced = card.querySelector<HTMLButtonElement>(".map-more")!;
-    advanced.setAttribute("aria-label", `Advanced settings for ${displayName(map.name)}`);
-    advanced.addEventListener("click", () => {
-      selectedMap = map;
-      element("ocr-status").textContent = "Checking text detection…";
-      advancedDialog.showModal();
-      void renderOcrSettings();
-    });
+    const more = card.querySelector<HTMLButtonElement>(".map-more")!;
+    const name = displayName(map.name);
+    more.title = "Map options";
+    more.setAttribute("aria-label", `Options for ${name}`);
+    more.addEventListener("click", () =>
+      mapMenu.toggle(more, name, [
+        { label: "Share", icon: icons.share, action: () => { void shareMap(map); } },
+        { label: "Rename", icon: icons.edit, action: () => openRenameMap(map) },
+        {
+          label: "Advanced settings",
+          icon: icons.tools,
+          action: () => {
+            selectedMap = map;
+            element("ocr-status").textContent = "Checking text detection…";
+            advancedDialog.showModal();
+            void renderOcrSettings();
+          },
+        },
+        {
+          label: "Delete",
+          icon: icons.trash,
+          danger: true,
+          action: () => {
+            deleting = map;
+            element("delete-name").textContent = name;
+            deleteDialog.showModal();
+          },
+        },
+      ]),
+    );
     grid.append(card);
     void payloadStore(map.backend)
       .get(map.id, tileKey(map.levels.length - 1, 0, 0))
