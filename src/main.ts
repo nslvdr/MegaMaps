@@ -12,6 +12,7 @@ import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { initLibraryFooter } from "./ui/library-footer";
+import { initKeyboardInset } from "./ui/keyboard-inset";
 import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
@@ -560,6 +561,7 @@ element("rerun-ocr").addEventListener("click", () => {
     })
     .finally(() => void renderOcrSettings());
 });
+initKeyboardInset();
 void registerOfflineShell().then(refreshFooter);
 async function start() {
   await mutate(async () => {
