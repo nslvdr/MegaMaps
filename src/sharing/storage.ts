@@ -4,7 +4,7 @@ import { payloadStore, deleteStoredMap } from "../storage/payloads";
 import { defaultNavigation, normalizeNavigation, type NavigationState } from "../viewer/navigation";
 import { importMap } from "../processing/import";
 import { readHeader } from "../processing/headers";
-import { mergeAnnotations } from "./annotations";
+import { mergeAnnotations, replaceAnnotations } from "./annotations";
 import { fingerprint, encodeShare, shareFilename, verifyImage, type SharedMap, type ShareManifest } from "./format";
 
 /** Cache on the latest record so hashing cannot undo a concurrent rename/deletion. */
@@ -72,12 +72,13 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     shareFilename(prepared.map.name), { type: "application/octet-stream" });
 }
 
-/** Read and merge in a single transaction; concurrent imports cannot lose each other. */
-export async function importAnnotations(mapId: string, manifest: ShareManifest, allowDifferentImage = false, signal?: AbortSignal) {
+export type ImportMode = "merge" | "replace";
+/** Read and write in a single transaction; concurrent imports cannot lose each other. */
+export async function importAnnotations(mapId: string, manifest: ShareManifest, mode: ImportMode = "merge", signal?: AbortSignal) {
   signal?.throwIfAborted();
   const db = await database();
   signal?.throwIfAborted();
-  return new Promise<{ added: number; skipped: number }>((resolve, reject) => {
+  return new Promise<{ added: number; skipped: number; removed: number }>((resolve, reject) => {
     const tx = db.transaction(["maps", "navigation"], "readwrite");
     const abort = () => tx.abort();
     signal?.addEventListener("abort", abort, { once: true });
@@ -85,19 +86,21 @@ export async function importAnnotations(mapId: string, manifest: ShareManifest, 
     const maps = tx.objectStore("maps"), navigation = tx.objectStore("navigation");
     const mapRequest: IDBRequest<MapRecord | undefined> = maps.get(mapId);
     const stateRequest: IDBRequest<NavigationState | undefined> = navigation.get(mapId);
-    let result = { added: 0, skipped: 0 };
+    let result = { added: 0, skipped: 0, removed: 0 };
     let failure: Error | undefined;
     stateRequest.onsuccess = () => {
       const map = mapRequest.result;
       if (!map || map.status !== "ready") failure = new Error("This map is no longer available.");
       else if (map.width !== manifest.map.width || map.height !== manifest.map.height)
         failure = new Error("Choose a map with the same dimensions as the shared map.");
-      else if (!allowDifferentImage && map.fingerprint !== manifest.map.fingerprint)
-        failure = new Error("Confirm annotation alignment before using a different map image.");
+      // Places are pixel positions, so only the exact same image keeps them aligned.
+      else if (map.fingerprint !== manifest.map.fingerprint)
+        failure = new Error("This map doesn’t use the same image as the shared map.");
       if (failure) { tx.abort(); return; }
-      const merged = mergeAnnotations(stateRequest.result ? normalizeNavigation(stateRequest.result) : defaultNavigation(mapId), manifest);
-      result = { added: merged.added, skipped: merged.skipped };
-      navigation.put(merged.state);
+      const state = stateRequest.result ? normalizeNavigation(stateRequest.result) : defaultNavigation(mapId);
+      const next = mode === "replace" ? replaceAnnotations(state, manifest) : { ...mergeAnnotations(state, manifest), removed: 0 };
+      result = { added: next.added, skipped: next.skipped, removed: next.removed };
+      navigation.put(next.state);
     };
     tx.oncomplete = () => { finish(); resolve(result); };
     tx.onabort = () => {
@@ -122,7 +125,7 @@ export async function importNewCopy(
     signal.throwIfAborted();
     await cacheFingerprint(map.id, share.manifest.map.fingerprint);
     signal.throwIfAborted();
-    const result = await importAnnotations(map.id, share.manifest, false, signal);
+    const result = await importAnnotations(map.id, share.manifest, "merge", signal);
     return { map, ...result };
   } catch (error) {
     if (map) await deleteStoredMap(map).catch(() => {});

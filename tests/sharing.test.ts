@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { encodeShare, fingerprint, MAX_MANIFEST_BYTES, readShare, validateManifest, verifyImage, type ShareManifest } from "../src/sharing/format";
+import { encodeShare, fingerprint, isShareFile, MAX_MANIFEST_BYTES, readShare, validateManifest, verifyImage, type ShareManifest } from "../src/sharing/format";
 import { mergeAnnotations, preserveUnseenImports } from "../src/sharing/annotations";
 import { exportFile, importAnnotations, importNewCopy, matchingMaps, prepareExport } from "../src/sharing/storage";
 import { defaultNavigation } from "../src/viewer/navigation";
@@ -68,6 +68,14 @@ test("fingerprints read bounded chunks and agree with SHA-256", async () => {
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(fingerprint(blob, controller.signal), { name: "AbortError" });
+});
+
+test("import routing recognizes the shared header regardless of filename or MIME type", async () => {
+  const { manifest, original } = await fixture();
+  assert.equal(await isShareFile(new File([encodeShare(manifest)], "map.png", { type: "image/png" })), true);
+  assert.equal(await isShareFile(new File([original], "map.megamap", { type: "application/octet-stream" })), false);
+  assert.equal(await isShareFile(new Blob(["MEGAMAP"])), false);
+  assert.equal(await isShareFile(new Blob()), false);
 });
 
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
@@ -145,7 +153,7 @@ test("transactional imports preserve existing navigation and survive stale saves
   state.view = { center: { x: 40, y: 30 }, scale: 2, rotation: 1 };
   await saveNavigation(state);
   const results = await Promise.all([importAnnotations(map.id, manifest), importAnnotations(map.id, manifest)]);
-  assert.deepEqual(results, [{ added: 2, skipped: 0 }, { added: 0, skipped: 2 }]);
+  assert.deepEqual(results, [{ added: 2, skipped: 0, removed: 0 }, { added: 0, skipped: 2, removed: 0 }]);
   state.dimming = 0.6;
   await saveNavigation(state); // Old viewer snapshot has not seen the import yet.
   const saved = await loadNavigation(map.id);
@@ -161,10 +169,56 @@ test("transactional imports preserve existing navigation and survive stale saves
   await assert.rejects(importAnnotations("missing", manifest), /no longer available/);
   const wrong = { ...record("wrong"), fingerprint: "b".repeat(64) };
   await saveMap(wrong);
-  await assert.rejects(importAnnotations(wrong.id, manifest), /alignment/);
+  await assert.rejects(importAnnotations(wrong.id, manifest), /same image/);
+  await assert.rejects(importAnnotations(wrong.id, manifest, "replace"), /same image/);
   assert.equal((await loadNavigation(wrong.id)).markers.length, 0);
-  await importAnnotations(wrong.id, manifest, true);
-  assert.equal((await loadNavigation(wrong.id)).markers.length, 1);
+  const wrongSize = { ...record("wrong-size"), width: 1024, fingerprint: manifest.map.fingerprint };
+  await saveMap(wrongSize);
+  for (const mode of ["merge", "replace"] as const)
+    await assert.rejects(importAnnotations(wrongSize.id, manifest, mode), /same dimensions/);
+  assert.equal((await loadNavigation(wrongSize.id)).markers.length, 0);
+});
+
+test("replace swaps places and finished routes for the shared ones but keeps drafts and settings", async () => {
+  const { manifest } = await fixture();
+  const map = { ...record("replace"), fingerprint: manifest.map.fingerprint };
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  state.dimming = 0.3;
+  state.markers = [
+    { id: "mine", point: { x: 1, y: 1 }, label: "Mine", note: "", kind: "bookmark", created: 1 },
+    { id: "theirs-edited", point: { x: 2, y: 2 }, label: "Edited", note: "", kind: "bookmark", created: 1 },
+  ];
+  state.routes = [
+    { id: "done", name: "Done", points: [{ x: 1, y: 1 }, { x: 5, y: 5 }], draft: false, created: 1 },
+    { id: "drawing", name: "Drawing", points: [{ x: 1, y: 1 }], draft: true, created: 1 },
+  ];
+  state.importedItems = ["marker:theirs-edited", "marker:deleted-earlier"];
+  await saveNavigation(state);
+  assert.deepEqual(await importAnnotations(map.id, manifest, "replace"), { added: 2, skipped: 0, removed: 3 });
+  const saved = await loadNavigation(map.id);
+  assert.deepEqual(saved.markers, manifest.markers);
+  assert.deepEqual(saved.routes.map((route) => route.id), ["drawing", ...manifest.routes.map((route) => route.id)]);
+  assert.deepEqual(saved.importedItems, [...manifest.markers.map((item) => `marker:${item.id}`), ...manifest.routes.map((item) => `route:${item.id}`)]);
+  assert.equal(saved.dimming, 0.3);
+  assert.deepEqual(await importAnnotations(map.id, manifest), { added: 0, skipped: 2, removed: 0 }, "a later merge skips replaced items");
+  // A queued save from an older window must not resurrect the removed annotations.
+  state.dimming = 0.6;
+  await saveNavigation(state);
+  const afterStaleSave = await loadNavigation(map.id);
+  assert.deepEqual(afterStaleSave.markers, manifest.markers);
+  assert.deepEqual(afterStaleSave.routes, saved.routes);
+  assert.deepEqual(afterStaleSave.importedItems, saved.importedItems);
+  assert.equal(afterStaleSave.annotationRevision, 1);
+  assert.equal(afterStaleSave.dimming, 0.6);
+  const refreshed = preserveUnseenImports(state, afterStaleSave);
+  refreshed.markers[0]!.note = "Edited after replacement";
+  await saveNavigation(refreshed);
+  assert.equal((await loadNavigation(map.id)).markers[0]!.note, "Edited after replacement", "edits after refreshing still persist");
+  const later = { ...manifest, markers: [{ ...manifest.markers[0]!, id: "next-share" }], routes: [] };
+  await importAnnotations(map.id, later, "replace");
+  await saveNavigation(refreshed);
+  assert.deepEqual((await loadNavigation(map.id)).markers, later.markers, "each replacement invalidates earlier snapshots");
 });
 
 test("new-copy import verifies images first and rolls back failed annotation commits", async () => {
@@ -209,7 +263,7 @@ test("cancelling an active annotation transaction leaves the destination unchang
   await saveMap(map);
   const state = defaultNavigation(map.id);
   await saveNavigation(state);
-  const controller = new AbortController();
+  let controller = new AbortController();
   const db = await database();
   const transaction = db.transaction.bind(db);
   db.transaction = (...args: Parameters<IDBDatabase["transaction"]>) => {
@@ -219,7 +273,10 @@ test("cancelling an active annotation transaction leaves the destination unchang
     return tx;
   };
   try {
-    await assert.rejects(importAnnotations(map.id, manifest, false, controller.signal), { name: "AbortError" });
+    for (const mode of ["merge", "replace"] as const) {
+      controller = new AbortController();
+      await assert.rejects(importAnnotations(map.id, manifest, mode, controller.signal), { name: "AbortError" });
+    }
   } finally { db.transaction = transaction; }
   assert.deepEqual(await loadNavigation(map.id), state);
 });
