@@ -1,12 +1,16 @@
 import { icons } from "./icons";
-import { markerKinds } from "../viewer/navigation";
+import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, markerKinds } from "../viewer/navigation";
 import { placeIcon } from "./place-icon";
 
 // Panels are stacked cards of rows: icon, label, then the row's control.
 const rowIcon = (icon: string, tint = "") =>
   `<i class="row-icon ${tint}">${icon}</i>`;
-const layerRow = (id: string, label: string, icon: string) =>
-  `<label class="panel-row">${rowIcon(icon, id)}<span class="row-text"><strong>${label}</strong></span><small class="row-count" id="layer-${id}-count"></small><input type="checkbox" role="switch" class="switch" id="layer-${id}"></label>`;
+// The whole icon tile toggles its layer through a native, keyboard-accessible input.
+const layerToggle = (id: string, label: string, icon: string) =>
+  `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
+const brightnessChoices = BRIGHTNESS_LEVELS.map(
+  (level) => `<label><input type="radio" name="map-brightness" id="brightness-${level * 100}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${level * 100}%</span></label>`,
+).join("");
 // Kinds are picked by their map pin, one big target each.
 const kindPicks = Object.entries(markerKinds)
   .map(
@@ -56,14 +60,14 @@ export const viewerMarkup = `
       <h3>Map</h3>
       <div class="panel-card">
         <label class="panel-row">${rowIcon(icons.moon)}<span class="row-text"><strong>Dark map</strong><small id="dark-status"></small></span><input type="checkbox" role="switch" class="switch" id="dark-map"></label>
-        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>Brightness</strong></span><output id="dimming-value">100%</output><div class="row-slider"><input id="map-dimming" aria-label="Map brightness" type="range" min="20" max="100" step="5"></div></div>
+        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>Brightness</strong></span><div class="brightness-options" role="radiogroup" aria-label="Map brightness">${brightnessChoices}</div></div>
         <div class="panel-row stacked" id="rotation-controls">${rowIcon(icons.rotateRight)}<span class="row-text"><strong>Rotation</strong></span><output id="rotation-value">0°</output><div class="row-slider"><button id="rotate-left" class="slider-step" aria-label="Rotate map left 15 degrees">${icons.rotateLeft}</button><input id="rotation-angle" aria-label="Map rotation" type="range" min="0" max="359" step="1"><button id="rotate-right" class="slider-step" aria-label="Rotate map right 15 degrees">${icons.rotateRight}</button></div></div>
       </div>
       <h3>Show on map</h3>
-      <div class="panel-card">
-        ${layerRow("routes", "Routes", icons.route)}
-        ${layerRow("places", "Places", icons.pin)}
-        ${layerRow("labels", "Names", icons.text)}
+      <div class="layer-toggles" role="group" aria-label="Show on map">
+        ${layerToggle("routes", "Routes", icons.route)}
+        ${layerToggle("places", "Places", icons.pin)}
+        ${layerToggle("labels", "Names", icons.text)}
       </div>
       <button id="spotlight" class="panel-action spotlight-action">${icons.sparkle}<span>Highlight</span></button>
     </div>

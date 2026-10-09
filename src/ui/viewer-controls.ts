@@ -6,6 +6,8 @@ import { NavigationPersistence, loadNavigation } from "../storage/navigation";
 import { preserveUnseenImports } from "../sharing/annotations";
 import { Viewer, type ViewerOptions } from "../viewer/viewer";
 import {
+  BRIGHTNESS_LEVELS,
+  DEFAULT_DIMMING,
   insideImage,
   layerNames,
   markerKinds,
@@ -88,6 +90,12 @@ export class ViewerControls {
     );
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
+    // Older slider values use the nearest available preset.
+    this.state.dimming = BRIGHTNESS_LEVELS.reduce(
+      (closest, level) => Math.abs(level - state.dimming) < Math.abs(closest - state.dimming)
+        ? level : closest,
+      DEFAULT_DIMMING,
+    );
     this.bind();
     this.el("share-saved").hidden = !onShare;
     this.sheet(undefined);
@@ -471,10 +479,14 @@ export class ViewerControls {
     this.click("rotate-right", () =>
       this.viewer?.rotateTo((this.state.view?.rotation ?? 0) + Math.PI / 12),
     );
-    this.on(this.input("map-dimming"), "input", () => {
-      this.state.dimming = Number(this.input("map-dimming").value) / 100;
-      this.changed();
-    });
+    for (const level of BRIGHTNESS_LEVELS) {
+      const input = this.input(`brightness-${level * 100}`);
+      this.on(input, "change", () => {
+        if (!input.checked) return;
+        this.state.dimming = level;
+        this.changed();
+      });
+    }
     // Tapping anywhere outside an open row menu closes it.
     this.on(document, "pointerdown", (event) => {
       if (!this.rowMenu) return;
@@ -851,9 +863,8 @@ export class ViewerControls {
       this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
     );
     this.input("dark-map").checked = this.state.inverted;
-    this.input("map-dimming").value = String(this.state.dimming * 100);
-    this.el("dimming-value").textContent =
-      `${Math.round(this.state.dimming * 100)}%`;
+    for (const level of BRIGHTNESS_LEVELS)
+      this.input(`brightness-${level * 100}`).checked = this.state.dimming === level;
     this.renderDark();
     const counts = {
       routes: this.state.routes.length,

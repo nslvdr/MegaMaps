@@ -47,6 +47,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   };
   await saveMap(map);
   const state = defaultNavigation("controls");
+  assert.equal(state.dimming, 0.85, "new maps default to 85% brightness");
+  state.dimming = 0.8; // Simulate a brightness saved by the old slider.
   let rotation = 0;
   let labelRefreshes = 0;
   const tools: string[] = [],
@@ -58,6 +60,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
+  assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
   controls.attach({
     setTool(tool: string) {
       tools.push(tool);
@@ -202,6 +205,18 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-display");
     click("sheet-dismiss");
     assert.equal(sheet.hidden, true);
+
+    // Brightness offers exactly three persistent choices, with 85% selected by default.
+    assert.equal(state.dimming, 0.85);
+    assert.equal((el("brightness-85") as HTMLInputElement).checked, true);
+    for (const percent of [100, 60, 85]) {
+      check(`brightness-${percent}`, true);
+      assert.equal(state.dimming, percent / 100);
+      for (const option of [100, 85, 60])
+        assert.equal((el(`brightness-${option}`) as HTMLInputElement).checked, option === percent);
+      await controls.flush();
+      assert.equal((await loadNavigation("controls")).dimming, percent / 100);
+    }
 
     // Smart dark mode is on by default and set from View.
     assert.equal(state.inverted, true);

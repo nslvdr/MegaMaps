@@ -55,6 +55,7 @@ export interface NavigationState {
 }
 /** Slightly dimmed by default so routes and places stand out from the map. */
 export const DEFAULT_DIMMING = 0.85;
+export const BRIGHTNESS_LEVELS = [1, DEFAULT_DIMMING, 0.6] as const;
 /** marker: tap to drop a new place · route: draw/edit · move: reposition a place */
 export type Tool = "browse" | "marker" | "route" | "move";
 export function defaultNavigation(mapId: string): NavigationState {
