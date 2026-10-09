@@ -52,6 +52,7 @@ export const icons = {
   text: svg(
     '<path d="M4 19 9 5l5 14M5.8 14h6.4"/><path d="M15.5 12.5a3 3 0 0 1 5 1.5v5M20.5 15.5h-2.7a2 2 0 0 0 0 4c1.6 0 2.7-1 2.7-3"/>',
   ),
+  merge: svg('<path d="M6 3v6a6 6 0 0 0 6 6v6M18 3v6a6 6 0 0 1-6 6"/>'),
   download: svg('<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>'),
   rotationLock: svg(
     '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11"/>',

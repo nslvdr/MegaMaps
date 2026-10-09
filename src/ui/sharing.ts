@@ -3,13 +3,13 @@ import { markerKinds, routeColor, type NavigationState } from "../viewer/navigat
 import { tileKey } from "../types";
 import { payloadStore } from "../storage/payloads";
 import { readShare, type SharedMap } from "../sharing/format";
-import { exportFile, matchingMaps, prepareExport, type PreparedExport, type ShareSelection } from "../sharing/storage";
+import { exportFile, matchingMaps, prepareExport, type ImportMode, type PreparedExport, type ShareSelection } from "../sharing/storage";
+import { loadNavigation } from "../storage/navigation";
 import { displayName, formatBytes, plural } from "./format";
 import { icons } from "./icons";
 import { placeIcon } from "./place-icon";
 
 export const sharingMarkup = `
-<input id="shared-file-input" type="file" accept=".megamap,application/octet-stream" hidden>
 <dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main"><h2 id="share-title">Share map</h2><p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">Preparing share…</p>
 <div id="share-content" hidden><div class="share-summary"><button id="share-places" class="share-row" data-kind="marker"><span class="share-row-icon share-place">${icons.pin}</span><span class="share-row-label">Places</span><span id="share-places-count" class="share-row-value"></span>${icons.arrow}</button><button id="share-routes" class="share-row" data-kind="route"><span class="share-row-icon share-route">${icons.route}</span><span class="share-row-label">Routes</span><span id="share-routes-count" class="share-row-value"></span>${icons.arrow}</button>
 <label class="share-row"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">Map image<small>Your friend won’t need the original</small></span><input id="share-image" class="switch" type="checkbox" role="switch"></label></div><p id="share-size" class="share-size" role="status" aria-live="polite"></p></div>
@@ -17,17 +17,17 @@ export const sharingMarkup = `
 <div id="share-picker" hidden><button id="share-back" class="share-back">${icons.arrow}<span>Share map</span></button><h2 id="share-picker-title"></h2><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>All</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>None</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
 <div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>Done</span></button></div></div></dialog>
 <dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title"><h2 id="receive-title">Import shared map</h2><p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
-<div id="receive-content" hidden><label class="share-field">Destination<select id="receive-destination"></select></label><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label>
-<p id="receive-match" class="dialog-note"></p><div id="receive-preview" class="share-preview" aria-label="Preview of shared annotations on the selected map" hidden><img id="receive-preview-image" alt="Selected map"><svg id="receive-preview-overlay" aria-hidden="true"></svg></div>
-<label id="receive-confirm-field" class="share-choice" hidden><input id="receive-confirm" type="checkbox"><span>I checked that the annotations line up</span></label><p class="dialog-note">Existing annotations stay intact. Previously imported items are skipped, including items you edited or deleted.</p></div>
+<div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">Add to</h3><div id="receive-destinations" class="share-summary" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
+<div id="receive-mode-field" hidden><h3 id="receive-mode-title" class="share-heading">Your places and routes</h3><div class="share-segments" role="radiogroup" aria-labelledby="receive-mode-title"><label><input type="radio" name="receive-mode" value="merge" checked>${icons.merge}<span>Merge</span></label><label class="share-segment-danger"><input type="radio" name="receive-mode" value="replace">${icons.rotateRight}<span>Replace</span></label></div></div>
+<p id="receive-note" class="dialog-note"></p><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label></div>
 <p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>Import</span></button><button id="receive-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></dialog>`;
 
-export interface ShareDestination { mapId?: string; image?: File; allowDifferentImage: boolean }
-export interface ShareImportResult { map: MapRecord; added: number; skipped: number }
+export interface ShareDestination { mapId?: string; image?: File; mode: ImportMode }
+export interface ShareImportResult { map: MapRecord; added: number; skipped: number; removed?: number }
 interface SharingOptions {
   maps: () => Promise<MapRecord[]>;
   import: (share: SharedMap, destination: ShareDestination) => Promise<ShareImportResult>;
-  imported: (result: ShareImportResult) => Promise<void>;
+  imported: (result: ShareImportResult, destination: ShareDestination) => Promise<void>;
 }
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
@@ -36,23 +36,20 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   const el = <T extends HTMLElement = HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
   const sendDialog = el<HTMLDialogElement>("share-dialog");
   const receiveDialog = el<HTMLDialogElement>("receive-dialog");
-  const shareInput = el<HTMLInputElement>("shared-file-input");
   const items = el("share-items");
   const includeImage = el<HTMLInputElement>("share-image");
-  const destination = el<HTMLSelectElement>("receive-destination");
+  const destinations = el("receive-destinations");
   const suppliedImage = el<HTMLInputElement>("receive-image");
-  const confirm = el<HTMLInputElement>("receive-confirm");
   let prepared: PreparedExport | undefined;
   let file: File | undefined;
   let received: SharedMap | undefined;
   let maps: MapRecord[] = [];
-  let matches: string[] = [];
+  let counts = new Map<string, { places: number; routes: number }>();
   let exporting = false;
   let receiving = false;
   let exportVersion = 0;
   let receiveVersion = 0;
-  let previewVersion = 0;
-  let previewURL: string | undefined;
+  let thumbnailURLs: string[] = [];
   let matching: AbortController | undefined;
 
   const showError = (id: string, error: unknown) => {
@@ -173,77 +170,95 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   items.addEventListener("change", updateFile);
   includeImage.addEventListener("change", updateFile);
 
-  const clearPreview = () => {
-    previewVersion++;
-    if (previewURL) URL.revokeObjectURL(previewURL);
-    previewURL = undefined;
-    el<HTMLImageElement>("receive-preview-image").removeAttribute("src");
-    el("receive-preview").hidden = true;
-    el("receive-preview-overlay").replaceChildren();
+  const checked = (name: string) => [...root.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)].find((input) => input.checked)?.value;
+  const destinationValue = () => checked("receive-destination") ?? "new";
+  const modeValue = (): ImportMode => checked("receive-mode") === "replace" ? "replace" : "merge";
+  const clearThumbnails = () => {
+    for (const url of thumbnailURLs) URL.revokeObjectURL(url);
+    thumbnailURLs = [];
   };
-  const updateDestination = async () => {
-    clearPreview();
-    confirm.checked = false;
-    el("receive-error").hidden = true;
-    const map = maps.find((map) => map.id === destination.value);
-    const exact = !!map && matches.includes(map.id);
-    const newCopy = destination.value === "new";
-    confirm.disabled = !newCopy && !exact;
-    el("receive-image-field").hidden = !newCopy || !!received?.image;
-    el("receive-confirm-field").hidden = newCopy || exact;
-    el("receive-match").textContent = newCopy
-      ? received?.image ? "The map image is included. A separate copy will be created." : "This share contains annotations only. Supply the original map image to create a copy."
-      : exact ? "Exact image match. Map filenames can differ." : "This image is not an exact match. Check the preview before importing; a different map revision can move passages.";
-    updateImportButton();
-    if (!map || !received) return;
-    const version = previewVersion;
-    try {
-      const overview = await payloadStore(map.backend).get(map.id, tileKey(map.levels.length - 1, 0, 0));
-      if (version !== previewVersion) return;
-      previewURL = URL.createObjectURL(overview);
-      const image = el<HTMLImageElement>("receive-preview-image");
-      image.src = previewURL;
-      await image.decode();
-      if (version !== previewVersion) return;
-      const preview = el("receive-preview");
-      preview.style.aspectRatio = `${map.width} / ${map.height}`;
-      const svg = el("receive-preview-overlay");
-      svg.setAttribute("viewBox", `0 0 ${map.width} ${map.height}`);
-      const append = (tag: string, attributes: Record<string, string>) => {
-        const node = root.ownerDocument.createElementNS("http://www.w3.org/2000/svg", tag);
-        for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
-        svg.append(node);
-      };
-      const stroke = String(Math.max(map.width, map.height) / 150);
-      for (const route of received.manifest.routes)
-        append("polyline", { points: route.points.map((point) => `${point.x},${point.y}`).join(" "), fill: "none", stroke: "#38d6ff", "stroke-width": stroke });
-      for (const marker of received.manifest.markers)
-        append("circle", { cx: String(marker.point.x), cy: String(marker.point.y), r: stroke, fill: "#ff9a5c", stroke: "#000", "stroke-width": String(Number(stroke) / 3) });
-      preview.hidden = false;
-      confirm.disabled = false;
-      updateImportButton();
-    } catch (error) {
-      if (version === previewVersion) {
-        showError("receive-error", new Error(`Map preview unavailable. ${errorMessage(error)}`));
-        // Manual matching requires a visible preview, not a blind confirmation.
-        if (!exact) el<HTMLInputElement>("receive-confirm").disabled = true;
-        updateImportButton();
-      }
+  const sharedItems = () => {
+    const share = received!.manifest;
+    return `${plural(share.markers.length, "place")} and ${plural(share.routes.length, "route")}`;
+  };
+  const setImportLabel = (icon: string, text: string) => {
+    const button = el("receive-import"), label = root.ownerDocument.createElement("span");
+    label.textContent = text;
+    button.innerHTML = icon;
+    button.append(label);
+  };
+  /** Shows what the chosen destination and mode will do before anything is written. */
+  function updateImport() {
+    const value = destinationValue(), map = maps.find((map) => map.id === value);
+    const replace = !!map && modeValue() === "replace";
+    el("receive-mode-field").hidden = !map;
+    el("receive-image-field").hidden = !!map || !received || !!received.image;
+    const button = el<HTMLButtonElement>("receive-import");
+    button.classList.toggle("danger", replace);
+    button.disabled = receiving || !received || (map ? false : !(received.image || suppliedImage.files?.[0]));
+    if (!received) return;
+    const note = el("receive-note"), name = map ? displayName(map.name) : "";
+    const own = counts.get(value);
+    note.classList.toggle("dialog-error", replace);
+    if (!map) {
+      note.textContent = `Creates a separate map with the shared ${sharedItems()}. Your existing maps stay as they are.`;
+      setImportLabel(icons.download, "Import as new map");
+    } else if (replace) {
+      note.textContent = own && own.places + own.routes
+        ? `Deletes your ${plural(own.places, "place")} and ${plural(own.routes, "route")} on this map and keeps only the shared ones. This can’t be undone.`
+        : "Uses only the shared places and routes. This map has none of its own yet.";
+      setImportLabel(icons.rotateRight, `Replace on ${name}`);
+    } else {
+      note.textContent = `${own && own.places + own.routes ? `Keeps your ${plural(own.places, "place")} and ${plural(own.routes, "route")}` : "Keeps this map as it is"} and adds the new ones. Items you already imported are skipped.`;
+      setImportLabel(icons.merge, `Merge into ${name}`);
     }
-  };
-  function updateImportButton() {
-    const newCopy = destination.value === "new";
-    const existing = maps.some((map) => map.id === destination.value);
-    const exact = matches.includes(destination.value);
-    el<HTMLButtonElement>("receive-import").disabled = receiving || !received ||
-      (newCopy ? !(received.image || suppliedImage.files?.[0]) : !existing || (!exact && (!confirm.checked || confirm.disabled)));
   }
-  destination.addEventListener("change", () => {
-    confirm.disabled = false;
-    void updateDestination();
-  });
-  suppliedImage.addEventListener("change", updateImportButton);
-  confirm.addEventListener("change", updateImportButton);
+  /** One row per map made from the same image, plus a new map; nothing else can line up. */
+  function showDestinations() {
+    clearThumbnails();
+    destinations.replaceChildren();
+    const single = !maps.length;
+    el("receive-destinations-title").hidden = single;
+    destinations.classList.toggle("single", single);
+    const addRow = (value: string, title: string, detail: string, map?: MapRecord) => {
+      const row = root.ownerDocument.createElement("label");
+      row.className = "share-row";
+      const thumbnail = root.ownerDocument.createElement("span");
+      thumbnail.className = map ? "receive-thumbnail" : "receive-thumbnail receive-new";
+      thumbnail.innerHTML = map ? icons.map : icons.plus;
+      const label = root.ownerDocument.createElement("span");
+      label.className = "share-row-label";
+      label.textContent = title;
+      const small = root.ownerDocument.createElement("small");
+      small.textContent = detail;
+      if (map) small.className = "receive-match";
+      label.append(small);
+      const input = root.ownerDocument.createElement("input");
+      input.type = "radio";
+      input.name = "receive-destination";
+      input.value = value;
+      input.hidden = single;
+      row.append(thumbnail, label, input);
+      destinations.append(row);
+      if (!map) return;
+      void payloadStore(map.backend).get(map.id, tileKey(map.levels.length - 1, 0, 0)).then((overview) => {
+        if (!row.isConnected) return;
+        const url = URL.createObjectURL(overview);
+        thumbnailURLs.push(url);
+        const image = root.ownerDocument.createElement("img");
+        image.alt = "";
+        image.src = url;
+        thumbnail.replaceChildren(image);
+      }, () => {});
+    };
+    for (const map of maps) addRow(map.id, displayName(map.name), "Same map", map);
+    addRow("new", "New map", single ? "None of your maps match this one" : received?.image ? "Uses the image in the file" : "Needs the original map image");
+    const selected = destinations.querySelector<HTMLInputElement>(`input[value="${maps[0]?.id ?? "new"}"]`)!;
+    selected.checked = true;
+  }
+  destinations.addEventListener("change", updateImport);
+  for (const input of root.querySelectorAll<HTMLInputElement>('input[name="receive-mode"]')) input.addEventListener("change", updateImport);
+  suppliedImage.addEventListener("change", updateImport);
   el("receive-cancel").addEventListener("click", () => receiveDialog.close());
   receiveDialog.addEventListener("cancel", (event) => { if (receiving) event.preventDefault(); });
   receiveDialog.addEventListener("close", () => {
@@ -251,34 +266,32 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     matching?.abort();
     received = undefined;
     suppliedImage.value = "";
-    clearPreview();
+    destinations.replaceChildren();
+    clearThumbnails();
   });
+  const receiveBusy = (busy: boolean) => {
+    receiving = busy;
+    el<HTMLButtonElement>("receive-cancel").disabled = busy;
+    suppliedImage.disabled = busy;
+    for (const input of receiveDialog.querySelectorAll<HTMLInputElement>('input[type="radio"]')) input.disabled = busy;
+    updateImport();
+  };
   el("receive-import").addEventListener("click", async () => {
     if (!received || receiving || el<HTMLButtonElement>("receive-import").disabled) return;
-    receiving = true;
-    updateImportButton();
+    const value = destinationValue();
+    const destination: ShareDestination = value === "new"
+      ? { image: received.image ?? suppliedImage.files?.[0], mode: "merge" }
+      : { mapId: value, mode: modeValue() };
     el("receive-error").hidden = true;
-    el<HTMLButtonElement>("receive-cancel").disabled = true;
-    destination.disabled = true;
-    suppliedImage.disabled = true;
-    confirm.disabled = true;
+    receiveBusy(true);
     try {
-      const newCopy = destination.value === "new";
-      const result = await options.import(received, {
-        ...(newCopy ? { image: received.image ?? suppliedImage.files?.[0] } : { mapId: destination.value }),
-        allowDifferentImage: !newCopy && !matches.includes(destination.value),
-      });
+      const result = await options.import(received, destination);
       receiveDialog.close();
-      await options.imported(result);
+      await options.imported(result, destination);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("receive-error", error);
     } finally {
-      receiving = false;
-      el<HTMLButtonElement>("receive-cancel").disabled = false;
-      destination.disabled = false;
-      suppliedImage.disabled = false;
-      confirm.disabled = false;
-      updateImportButton();
+      receiveBusy(false);
     }
   });
 
@@ -294,8 +307,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("receive-error").hidden = true;
     el("receive-summary").textContent = "Reading shared file…";
     suppliedImage.value = "";
-    clearPreview();
-    updateImportButton();
+    updateImport();
     if (!receiveDialog.open) receiveDialog.showModal();
     try {
       const parsed = await readShare(input);
@@ -304,36 +316,22 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       el("receive-summary").textContent = `${share.map.name}\n${plural(share.markers.length, "place")} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
       const available = (await options.maps()).filter((map) => map.status === "ready" && map.width === share.map.width && map.height === share.map.height);
       const exact = await matchingMaps(share, available, controller.signal);
+      const states = await Promise.all(exact.map((id) => loadNavigation(id)));
       if (version !== receiveVersion) return;
-      maps = available;
-      matches = exact;
+      maps = available.filter((map) => exact.includes(map.id));
+      counts = new Map(states.map((state) => [state.mapId, { places: state.markers.length, routes: state.routes.filter((route) => !route.draft).length }]));
       received = parsed;
-      destination.replaceChildren();
-      const addOption = (value: string, label: string) => {
-        const option = root.ownerDocument.createElement("option");
-        option.value = value;
-        option.textContent = label;
-        destination.append(option);
-      };
-      addOption("new", "Create a separate copy");
-      for (const map of maps) addOption(map.id, `${map.name}${matches.includes(map.id) ? " · exact match" : " · check alignment"}`);
-      destination.value = matches[0] ?? "new";
-      confirm.disabled = false;
+      root.querySelector<HTMLInputElement>('input[name="receive-mode"][value="merge"]')!.checked = true;
+      showDestinations();
       el("receive-content").hidden = false;
-      await updateDestination();
+      updateImport();
     } catch (error) {
       if (version === receiveVersion) showError("receive-error", error);
     } finally {
       if (version === receiveVersion) el("receive-loading").hidden = true;
     }
   }
-  shareInput.addEventListener("change", () => {
-    const file = shareInput.files?.[0];
-    shareInput.value = "";
-    if (file) void openImport(file);
-  });
   return {
-    importFile: () => shareInput.click(),
     openImport,
     async openExport(map: MapRecord, state: NavigationState, initial?: { kind: "marker" | "route"; id: string }) {
       if (exporting) return;

@@ -5,6 +5,7 @@ import { parseHTML } from "linkedom";
 import { initSharing, sharingMarkup, type ShareDestination } from "../src/ui/sharing";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { saveMap } from "../src/storage/database";
+import { saveNavigation } from "../src/storage/navigation";
 import { payloadStore } from "../src/storage/payloads";
 import { encodeShare, fingerprint, readShare, type SharedMap, type ShareManifest } from "../src/sharing/format";
 import type { MapRecord } from "../src/types";
@@ -24,11 +25,8 @@ async function setup() {
       } },
     });
   }
-  // Linkedom lacks a select value setter and file picker state.
-  let selected = "";
-  Object.defineProperty(el("receive-destination"), "value", { get: () => selected, set: (value: string) => { selected = value; } });
+  // Linkedom lacks file picker state.
   Object.defineProperty(el("receive-image"), "files", { value: [], writable: true });
-  Object.defineProperty(el("receive-preview-image"), "decode", { value: async () => {}, configurable: true });
   Object.defineProperty(globalThis, "navigator", { value: { canShare: () => false }, configurable: true });
   const header = new Uint8Array(33);
   header.set([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -67,6 +65,11 @@ async function setup() {
     click: (id: string) => el(id).dispatchEvent(new window.Event("click")),
     change: (id: string) => el(id).dispatchEvent(new window.Event("change")),
     escape: (id: string) => el(id).dispatchEvent(new window.Event("cancel", { cancelable: true })),
+    choose: (name: string, value: string) => {
+      for (const input of document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)) input.checked = input.value === value;
+      document.querySelector(`input[name="${name}"][value="${value}"]`)!.dispatchEvent(new window.Event("change", { bubbles: true }));
+    },
+    rows: () => [...el("receive-destinations").querySelectorAll<HTMLInputElement>("input")].map((input) => input.value),
   };
 }
 
@@ -132,16 +135,36 @@ test("share dialog with no annotations offers the image only", async () => {
   assert.equal(el<HTMLDialogElement>("share-dialog").open, false);
 });
 
-test("import dialog offers existing-map and separate-copy destinations, waits for one import and supports retry", async () => {
-  const { ui, el, map, manifest, original, calls, imported, click, change, escape, fail, finish } = await setup();
+test("import dialog merges into a matching map by default and warns before replacing", async () => {
+  const { ui, el, map, state, manifest, calls, imported, click, choose, rows, finish } = await setup();
+  await saveNavigation(state);
   await ui.openImport(encodeShare(manifest));
-  assert.equal(el<HTMLSelectElement>("receive-destination").value, map.id);
+  assert.deepEqual(rows(), [map.id, "new"]);
+  assert.equal(el<HTMLInputElement>("receive-destinations").querySelector<HTMLInputElement>("input")!.checked, true);
+  assert.equal(el("receive-destinations").querySelector("script"), null);
+  assert.match(el("receive-destinations").textContent!, /Survey <west>/);
+  assert.equal(el("receive-mode-field").hidden, false);
+  assert.match(el("receive-note").textContent!, /Keeps your 1 place and 1 route/);
+  assert.equal(el("receive-import").textContent, "Merge into Survey <west>");
+  assert.equal(el("receive-import").classList.contains("danger"), false);
+  choose("receive-mode", "replace");
+  assert.match(el("receive-note").textContent!, /Deletes your 1 place and 1 route.*can’t be undone/);
+  assert.equal(el("receive-import").textContent, "Replace on Survey <west>");
+  assert.equal(el("receive-import").classList.contains("danger"), true);
+  click("receive-import");
+  assert.deepEqual(calls[0]!.destination, { mapId: map.id, mode: "replace" });
+  finish();
+  await settle();
+  assert.deepEqual(imported, [map.id]);
+});
+
+test("a new map hides merge and replace, needs an image, waits for one import and supports retry", async () => {
+  const { ui, el, map, manifest, original, calls, imported, click, change, choose, escape, fail, finish } = await setup();
+  await ui.openImport(encodeShare(manifest));
   assert.match(el("receive-summary").textContent!, /Annotations only/);
-  assert.equal(el("receive-preview").hidden, false);
-  assert.equal(el("receive-preview-overlay").querySelectorAll("circle").length, 1);
-  assert.equal(el<HTMLButtonElement>("receive-import").disabled, false);
-  el<HTMLSelectElement>("receive-destination").value = "new";
-  change("receive-destination");
+  choose("receive-destination", "new");
+  assert.equal(el("receive-mode-field").hidden, true);
+  assert.equal(el("receive-import").textContent, "Import as new map");
   assert.equal(el("receive-image-field").hidden, false);
   assert.equal(el<HTMLButtonElement>("receive-import").disabled, true);
   Object.defineProperty(el("receive-image"), "files", { value: [original] });
@@ -157,8 +180,7 @@ test("import dialog offers existing-map and separate-copy destinations, waits fo
   click("receive-import");
   click("receive-import");
   assert.equal(calls.length, 2, "a pending import cannot be submitted twice");
-  assert.equal(calls[1]!.destination.mapId, undefined);
-  assert.equal(calls[1]!.destination.image, original);
+  assert.deepEqual(calls[1]!.destination, { image: original, mode: "merge" });
   assert.equal(escape("receive-dialog"), false);
   finish();
   await settle();
@@ -166,24 +188,38 @@ test("import dialog offers existing-map and separate-copy destinations, waits fo
   assert.deepEqual(imported, [map.id]);
 });
 
-test("unmatched images require a loaded preview and explicit alignment confirmation", async () => {
-  const { ui, el, map, manifest, click, change, calls, finish } = await setup();
-  const different = { ...manifest, map: { ...manifest.map, fingerprint: "f".repeat(64) } };
-  await ui.openImport(encodeShare(different));
-  assert.equal(el<HTMLSelectElement>("receive-destination").value, "new");
-  el<HTMLSelectElement>("receive-destination").value = map.id;
-  change("receive-destination");
-  assert.equal(el<HTMLButtonElement>("receive-import").disabled, true);
-  assert.equal(el<HTMLInputElement>("receive-confirm").disabled, true);
-  await settle();
-  assert.equal(el<HTMLInputElement>("receive-confirm").disabled, false);
-  assert.equal(el("receive-confirm-field").hidden, false);
-  el<HTMLInputElement>("receive-confirm").checked = true;
-  change("receive-confirm");
+test("embedded shares can merge into a matching map or import an independent copy", async () => {
+  const { ui, el, map, manifest, original, calls, click, choose, finish } = await setup();
+  const file = encodeShare({ ...manifest, image: { name: original.name, type: original.type, bytes: original.size } }, original);
+  await ui.openImport(file);
+  assert.equal(el("receive-image-field").hidden, true);
   click("receive-import");
-  assert.equal(calls[0]!.destination.allowDifferentImage, true);
+  assert.deepEqual(calls[0]!.destination, { mapId: map.id, mode: "merge" });
   finish();
   await settle();
+  await ui.openImport(file);
+  choose("receive-mode", "replace");
+  choose("receive-destination", "new");
+  assert.equal(el("receive-mode-field").hidden, true);
+  assert.equal(el("receive-image-field").hidden, true);
+  assert.equal(el("receive-import").classList.contains("danger"), false);
+  assert.equal(el<HTMLButtonElement>("receive-import").disabled, false);
+  click("receive-import");
+  assert.equal(calls[1]!.destination.mapId, undefined);
+  assert.equal(calls[1]!.destination.mode, "merge");
+  assert.deepEqual(await calls[1]!.destination.image!.arrayBuffer(), await original.arrayBuffer());
+  finish();
+  await settle();
+});
+
+test("maps made from a different image are not offered as destinations", async () => {
+  const { ui, el, manifest, rows } = await setup();
+  await ui.openImport(encodeShare({ ...manifest, map: { ...manifest.map, fingerprint: "f".repeat(64) } }));
+  assert.deepEqual(rows(), ["new"]);
+  assert.equal(el("receive-destinations-title").hidden, true);
+  assert.match(el("receive-destinations").textContent!, /None of your maps match/);
+  assert.equal(el("receive-mode-field").hidden, true);
+  assert.equal(el<HTMLButtonElement>("receive-import").disabled, true, "an annotations-only share needs the original image");
 });
 
 test("cancelling and invalid files never perform an import", async () => {
@@ -196,21 +232,5 @@ test("cancelling and invalid files never perform an import", async () => {
   click("receive-cancel");
   await loading;
   assert.equal(el<HTMLDialogElement>("receive-dialog").open, false);
-  assert.deepEqual(calls, []);
-});
-
-test("a damaged map preview cannot authorize importing onto an unmatched image", async () => {
-  const { ui, el, manifest, map, change, calls } = await setup();
-  Object.defineProperty(el("receive-preview-image"), "decode", { value: async () => { throw new Error("Damaged image"); } });
-  await ui.openImport(encodeShare({ ...manifest, map: { ...manifest.map, fingerprint: "a".repeat(64) } }));
-  el<HTMLSelectElement>("receive-destination").value = map.id;
-  change("receive-destination");
-  await settle();
-  assert.equal(el("receive-preview").hidden, true);
-  assert.equal(el<HTMLInputElement>("receive-confirm").disabled, true);
-  assert.match(el("receive-error").textContent!, /Damaged image/);
-  el<HTMLInputElement>("receive-confirm").checked = true;
-  change("receive-confirm");
-  assert.equal(el<HTMLButtonElement>("receive-import").disabled, true);
   assert.deepEqual(calls, []);
 });

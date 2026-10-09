@@ -49,6 +49,8 @@ export interface NavigationState {
   routes: PlannedRoute[];
   /** Stable imported identities, retained when an imported item is deleted. */
   importedItems?: string[];
+  /** Incremented by Replace so older windows cannot restore removed annotations. */
+  annotationRevision?: number;
   layers: Layers;
 }
 /** Slightly dimmed by default so routes and places stand out from the map. */

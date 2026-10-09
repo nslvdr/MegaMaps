@@ -1057,7 +1057,7 @@ export class ViewerControls {
   async prepareForUpdate() {
     await this.persistence.flushForReload();
   }
-  /** Add imports made in another window while keeping this window's local edits. */
+  /** Reconcile shared imports and replacements made in another window. */
   async refreshImports() {
     const stored = await loadNavigation(this.map.id);
     if (this.controller.signal.aborted) return;

@@ -1947,7 +1947,49 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
 .share-choice-icon svg { width: 26px; height: 26px; }
 .share-choice-text { flex: 1; min-width: 0; }
 .share-field { display: block; margin: 16px 0; font-size: 14px; color: var(--muted); }
-.share-preview { position: relative; width: 100%; max-height: none; border-radius: var(--radius-sm); overflow: hidden; background: #111; }
-.share-preview img, .share-preview svg { display: block; width: 100%; height: 100%; }
-.share-preview svg { position: absolute; inset: 0; }
+/* Import: shared files go only onto maps made from the same image. */
+.share-file { --k: var(--neon-view); }
+.share-heading { margin: 18px 2px 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+#receive-destinations { margin-top: 0; }
+#receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
+#receive-destinations.single { margin-top: 16px; }
+#receive-destinations.single .share-row { cursor: default; background: none; }
+#receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.receive-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0d0e11;
+  color: var(--muted);
+}
+.receive-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+.receive-thumbnail svg { width: 18px; height: 18px; }
+.receive-new { color: var(--neon-add); background: color-mix(in srgb, var(--neon-add) 12%, #000); border-color: color-mix(in srgb, var(--neon-add) 40%, transparent); }
+.share-row-label small.receive-match { color: var(--neon-add); }
+.share-segments { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 99px; background: #ffffff0a; }
+.share-segments label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+}
+.share-segments svg { width: 18px; height: 18px; }
+.share-segments input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.share-segments label:has(input:checked) { color: var(--text); background: color-mix(in srgb, var(--c) 18%, #000); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+.share-segments .share-segment-danger { --c: var(--danger); }
+.share-segments label:has(input:focus-visible) { outline: 2px solid var(--c); outline-offset: 2px; }
+dialog #receive-note { margin: 10px 2px 0; }
 #share-saved { margin-bottom: 18px; }

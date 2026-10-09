@@ -23,6 +23,11 @@ export interface SharedMap {
   image?: File;
 }
 
+/** Shared files are recognised by their header, whatever their name or picker. */
+export async function isShareFile(blob: Blob) {
+  return new TextDecoder().decode(await blob.slice(0, MAGIC.length).arrayBuffer()) === MAGIC;
+}
+
 /** Hash bounded chunks so a large original never becomes one in-memory buffer. */
 export async function fingerprint(blob: Blob, signal?: AbortSignal) {
   const hash = sha256.create();

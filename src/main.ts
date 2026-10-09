@@ -7,7 +7,7 @@ import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { findAppUpdate, installAppUpdate } from "./app-update";
 import { icons } from "./ui/icons";
-import { displayName, formatBytes } from "./ui/format";
+import { displayName, formatBytes, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
@@ -21,17 +21,19 @@ import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
+import { isShareFile } from "./sharing/format";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger">${icons.plus}<span>Import map</span></button><button class="library-action" id="import-shared">${icons.folder}<span>Import shared</span></button></div>
-    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map.<br>Keep it with you, even offline.</p></div></section>
+    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>Import</span></button></div>
+    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p></div></section>
     <footer class="library-footer"><div class="app-updated"><span>Last app update</span><time id="app-updated-at">Checking…</time></div><div class="connection-status" role="status" aria-live="polite"><span id="internet-status">Checking connection…</span><span id="app-availability">Checking live app…</span><span id="offline-availability">Checking offline app…</span></div></footer>
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
-  <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
+  <input type="file" id="file-input" hidden>
+  <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
   <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel" autofocus>${icons.close}<span>Keep map</span></button></div></dialog>
@@ -127,7 +129,7 @@ const sharing = initSharing(app, {
       const result = await mutate(async () => {
         if (destination.mapId) {
           controller.signal.throwIfAborted();
-          const counts = await importAnnotations(destination.mapId, share.manifest, destination.allowDifferentImage, controller.signal);
+          const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal);
           const map = (await listMaps()).find((map) => map.id === destination.mapId);
           if (!map) throw new Error("This map is no longer available.");
           return { map, ...counts };
@@ -146,13 +148,15 @@ const sharing = initSharing(app, {
       importing = undefined;
     }
   },
-  imported: async (result) => {
+  imported: async (result, destination) => {
     await refresh();
     await openMap(result.map);
-    showMessage("Share imported", `${result.added} items added · ${result.skipped} already imported and skipped.\nYour existing annotations and local edits were kept.`);
+    if (!destination.mapId) showMessage("Share imported", `${plural(result.added, "item")} added to a new map.`);
+    else if (destination.mode === "replace")
+      showMessage("Share imported", `${plural(result.removed ?? 0, "item")} removed · ${plural(result.added, "shared item")} added.`);
+    else showMessage("Share imported", `${result.added} items added · ${result.skipped} already imported and skipped.\nYour existing annotations and local edits were kept.`);
   },
 });
-element("import-shared").addEventListener("click", () => sharing.importFile());
 
 // Flush pending edits before taking the independent export snapshot.
 async function shareMap(map: MapRecord, item?: { kind: "marker" | "route"; id: string }) {
@@ -334,12 +338,28 @@ async function refresh() {
       });
   }
 }
-for (const button of document.querySelectorAll(".import-trigger"))
-  button.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => {
+const importDialog = element<HTMLDialogElement>("import-dialog");
+element("import-open").addEventListener("click", () => importDialog.showModal());
+element("import-cancel").addEventListener("click", () => importDialog.close());
+// Each row only narrows the picker; the file's header decides how it is imported.
+for (const [id, accept] of [
+  ["import-image", "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"],
+  ["import-share", ".megamap,application/octet-stream"],
+] as const)
+  element(id).addEventListener("click", () => {
+    importDialog.close();
+    fileInput.accept = accept;
+    fileInput.click();
+  });
+fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
   fileInput.value = "";
   if (!file || importing) return;
+  if (await isShareFile(file).catch(() => false)) void sharing.openImport(file);
+  else importImage(file);
+});
+function importImage(file: File) {
+  if (importing) return;
   importing = new AbortController();
   const controller = importing;
   element("progress-title").textContent = "Preparing map";
@@ -396,7 +416,7 @@ fileInput.addEventListener("change", () => {
       progressDialog.close();
       importing = undefined;
     });
-});
+}
 element("cancel-import").addEventListener("click", () => {
   importing?.abort();
 });

@@ -19,8 +19,30 @@ export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   };
 }
 
-/** A camera save from another tab must not erase imports it has not seen yet. */
+/** Replace swaps every place and finished route for the shared ones; unfinished drafts stay. */
+export function replaceAnnotations(state: NavigationState, share: ShareManifest) {
+  const removed = state.markers.length + state.routes.filter((route) => !route.draft).length;
+  return {
+    state: { ...state, markers: structuredClone(share.markers),
+      routes: [...state.routes.filter((route) => route.draft), ...structuredClone(share.routes)],
+      annotationRevision: (state.annotationRevision ?? 0) + 1,
+      importedItems: [...share.markers.map((item) => `marker:${item.id}`), ...share.routes.map((item) => `route:${item.id}`)] },
+    added: share.markers.length + share.routes.length,
+    skipped: 0,
+    removed,
+  };
+}
+
+/** Reconcile imports and replacements before an older window saves or refreshes. */
 export function preserveUnseenImports(next: NavigationState, stored?: NavigationState): NavigationState {
+  if (stored && (stored.annotationRevision ?? 0) > (next.annotationRevision ?? 0)) {
+    return { ...next,
+      markers: structuredClone(stored.markers),
+      routes: [...next.routes.filter((route) => route.draft), ...structuredClone(stored.routes.filter((route) => !route.draft))],
+      importedItems: [...(stored.importedItems ?? [])],
+      annotationRevision: stored.annotationRevision,
+    };
+  }
   if (!stored?.importedItems?.length) return next;
   const seen = new Set(next.importedItems ?? []);
   const unseen = new Set(stored.importedItems.filter((id) => !seen.has(id)));

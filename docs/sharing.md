@@ -12,17 +12,18 @@ MegaMaps exchanges independent, editable copies through `.megamap` files. Export
 
 ## Receive
 
-- Open MegaMaps and choose **Import shared** in the library, then select the `.megamap` file.
-- Review the map name, counts, image inclusion, destination, and annotation preview.
+- Open MegaMaps and choose **Import → Shared file** in the library, then select the `.megamap` file. **Import → New map** opens the image picker. File contents determine the import type if you choose a file through the other picker.
+- Review the map name, counts, image inclusion, and destination.
 - Choose an existing map or create a separate copy. Without an embedded image, a new copy requires the exact source image supplied through the dialog.
 - Exact matches use SHA-256 of the original image bytes; filenames have no effect. A re-encoded image is not an exact match even if its pixels look identical.
-- Existing maps must have the same original pixel dimensions. When an existing image is not an exact match, importing requires a successfully loaded preview and explicit confirmation that annotations line up. Dimension equality alone does not identify a map.
+- Only existing maps with the same original image fingerprint and pixel dimensions are offered. Maps that merely have the same dimensions cannot receive the shared annotations.
+- For a matching map, **Merge** keeps existing places and routes and adds unseen shared items. **Replace** removes existing places and finished routes and uses the shared ones. The dialog shows removal counts and a warning before replacing. Unfinished route drafts, display settings, and camera state are kept.
 - New copies verify both image dimensions and the fingerprint before processing. The usual local image importer builds their viewing tiles.
-- Import opens the destination map and reports added and skipped items.
+- Import opens the destination map and reports added, skipped, or replaced items.
 
-Each destination remembers imported annotation identities. Repeated imports add new identities, skip existing ones, preserve local edits, and do not resurrect deleted imported items. Display settings and camera state remain local. Changes to a received copy do not automatically reach its sender.
+Each destination remembers imported annotation identities. Repeated merges add new identities, skip existing ones, preserve local edits, and do not resurrect deleted imported items. Replace resets that history to the shared identities, so shared items previously edited or deleted are restored. Display settings and camera state remain local. Changes to a received copy do not automatically reach its sender.
 
-An annotation write reads the latest map and navigation together in one IndexedDB transaction. New-copy failures clean up that copy. Stale camera saves preserve imports that their window has not yet seen; a library-channel notification refreshes annotations in an open viewer.
+An annotation write reads the latest map and navigation together in one IndexedDB transaction. New-copy failures clean up that copy. Stale camera saves preserve imports that their window has not yet seen. Replace increments a local annotation revision so older saves cannot restore removed places or finished routes; a library-channel notification refreshes annotations in an open viewer.
 
 ## Version 1 file format
 
@@ -41,6 +42,6 @@ Parsing limits are 4 MiB of manifest JSON, 10,000 combined annotations, 100,000 
 
 ## Verification
 
-`tests/sharing.test.ts` covers both container round trips, bounded hashing, malformed files, image verification, selection, map matching, duplicate/deletion behavior, atomic concurrent imports, stale saves, and rollback. `tests/sharing-ui.test.ts` uses a DOM adapter to cover selection, safe text rendering, native-share dispatch, destination choices, alignment confirmation, double-submit protection, retry, and cancellation. Viewer tests cover map-level and item-level sharing actions.
+`tests/sharing.test.ts` covers both container round trips, header-based import routing, bounded hashing, malformed files, image verification, selection, map matching, duplicate/deletion behavior, merge and replace, atomic concurrent imports, stale saves, and rollback. `tests/sharing-ui.test.ts` uses a DOM adapter to cover selection, safe text rendering, native-share dispatch, matching destinations, merge/replace controls and warnings, double-submit protection, retry, and cancellation. Viewer tests cover map-level and item-level sharing actions.
 
 Physical iPhone/Android verification is still needed for native share-sheet destinations, downloaded-file selection, large-file behavior, and offline import after a cold launch. Automated tests do not establish those device behaviors.
