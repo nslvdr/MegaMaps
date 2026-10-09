@@ -17,6 +17,12 @@
   --radius-md: 18px;
   --radius-lg: 28px;
   --button-h: 50px;
+  /* One footprint for the library, dialogs, panels, and their controls. */
+  --edge-l: max(10px, env(safe-area-inset-left));
+  --edge-r: max(10px, env(safe-area-inset-right));
+  --surface-max-width: 520px;
+  --surface-width: min(var(--surface-max-width), calc(100vw - var(--edge-l) - var(--edge-r)));
+  --surface-left: max(var(--edge-l), calc((100vw - var(--surface-max-width) + var(--edge-l) - var(--edge-r)) / 2));
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -87,11 +93,10 @@ svg {
 .home {
   --accent: var(--neon-add);
   --home-top: calc(20px + env(safe-area-inset-top));
-  max-width: 720px;
-  margin: 0 auto;
-  padding: var(--home-top)
-    max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom))
-    max(16px, env(safe-area-inset-left));
+  width: var(--surface-width);
+  /* Center in the usable area, including asymmetric landscape safe areas. */
+  margin: 0 auto 0 var(--surface-left);
+  padding: var(--home-top) 0 calc(16px + env(safe-area-inset-bottom));
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -405,7 +410,10 @@ h2 {
 dialog {
   --accent: var(--neon-add);
   --dialog-from: 10px;
-  width: min(440px, calc(100% - 20px));
+  width: var(--surface-width);
+  max-width: var(--surface-width);
+  left: var(--edge-l);
+  right: var(--edge-r);
   max-height: calc(
     100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
       var(--keyboard-inset, 0px)
@@ -628,8 +636,10 @@ dialog .dialog-error {
     background: color-mix(in srgb, var(--danger) 16%, #000);
   }
 }
-#message-dialog .primary {
+dialog > button {
   width: 100%;
+}
+#message-dialog .primary {
   margin-top: 8px;
 }
 
@@ -747,8 +757,6 @@ dialog textarea {
   font-size: 15px;
   user-select: none;
   -webkit-user-select: none;
-  --edge-l: max(10px, env(safe-area-inset-left));
-  --edge-r: max(10px, env(safe-area-inset-right));
   --hud-top: max(10px, calc(env(safe-area-inset-top) + 2px));
   /* Sits just above the home indicator instead of a full safe-area gap, or
      just above the keyboard while typing (search). */
@@ -893,14 +901,21 @@ button.glass:active:not(:disabled) {
 }
 
 /* Bottom pill: three labeled tabs (the open one stays highlighted) and Lock. */
+.dock,
+.add-bar,
+.tool-bar,
+.sheet,
+.viewer-error {
+  left: var(--edge-l);
+  right: var(--edge-r);
+  width: var(--surface-width);
+  margin-inline: auto;
+}
 .dock {
   position: absolute;
   z-index: 5;
-  left: var(--edge-l);
-  right: var(--edge-r);
   bottom: var(--hud-bottom);
-  max-width: 340px;
-  margin: 0 auto;
+  height: var(--dock-h);
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -946,7 +961,7 @@ button.glass:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: var(--dock-h);
+  height: var(--dock-h);
   padding: 0 15px;
   border-radius: 27px;
 }
@@ -1046,8 +1061,6 @@ button.glass:active:not(:disabled) {
 .viewer-error {
   position: absolute;
   bottom: calc(var(--hud-bottom) + var(--dock-h) + 16px);
-  left: 16px;
-  right: 80px;
   text-align: center;
   font-size: 14px;
   line-height: 1.5;
@@ -1055,7 +1068,6 @@ button.glass:active:not(:disabled) {
   background: #34201aee;
   border-radius: var(--radius-md);
   padding: 12px;
-  max-width: 500px;
   margin: auto;
   z-index: 6;
   pointer-events: none;
@@ -1082,10 +1094,7 @@ button.glass:active:not(:disabled) {
 .tool-bar {
   position: absolute;
   z-index: 5;
-  left: var(--edge-l);
-  right: var(--edge-r);
   bottom: calc(var(--hud-bottom) + var(--dock-h) + 10px);
-  margin: 0 auto;
   animation: float-up 0.18s ease-out;
 }
 @keyframes float-up {
@@ -1095,7 +1104,6 @@ button.glass:active:not(:disabled) {
   }
 }
 .add-bar {
-  max-width: 340px;
   display: flex;
   gap: 10px;
 }
@@ -1128,8 +1136,6 @@ button.glass:active:not(:disabled) {
 }
 /* A slim line of instruction; routes add Undo and Done at its end. */
 .tool-bar {
-  width: fit-content;
-  max-width: min(400px, calc(100% - var(--edge-l) - var(--edge-r)));
   min-height: 46px;
   display: flex;
   align-items: center;
@@ -1139,6 +1145,7 @@ button.glass:active:not(:disabled) {
   border-color: color-mix(in srgb, var(--c) 40%, transparent);
 }
 .tool-hint {
+  flex: 1;
   min-width: 0;
   margin: 0;
   padding: 0 12px;
@@ -1296,11 +1303,7 @@ dialog form > label.place-note {
 }
 .sheet {
   position: absolute;
-  left: var(--edge-l);
-  right: var(--edge-r);
   bottom: calc(var(--hud-bottom) + var(--dock-h) + 8px);
-  margin: 0 auto;
-  max-width: 520px;
   max-height: min(
     calc(100svh - var(--hud-top) - var(--hud-bottom) - var(--dock-h) - 16px),
     640px
@@ -1384,7 +1387,6 @@ dialog form > label.place-note {
 /* Search replaces the dock with the same black pill, outline, and footprint. */
 .sheet[data-panel="search"] {
   bottom: var(--hud-bottom);
-  max-width: 340px;
   padding: 0;
   border: 0;
   border-radius: 27px;
