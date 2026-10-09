@@ -1,18 +1,21 @@
 import type { MapRecord } from "../types";
-import type { NavigationState } from "../viewer/navigation";
+import { markerKinds, routeColor, type NavigationState } from "../viewer/navigation";
 import { tileKey } from "../types";
 import { payloadStore } from "../storage/payloads";
 import { readShare, type SharedMap } from "../sharing/format";
 import { exportFile, matchingMaps, prepareExport, type PreparedExport, type ShareSelection } from "../sharing/storage";
 import { displayName, formatBytes, plural } from "./format";
 import { icons } from "./icons";
+import { placeIcon } from "./place-icon";
 
 export const sharingMarkup = `
 <input id="shared-file-input" type="file" accept=".megamap,application/octet-stream" hidden>
-<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><h2 id="share-title">Share map</h2><p id="share-map-name"></p><p id="share-loading" role="status">Preparing share…</p>
-<div id="share-content" hidden><div id="share-selection" class="share-selection-actions"><button id="share-all" class="secondary">${icons.check}<span>Select all</span></button><button id="share-none" class="secondary">${icons.close}<span>Clear selection</span></button></div><div id="share-items" class="share-items" role="group" aria-label="Annotations to share"></div>
-<label class="share-choice"><input id="share-image" type="checkbox"><span>Include map image<small>Your friend can import it without finding the original.</small></span></label><p id="share-size" role="status" aria-live="polite"></p><p class="dialog-note">Your friend receives an editable copy. Sending it again adds new items and keeps their edits.</p></div>
-<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button><button id="share-save" class="secondary" disabled>${icons.download}<span>Save file</span></button><button id="share-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></dialog>
+<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main"><h2 id="share-title">Share map</h2><p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">Preparing share…</p>
+<div id="share-content" hidden><div class="share-summary"><button id="share-places" class="share-row" data-kind="marker"><span class="share-row-icon share-place">${icons.pin}</span><span class="share-row-label">Places</span><span id="share-places-count" class="share-row-value"></span>${icons.arrow}</button><button id="share-routes" class="share-row" data-kind="route"><span class="share-row-icon share-route">${icons.route}</span><span class="share-row-label">Routes</span><span id="share-routes-count" class="share-row-value"></span>${icons.arrow}</button>
+<label class="share-row"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">Map image<small>Your friend won’t need the original</small></span><input id="share-image" class="switch" type="checkbox" role="switch"></label></div><p id="share-size" class="share-size" role="status" aria-live="polite"></p></div>
+<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button><button id="share-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></div>
+<div id="share-picker" hidden><button id="share-back" class="share-back">${icons.arrow}<span>Share map</span></button><h2 id="share-picker-title"></h2><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>All</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>None</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
+<div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>Done</span></button></div></div></dialog>
 <dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title"><h2 id="receive-title">Import shared map</h2><p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
 <div id="receive-content" hidden><label class="share-field">Destination<select id="receive-destination"></select></label><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label>
 <p id="receive-match" class="dialog-note"></p><div id="receive-preview" class="share-preview" aria-label="Preview of shared annotations on the selected map" hidden><img id="receive-preview-image" alt="Selected map"><svg id="receive-preview-overlay" aria-hidden="true"></svg></div>
@@ -56,32 +59,60 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el(id).textContent = errorMessage(error);
     el(id).hidden = false;
   };
+  const kindInputs = (kind: "marker" | "route") => [...items.querySelectorAll<HTMLInputElement>(`input[data-kind="${kind}"]`)];
+  let picking: "marker" | "route" | undefined;
   const exportBusy = (busy: boolean) => {
     exporting = busy;
-    for (const id of ["share-cancel", "share-save", "share-send", "share-all", "share-none"])
-      el<HTMLButtonElement>(id).disabled = busy || ((id === "share-save" || id === "share-send") && !file);
+    for (const id of ["share-cancel", "share-send", "share-all", "share-none", "share-back", "share-done"])
+      el<HTMLButtonElement>(id).disabled = busy || (id === "share-send" && !file);
+    for (const [id, kind] of [["share-places", "marker"], ["share-routes", "route"]] as const)
+      el<HTMLButtonElement>(id).disabled = busy || !kindInputs(kind).length;
     includeImage.disabled = busy;
     for (const input of items.querySelectorAll<HTMLInputElement>("input")) input.disabled = busy;
   };
   const selection = (): ShareSelection => ({
-    markers: [...items.querySelectorAll<HTMLInputElement>('input[data-kind="marker"]')].filter((input) => input.checked).map((input) => input.value),
-    routes: [...items.querySelectorAll<HTMLInputElement>('input[data-kind="route"]')].filter((input) => input.checked).map((input) => input.value),
+    markers: kindInputs("marker").filter((input) => input.checked).map((input) => input.value),
+    routes: kindInputs("route").filter((input) => input.checked).map((input) => input.value),
     includeImage: includeImage.checked,
   });
   const updateFile = () => {
     file = undefined;
     el("share-error").hidden = true;
+    el("share-size").replaceChildren();
+    for (const [id, kind] of [["share-places-count", "marker"], ["share-routes-count", "route"]] as const) {
+      const inputs = kindInputs(kind), picked = inputs.filter((input) => input.checked).length;
+      el(id).textContent = !inputs.length ? "None saved" : picked === inputs.length ? `All ${picked}` : picked ? `${picked} of ${inputs.length}` : "None";
+    }
+    if (picking) {
+      const inputs = kindInputs(picking), picked = inputs.filter((input) => input.checked).length;
+      el("share-all").setAttribute("aria-pressed", String(picked === inputs.length));
+      el("share-none").setAttribute("aria-pressed", String(!picked));
+    }
     if (prepared) {
       try {
         file = exportFile(prepared, selection());
-        const picked = selection();
-        el("share-size").textContent = `${plural(picked.markers.length, "place")} · ${plural(picked.routes.length, "route")} · ${formatBytes(file.size)}`;
+        const kind = root.ownerDocument.createElement("span"), size = root.ownerDocument.createElement("b");
+        kind.textContent = includeImage.checked ? "With map image" : "Annotations only";
+        size.textContent = formatBytes(file.size);
+        el("share-size").append(kind, size);
       } catch (error) {
-        el("share-size").textContent = "";
         showError("share-error", error);
       }
     }
     exportBusy(false);
+  };
+  // Places and routes are picked on their own page so the summary never scrolls.
+  const showPicker = (kind?: "marker" | "route") => {
+    const from = picking;
+    picking = kind;
+    el("share-main").hidden = !!kind;
+    el("share-picker").hidden = !kind;
+    if (kind) {
+      el("share-picker-title").textContent = kind === "marker" ? "Places" : "Routes";
+      for (const label of items.children) (label as HTMLElement).hidden = label.querySelector("input")?.dataset.kind !== kind;
+    }
+    updateFile();
+    el(kind ? "share-done" : from === "route" ? "share-routes" : "share-places").focus();
   };
   const download = () => {
     if (!file) return;
@@ -94,11 +125,11 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
-  el("share-save").addEventListener("click", download);
   el("share-send").addEventListener("click", async () => {
     if (!file || exporting) return;
     el("share-error").hidden = true;
     try {
+      // Browsers without file sharing (e.g. desktop Firefox) get a download instead.
       if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
         download();
         el("share-size").textContent = "File saved. Send it from your files app.";
@@ -107,21 +138,36 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       exportBusy(true);
       // The file is prepared before this click, preserving native user activation.
       await navigator.share({ files: [file], title: prepared?.map.name });
+      sendDialog.close();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("share-error", error);
     } finally { exportBusy(false); }
   });
   el("share-cancel").addEventListener("click", () => sendDialog.close());
-  sendDialog.addEventListener("cancel", (event) => { if (exporting) event.preventDefault(); });
+  el("share-places").addEventListener("click", () => showPicker("marker"));
+  el("share-routes").addEventListener("click", () => showPicker("route"));
+  for (const id of ["share-back", "share-done"]) el(id).addEventListener("click", () => showPicker());
+  sendDialog.addEventListener("cancel", (event) => {
+    if (exporting) event.preventDefault();
+    // Escape on a picker page steps back to the summary.
+    else if (picking) {
+      event.preventDefault();
+      showPicker();
+    }
+  });
   sendDialog.addEventListener("close", () => {
     exportVersion++;
     prepared = undefined;
     file = undefined;
+    picking = undefined;
+    el("share-main").hidden = false;
+    el("share-picker").hidden = true;
     items.replaceChildren();
   });
   for (const [id, checked] of [["share-all", true], ["share-none", false]] as const)
     el(id).addEventListener("click", () => {
-      for (const input of items.querySelectorAll<HTMLInputElement>("input")) input.checked = checked;
+      if (!picking) return;
+      for (const input of kindInputs(picking)) input.checked = checked;
       updateFile();
     });
   items.addEventListener("change", updateFile);
@@ -294,7 +340,10 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       const version = ++exportVersion;
       prepared = undefined;
       file = undefined;
+      picking = undefined;
       items.replaceChildren();
+      el("share-main").hidden = false;
+      el("share-picker").hidden = true;
       el("share-map-name").textContent = displayName(map.name);
       el("share-loading").hidden = false;
       el("share-content").hidden = true;
@@ -310,22 +359,23 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
           for (const item of entries) {
             const label = root.ownerDocument.createElement("label");
             label.className = "share-choice";
+            const icon = root.ownerDocument.createElement("span");
+            icon.className = "share-choice-icon";
+            icon.innerHTML = "label" in item ? placeIcon(item.kind) : icons.route.replace("<svg ", `<svg style="color:${routeColor(state, item.id)}" `);
+            const text = root.ownerDocument.createElement("span");
+            text.className = "share-choice-text";
+            text.textContent = "label" in item ? item.label : item.name;
+            const detail = root.ownerDocument.createElement("small");
+            detail.textContent = "label" in item ? (markerKinds[item.kind] ?? markerKinds.bookmark).label : plural(item.points.length, "point");
+            text.append(detail);
             const input = root.ownerDocument.createElement("input");
             input.type = "checkbox";
             input.value = item.id;
             input.dataset.kind = kind;
             input.checked = !initial || (initial.kind === kind && initial.id === item.id);
-            const span = root.ownerDocument.createElement("span");
-            span.textContent = `${kind === "marker" ? "Place" : "Route"} · ${"label" in item ? item.label : item.name}`;
-            label.append(input, span);
+            label.append(icon, text, input);
             items.append(label);
           }
-        el("share-selection").hidden = !items.childElementCount;
-        if (!items.childElementCount) {
-          const note = root.ownerDocument.createElement("p");
-          note.textContent = "No saved annotations yet. You can share the map image.";
-          items.append(note);
-        }
         el("share-content").hidden = false;
         updateFile();
       } catch (error) {

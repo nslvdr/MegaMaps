@@ -70,21 +70,43 @@ async function setup() {
   };
 }
 
-test("share dialog selects individual items safely, toggles the image, and shares the prepared file", async () => {
-  const { ui, el, map, state, click, change } = await setup();
+test("share dialog summarizes the file, picks items per kind, toggles the image, and shares the prepared file", async () => {
+  const { ui, el, map, state, click, change, escape } = await setup();
   await ui.openExport(map, state, { kind: "marker", id: "place" });
   assert.equal(el<HTMLDialogElement>("share-dialog").open, true);
+  assert.equal(el("share-places-count").textContent, "All 1");
+  assert.equal(el("share-routes-count").textContent, "None");
+  assert.match(el("share-size").textContent!, /Annotations only/);
   const inputs = [...el("share-items").querySelectorAll<HTMLInputElement>("input")];
   assert.deepEqual(inputs.map((input) => input.checked), [true, false]);
   assert.equal(el("share-items").querySelector("script"), null);
   assert.match(el("share-items").textContent!, /<script>entrance<\/script>/);
   assert.equal(el<HTMLInputElement>("share-image").checked, false);
+  click("share-places");
+  assert.equal(el("share-main").hidden, true);
+  assert.equal(el("share-picker-title").textContent, "Places");
+  assert.deepEqual(inputs.map((input) => input.closest("label")!.hidden), [false, true]);
+  assert.equal(el("share-all").getAttribute("aria-pressed"), "true");
   click("share-none");
+  assert.equal(inputs[0]!.checked, false);
+  assert.equal(escape("share-dialog"), false, "Escape steps back instead of closing");
+  assert.equal(el("share-main").hidden, false);
+  assert.equal(el("share-places-count").textContent, "None");
   assert.equal(el<HTMLButtonElement>("share-send").disabled, true);
   el<HTMLInputElement>("share-image").checked = true;
   change("share-image");
   assert.equal(el<HTMLButtonElement>("share-send").disabled, false, "image-only export is supported");
+  assert.match(el("share-size").textContent!, /With map image/);
+  click("share-routes");
+  assert.deepEqual(inputs.map((input) => input.closest("label")!.hidden), [true, false]);
   click("share-all");
+  assert.equal(inputs[0]!.checked, false, "select all only affects the open kind");
+  click("share-done");
+  click("share-places");
+  click("share-all");
+  click("share-back");
+  assert.equal(el("share-places-count").textContent, "All 1");
+  assert.equal(el("share-routes-count").textContent, "All 1");
   let shared: ShareData | undefined;
   Object.defineProperty(globalThis, "navigator", { value: {
     canShare: () => true, share: async (value: ShareData) => { shared = value; },
@@ -95,8 +117,19 @@ test("share dialog selects individual items safely, toggles the image, and share
   assert.equal(decoded.manifest.markers.length, 1);
   assert.equal(decoded.manifest.routes.length, 1);
   assert.ok(decoded.image);
-  assert.equal(el<HTMLButtonElement>("share-cancel").disabled, false);
+  assert.equal(el<HTMLDialogElement>("share-dialog").open, false, "a completed share closes the dialog");
+});
+
+test("share dialog with no annotations offers the image only", async () => {
+  const { ui, el, map, click } = await setup();
+  await ui.openExport(map, defaultNavigation(map.id));
+  assert.equal(el("share-places-count").textContent, "None saved");
+  assert.equal(el<HTMLButtonElement>("share-places").disabled, true);
+  assert.equal(el<HTMLButtonElement>("share-routes").disabled, true);
+  assert.equal(el<HTMLInputElement>("share-image").checked, true);
+  assert.equal(el<HTMLButtonElement>("share-send").disabled, false);
   click("share-cancel");
+  assert.equal(el<HTMLDialogElement>("share-dialog").open, false);
 });
 
 test("import dialog offers existing-map and separate-copy destinations, waits for one import and supports retry", async () => {
