@@ -292,14 +292,7 @@ h2 {
 .map-size {
   margin-top: 3px;
 }
-.map-actions {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-.map-more,
-.rename-map,
-.delete-map {
+.map-more {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -309,25 +302,21 @@ h2 {
   width: 44px;
   height: 44px;
 }
-.rename-map {
-  color: var(--neon-saved);
-}
 .map-more:hover,
 .map-more:active,
-.rename-map:hover,
-.rename-map:active {
+.map-more[aria-expanded="true"] {
+  color: var(--neon-saved);
   background: color-mix(in srgb, var(--neon-saved) 12%, #000);
 }
-.delete-map:hover,
-.delete-map:active {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, #000);
-}
-.map-more svg,
-.rename-map svg,
-.delete-map svg {
+.map-more svg {
   width: 20px;
   height: 20px;
+}
+/* Library card menu: same look as the viewer's row menus, pinned to the viewport. */
+.map-menu {
+  position: fixed;
+  --glass-line: rgb(255 255 255 / 0.16);
+  --fill-strong: rgb(255 255 255 / 0.13);
 }
 .empty {
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
@@ -1850,18 +1839,6 @@ input[type="range"] {
 
 /* Sharing stays in menus and dialogs, leaving the map controls compact. */
 .library-actions { gap: 10px; flex-wrap: wrap; }
-.share-map {
-  display: grid;
-  place-items: center;
-  background: none;
-  color: var(--neon-view);
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-}
-.share-map:hover,
-.share-map:active { background: color-mix(in srgb, var(--neon-view) 12%, #000); }
-.share-map svg { width: 20px; height: 20px; }
 .sharing-dialog {
   --accent: var(--neon-view);
   --c: var(--accent);
