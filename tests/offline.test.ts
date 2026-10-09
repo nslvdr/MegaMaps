@@ -51,6 +51,7 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       claimed = false,
       skipped = false;
     const fetched: string[] = [];
+    const progress: { type: string; loaded: number; total: number; version: string }[] = [];
     const caches = {
       async open(name: string) {
         let data = stores.get(name);
@@ -79,6 +80,8 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       caches,
       URL,
       Response,
+      Headers,
+      Blob,
       // Like Cloudflare assets: /index.html redirects to /, which serves the shell.
       fetch: async (url: string) => {
         network++;
@@ -99,6 +102,11 @@ test("generated service worker serves cold offline navigation, worker JS, and co
         clients: {
           async claim() {
             claimed = true;
+          },
+          async matchAll(options: { type: string; includeUncontrolled: boolean }) {
+            assert.equal(options.type, "window");
+            assert.equal(options.includeUncontrolled, true);
+            return [{ postMessage: (message: (typeof progress)[number]) => progress.push(message) }];
           },
         },
         addEventListener: (name: string, listener: (event: unknown) => void) =>
@@ -121,6 +129,20 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       !fetched.includes("/app-status.json"),
       "live availability is never precached",
     );
+    // Install progress counts every shell byte and ends complete.
+    const shellBytes = Object.entries(assets)
+      .filter(([url]) => url !== "/app-status.json")
+      .reduce((sum, [, body]) => sum + Buffer.byteLength(body), 0);
+    assert.ok(progress.length >= 2);
+    assert.ok(progress.every((message) => message.type === "install-progress" && message.total === shellBytes));
+    assert.equal(progress[0]!.loaded, 0);
+    assert.equal(progress.at(-1)!.loaded, shellBytes);
+    // The version probe describes the update before anything downloads.
+    const version = JSON.parse(await readFile(path.join(root, "dist/app-version.json"), "utf8"));
+    assert.equal(version.size, shellBytes);
+    assert.equal(version.builtAt, builtAt);
+    assert.ok(assets["/index.html"].includes(`content="${version.version}"`));
+    assert.equal(progress[0]!.version, version.version);
     let intercepted = false;
     listeners.get("fetch")!({
       request: {
@@ -137,6 +159,17 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       false,
       "availability probes go straight to the network",
     );
+    listeners.get("fetch")!({
+      request: {
+        url: "https://map.local/app-version.json?check=123",
+        method: "GET",
+        mode: "cors",
+      },
+      respondWith: () => {
+        intercepted = true;
+      },
+    });
+    assert.equal(intercepted, false, "version probes go straight to the network");
     stores.set("map-viewer-shell-old", new Map());
     stores.set(
       "unrelated-user-cache",

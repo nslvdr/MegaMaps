@@ -5,7 +5,7 @@ import { payloadStore, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
 import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
-import { checkForAppUpdate } from "./app-update";
+import { findAppUpdate, installAppUpdate } from "./app-update";
 import { icons } from "./ui/icons";
 import { displayName, formatBytes } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
@@ -17,6 +17,7 @@ import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
 import { initSharing, sharingMarkup } from "./ui/sharing";
+import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -34,6 +35,7 @@ app.innerHTML = `
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel" autofocus>${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
+  ${updateDialogMarkup}
   <dialog id="advanced-map-dialog"><h2>Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>Stop detection</button></div><button class="secondary" id="advanced-map-close">Close</button></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
@@ -60,7 +62,6 @@ const refreshFooter = initLibraryFooter(home);
 let controls: ViewerControls | undefined;
 let pendingViewSave = Promise.resolve();
 let openVersion = 0;
-let updating = false;
 let viewer: Viewer | undefined,
   currentMap: MapRecord | undefined,
   maps: MapRecord[] = [];
@@ -87,10 +88,27 @@ function showMessage(title: string, message: string) {
   element("message-body").textContent = message;
   if (!messageDialog.open) messageDialog.showModal();
 }
+const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
+const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
+// Ask before downloading; keep the current map/session and wait for durable saves before reloading.
+const updates = initUpdateDialog(element<HTMLDialogElement>("update-dialog"), {
+  currentRelease: Number.isFinite(loadedRelease.getTime()) ? loadedRelease : undefined,
+  find: () => findAppUpdate(loadedVersion),
+  install: (report) => mutate(async () => {
+    if (importing || ocrJob) throw new Error("Mega Maps started preparing a map. Let it finish, then try again.");
+    const installed = await installAppUpdate(loadedVersion, (progress) => report({ step: "download", ...progress }));
+    if (!installed) return false;
+    report({ step: "save" });
+    await pendingViewSave;
+    await controls?.prepareForUpdate();
+    return true;
+  }),
+  restart: () => window.location.reload(),
+});
 const sharing = initSharing(app, {
   maps: listMaps,
   import: async (share, destination) => {
-    if (importing || updating) throw new Error("Finish the current operation before importing a share.");
+    if (importing || updates.busy) throw new Error("Finish the current operation before importing a share.");
     await pendingViewSave;
     const controller = new AbortController();
     importing = controller;
@@ -375,60 +393,14 @@ progressDialog.addEventListener("cancel", (event) => {
   importing?.abort();
 });
 element("message-close").addEventListener("click", () => messageDialog.close());
-messageDialog.addEventListener("cancel", (event) => {
-  if (updating) event.preventDefault();
+element("update-app").addEventListener("click", () => {
+  if (updates.busy) updates.open();
+  else if (importing || ocrJob)
+    updates.explain("Finish the current task first", "Mega Maps is preparing a map. Let it finish, or stop it, then check for updates again.");
+  else if (!import.meta.env.PROD || !("serviceWorker" in navigator))
+    updates.explain("Updates aren’t available here", "App updates work in the installed app or on the live HTTPS site.");
+  else updates.open();
 });
-element("update-app").addEventListener("click", () => void updateApp());
-
-// Keep the current map/session and wait for durable saves before reloading.
-async function updateApp() {
-  if (updating) return;
-  if (importing || ocrJob) {
-    showMessage(
-      "App update",
-      "Finish or stop the current map preparation, then try again.",
-    );
-    return;
-  }
-  if (!import.meta.env.PROD || !("serviceWorker" in navigator)) {
-    showMessage(
-      "App update",
-      "App updates are available in the installed app or on the live HTTPS site.",
-    );
-    return;
-  }
-  updating = true;
-  const close = element<HTMLButtonElement>("message-close");
-  close.disabled = true;
-  showMessage(
-    "Checking for updates",
-    "Keep the app open while the update downloads. Your saved maps, places and routes are kept.",
-  );
-  try {
-    await mutate(async () => {
-      const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
-      if (!(await checkForAppUpdate(loadedVersion))) {
-        showMessage(
-          "You’re up to date",
-          "You already have the latest version. Your saved data is unchanged.",
-        );
-        return;
-      }
-      await pendingViewSave;
-      await controls?.prepareForUpdate();
-      showMessage("Update ready", "Your changes are saved. Reloading…");
-      window.location.reload();
-    });
-  } catch (error) {
-    showMessage(
-      "Couldn’t update the app",
-      `${error instanceof Error ? error.message : String(error)} You can keep using the current app and try again later.`,
-    );
-  } finally {
-    updating = false;
-    close.disabled = false;
-  }
-}
 element("delete-cancel").addEventListener("click", () => deleteDialog.close());
 element("delete-confirm").addEventListener("click", () => {
   const map = deleting;

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
-import { checkForAppUpdate } from "../src/app-update";
+import { findAppUpdate, installAppUpdate, type DownloadProgress } from "../src/app-update";
 
 class Worker extends EventTarget {
   state: ServiceWorkerState = "activated";
@@ -27,6 +27,9 @@ function environment(worker: Worker, update = async () => {}) {
       assert.equal(options.updateViaCache, "none");
       return registration;
     },
+    async getRegistration() {
+      return registration;
+    },
   });
   const registration = {
     active: worker as Worker | null,
@@ -37,7 +40,13 @@ function environment(worker: Worker, update = async () => {}) {
   return {
     container,
     registration,
-    check: (loaded: string) => checkForAppUpdate(loaded, container as unknown as ServiceWorkerContainer),
+    check: (loaded: string, progress?: (progress: DownloadProgress) => void) =>
+      installAppUpdate(loaded, progress, container as unknown as ServiceWorkerContainer),
+    find: (loaded: string, latest: unknown, ok = true) =>
+      findAppUpdate(loaded, container as unknown as ServiceWorkerContainer, async (url) => {
+        assert.match(String(url), /^\/app-version\.json\?check=/);
+        return new Response(JSON.stringify(latest), { status: ok ? 200 : 404 });
+      }),
   };
 }
 
@@ -76,4 +85,51 @@ test("offline checks, failed installs and incomplete shells fail without request
   const incomplete = new Worker("new");
   incomplete.ready = false;
   await assert.rejects(environment(incomplete).check("old"), /not ready for offline use/);
+});
+
+test("finding an update reports size and release without installing anything", async () => {
+  const app = environment(new Worker("build-one"));
+  app.registration.update = async () => assert.fail("finding must not start a download");
+  assert.equal(await app.find("build-two", { version: "build-two", size: 10 }), undefined);
+  const update = await app.find("build-one", { version: "build-two", size: 2048, builtAt: "2026-10-01T10:00:00.000Z" });
+  assert.deepEqual(update, {
+    version: "build-two",
+    size: 2048,
+    releasedAt: new Date("2026-10-01T10:00:00.000Z"),
+    downloaded: false,
+  });
+});
+
+test("finding an update notices when the background worker already downloaded it", async () => {
+  const app = environment(new Worker("build-two"));
+  const update = await app.find("build-one", { version: "build-two", size: 2048 });
+  assert.equal(update?.downloaded, true);
+});
+
+test("finding an update fails clearly when the host is unreachable or unreadable", async () => {
+  const app = environment(new Worker("build-one"));
+  await assert.rejects(app.find("build-one", {}, false), /latest version/);
+  const offline = findAppUpdate("build-one", app.container as unknown as ServiceWorkerContainer, async () => {
+    throw new TypeError("Failed to fetch");
+  });
+  await assert.rejects(offline, /Couldn’t reach Mega Maps/);
+});
+
+test("installing forwards download progress from the new worker", async () => {
+  const worker = new Worker("new");
+  worker.state = "installing";
+  const app = environment(worker);
+  app.container.controller = new Worker("old");
+  app.registration.installing = worker;
+  const seen: DownloadProgress[] = [];
+  const pending = app.check("old", (progress) => seen.push(progress));
+  await setImmediate();
+  app.container.dispatchEvent(new MessageEvent("message", { data: { type: "install-progress", loaded: 5, total: 10 } }));
+  app.container.dispatchEvent(new MessageEvent("message", { data: { type: "other" } }));
+  app.container.dispatchEvent(new MessageEvent("message", { data: { type: "install-progress", loaded: 10, total: 10 } }));
+  worker.transition("activated");
+  app.container.controller = worker;
+  app.container.dispatchEvent(new Event("controllerchange"));
+  assert.equal(await pending, true);
+  assert.deepEqual(seen, [{ loaded: 5, total: 10 }, { loaded: 10, total: 10 }]);
 });
