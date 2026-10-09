@@ -1523,6 +1523,44 @@ label.panel-row {
   flex: 1;
   min-width: 0;
 }
+/* Native radios expose one brightness choice, with full-size touch targets. */
+.brightness-options {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0;
+}
+.brightness-options label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-sm);
+  background: var(--fill);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.brightness-options input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.brightness-options label:has(input:checked) {
+  color: var(--c);
+  border-color: color-mix(in srgb, var(--c) 40%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, #000);
+}
+.brightness-options label:has(input:focus-visible) {
+  outline: 2px solid var(--c);
+  outline-offset: 2px;
+}
 .slider-step {
   display: grid;
   place-items: center;
@@ -1581,6 +1619,66 @@ input[type="range"] {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Compact layer tiles keep the full surface tappable and expose native switch state. */
+.layer-toggles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.layer-toggle {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 8px 4px;
+  border: 1px solid var(--glass-line);
+  border-radius: 13px;
+  background: var(--fill);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.layer-toggle.routes { --c: var(--kind-route); }
+.layer-toggle.places { --c: var(--kind-place); }
+.layer-toggle.labels { --c: var(--neon-saved); }
+.layer-toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.layer-toggle svg {
+  width: 21px;
+  height: 21px;
+  color: var(--muted);
+}
+.layer-toggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--c) 40%, transparent);
+  background: color-mix(in srgb, var(--c) 5%, #000);
+}
+.layer-toggle:has(input:checked) svg { color: var(--c); }
+.layer-toggle:has(input:focus-visible) {
+  outline: 2px solid var(--c);
+  outline-offset: 2px;
+}
+.layer-count {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.layer-count:empty { display: none; }
 .panel-action {
   width: 100%;
   margin-top: 14px;
