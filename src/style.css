@@ -510,7 +510,8 @@ dialog .dialog-error {
   margin: 20px 0 12px;
   overflow: hidden;
 }
-#progress-fill {
+#progress-fill,
+.progress-fill {
   height: 100%;
   background: var(--accent);
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
@@ -611,6 +612,65 @@ dialog .dialog-error {
 #message-dialog .primary {
   width: 100%;
   margin-top: 8px;
+}
+
+/* Updates: explain what changes before downloading, then show each step. */
+#update-dialog {
+  --accent: var(--neon-view);
+}
+#update-dialog[data-state="current"],
+#update-dialog[data-state="restarting"] {
+  --accent: var(--neon-add);
+}
+#update-dialog[data-state="error"] {
+  --accent: var(--danger);
+}
+#update-dialog[data-state="checking"] .dialog-icon svg {
+  animation: update-spin 1.1s linear infinite;
+}
+.update-facts {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #ffffff08;
+}
+.update-facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.update-facts svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--accent);
+}
+.update-progress .progress-track {
+  margin-top: 18px;
+}
+.progress-track.indeterminate .progress-fill {
+  width: 35%;
+  animation: progress-sweep 1.3s ease-in-out infinite;
+}
+@keyframes progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+@keyframes update-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 dialog form > label {
