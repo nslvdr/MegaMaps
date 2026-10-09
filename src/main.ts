@@ -1,3 +1,4 @@
+import { showDialog } from "./ui/dialog";
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
 import { listMaps, renameMap } from "./storage/database";
@@ -36,7 +37,7 @@ app.innerHTML = `
   <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
   <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel" autofocus>${icons.close}<span>Keep map</span></button></div></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
@@ -91,7 +92,7 @@ const openRenameMap = initMapRename(
 function showMessage(title: string, message: string) {
   element("message-title").textContent = title;
   element("message-body").textContent = message;
-  if (!messageDialog.open) messageDialog.showModal();
+  if (!messageDialog.open) showDialog(messageDialog);
 }
 const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
 const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
@@ -124,7 +125,7 @@ const sharing = initSharing(app, {
     element("progress-fill").style.width = "0%";
     element("progress-percent").textContent = "0%";
     element("progress-message").textContent = "Checking shared map…";
-    progressDialog.showModal();
+    showDialog(progressDialog);
     try {
       const result = await mutate(async () => {
         if (destination.mapId) {
@@ -232,7 +233,6 @@ async function openMap(map: MapRecord) {
     );
     controls.attach(viewer);
     void prepareMapSearch(map, version);
-    element("map-canvas").focus();
     await setLastMap(map.id);
   } catch (error) {
     if (version === openVersion) {
@@ -303,7 +303,7 @@ async function refresh() {
           action: () => {
             selectedMap = map;
             element("ocr-status").textContent = "Checking text detection…";
-            advancedDialog.showModal();
+            showDialog(advancedDialog);
             void renderOcrSettings();
           },
         },
@@ -314,7 +314,7 @@ async function refresh() {
           action: () => {
             deleting = map;
             element("delete-name").textContent = name;
-            deleteDialog.showModal();
+            showDialog(deleteDialog);
           },
         },
       ]),
@@ -339,7 +339,7 @@ async function refresh() {
   }
 }
 const importDialog = element<HTMLDialogElement>("import-dialog");
-element("import-open").addEventListener("click", () => importDialog.showModal());
+element("import-open").addEventListener("click", () => showDialog(importDialog));
 element("import-cancel").addEventListener("click", () => importDialog.close());
 // Each row only narrows the picker; the file's header decides how it is imported.
 for (const [id, accept] of [
@@ -370,7 +370,7 @@ function importImage(file: File) {
   element("progress-fill").style.width = "0%";
   element("progress-percent").textContent = "0%";
   element("progress-message").textContent = "Reading image metadata…";
-  progressDialog.showModal();
+  showDialog(progressDialog);
   void mutate(async () => {
     const map = await importMap(
       file,

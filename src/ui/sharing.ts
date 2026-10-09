@@ -1,3 +1,4 @@
+import { showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { markerKinds, routeColor, type NavigationState } from "../viewer/navigation";
 import { tileKey } from "../types";
@@ -100,7 +101,6 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   };
   // Places and routes are picked on their own page so the summary never scrolls.
   const showPicker = (kind?: "marker" | "route") => {
-    const from = picking;
     picking = kind;
     el("share-main").hidden = !!kind;
     el("share-picker").hidden = !kind;
@@ -109,7 +109,6 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       for (const label of items.children) (label as HTMLElement).hidden = label.querySelector("input")?.dataset.kind !== kind;
     }
     updateFile();
-    el(kind ? "share-done" : from === "route" ? "share-routes" : "share-places").focus();
   };
   const download = () => {
     if (!file) return;
@@ -308,7 +307,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("receive-summary").textContent = "Reading shared file…";
     suppliedImage.value = "";
     updateImport();
-    if (!receiveDialog.open) receiveDialog.showModal();
+    if (!receiveDialog.open) showDialog(receiveDialog);
     try {
       const parsed = await readShare(input);
       if (version !== receiveVersion) return;
@@ -347,7 +346,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       el("share-content").hidden = true;
       el("share-error").hidden = true;
       exportBusy(false);
-      if (!sendDialog.open) sendDialog.showModal();
+      if (!sendDialog.open) showDialog(sendDialog);
       try {
         const data = await prepareExport(map, state);
         if (version !== exportVersion) return;

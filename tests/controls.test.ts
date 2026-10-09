@@ -33,6 +33,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     });
   }
   const root = document.querySelector<HTMLElement>("#viewer")!;
+  const focus = t.mock.method(window.HTMLElement.prototype, "focus");
   const map: MapRecord = {
     id: "controls",
     name: "cave.png",
@@ -149,7 +150,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       ],
     );
     const refreshesBeforeOpening = labelRefreshes;
+    focus.mock.resetCalls();
     click("open-saved");
+    assert.equal(focus.mock.callCount(), 0, "opening a panel does not preselect its close button");
     assert.ok(labelRefreshes > refreshesBeforeOpening, "opening a panel refreshes labels on an idle map");
     assert.equal(sheet.hidden, false);
     assert.equal(el("sheet-saved").hidden, false);
@@ -166,7 +169,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // own button turns into × in the same spot to close them.
     const addBar = el("add-bar");
     assert.equal(addBar.hidden, true);
+    focus.mock.resetCalls();
     click("open-add");
+    assert.equal(focus.mock.callCount(), 0, "opening Add does not preselect Place");
     assert.equal(sheet.hidden, true);
     assert.equal(el("open-saved").getAttribute("aria-expanded"), "false");
     assert.equal(dock.hidden, false, "the pill never leaves");
@@ -319,7 +324,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       /Actions for <Entrance>/,
     );
     const originalMore = placeMore();
+    focus.mock.resetCalls();
     originalMore.dispatchEvent(new window.Event("click"));
+    assert.equal(focus.mock.callCount(), 0, "opening row actions does not preselect the first action");
     assert.equal(
       placeMore(),
       originalMore,
@@ -625,7 +632,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, false, "closing search restores the navbar");
     assert.equal(highlights?.active, false, "closing removes search highlights");
     assert.equal((el("map-search") as HTMLInputElement).value, "");
+    focus.mock.resetCalls();
     click("open-search");
+    assert.equal(focus.mock.callCount(), 0, "opening Search waits for a click on the input");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);

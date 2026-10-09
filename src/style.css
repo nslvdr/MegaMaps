@@ -493,6 +493,10 @@ dialog h2 {
   line-height: 1.3;
   margin: 0 0 8px;
 }
+/* Dialog headings receive opening focus without looking like a selected control. */
+dialog h2[autofocus]:focus {
+  outline: none;
+}
 dialog p {
   color: var(--muted);
   font-size: 15px;
