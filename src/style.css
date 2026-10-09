@@ -86,14 +86,27 @@ svg {
 /* ---------- Library ---------- */
 .home {
   --accent: var(--neon-add);
+  --home-top: calc(20px + env(safe-area-inset-top));
   max-width: 720px;
   margin: 0 auto;
-  padding: calc(20px + env(safe-area-inset-top))
+  padding: var(--home-top)
     max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom))
     max(16px, env(safe-area-inset-left));
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+}
+@media (display-mode: standalone) {
+  /* Keep scrolled library content out of the iPhone's translucent top edge. */
+  .home::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: var(--home-top);
+    background: var(--bg);
+    z-index: 1;
+    pointer-events: none;
+  }
 }
 .header {
   display: flex;
