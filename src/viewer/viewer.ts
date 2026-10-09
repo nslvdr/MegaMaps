@@ -196,11 +196,11 @@ export class Viewer {
         x: old.width / 2,
         y: old.height / 2,
       });
+    const fitted = fitCamera(this.map, old, this.camera.rotation ?? 0);
     const wasFit =
-      Math.abs(
-        this.camera.scale -
-          fitCamera(this.map, old, this.camera.rotation ?? 0).scale,
-      ) < 0.00001;
+      Math.abs(this.camera.scale - fitted.scale) < 0.00001 &&
+      Math.abs(this.camera.x - fitted.x) < 0.00001 &&
+      Math.abs(this.camera.y - fitted.y) < 0.00001;
     this.width = Math.max(1, this.canvas.clientWidth);
     this.height = Math.max(1, this.canvas.clientHeight);
     // Cap the backing canvas at 4 MP (16 MiB); don't blindly allocate DPR=3 canvases.
@@ -245,11 +245,15 @@ export class Viewer {
   }
   private setCamera(camera: Camera) {
     const { min, max } = this.limits(camera.rotation ?? 0);
-    this.camera = constrain(
-      { ...camera, scale: Math.max(min, Math.min(max, camera.scale)) },
-      this.map,
-      this.viewport(),
-    );
+    const scale = Math.max(min, Math.min(max, camera.scale));
+    // Enforcing zoom limits must preserve the chosen center (saved views/resizes).
+    const limited = scale === camera.scale
+      ? camera
+      : transformAt(camera, scale, camera.rotation ?? 0, {
+          x: this.width / 2,
+          y: this.height / 2,
+        });
+    this.camera = constrain(limited, this.map, this.viewport());
     this.navigation.view = captureView(this.camera, this.viewport());
     this.options?.onView();
     this.onZoom(Math.round(this.camera.scale * 100));
