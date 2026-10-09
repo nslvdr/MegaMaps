@@ -79,6 +79,7 @@ export function zoomAt(
     y: y - (y - camera.y) * ratio,
   };
 }
+/** Let every map edge reach the screen center while keeping the map in reach. */
 export function constrain(camera: Camera, image: Size, viewport: Size): Camera {
   const corners = [
     { x: 0, y: 0 },
@@ -91,9 +92,7 @@ export function constrain(camera: Camera, image: Size, viewport: Size): Camera {
     minY = Math.min(...corners.map((p) => p.y)),
     maxY = Math.max(...corners.map((p) => p.y));
   const axis = (p: number, min: number, max: number, size: number) =>
-    max - min < size
-      ? (size - (max - min)) / 2 - min
-      : Math.max(size - max, Math.min(-min, p));
+    Math.max(size / 2 - max, Math.min(size / 2 - min, p));
   return {
     ...camera,
     x: axis(camera.x, minX, maxX, viewport.width) || 0,

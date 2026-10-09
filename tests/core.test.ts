@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
 import { pyramid, tileCount } from "../src/processing/pyramid";
 import {
+  cameraAt,
   fitCamera,
+  worldToScreen,
   zoomAt,
   constrain,
   chooseLevel,
@@ -72,7 +74,7 @@ test("fit, bounds, and DPR-aware tile selection", () => {
   assert.equal(fit.y, 227);
   assert.deepEqual(
     constrain({ x: 100, y: -50000, scale: 1 }, image, viewport),
-    { x: 0, y: -8156, scale: 1 },
+    { x: 100, y: -8578, scale: 1 },
   );
   const levels = pyramid(9000, 9000);
   assert.equal(chooseLevel(levels, 1, 2), 0);
@@ -84,6 +86,41 @@ test("fit, bounds, and DPR-aware tile selection", () => {
   );
   assert.ok(visible.every((t) => t.x >= 0 && t.y >= 0 && t.x < 18 && t.y < 18));
   assert.ok(visible.some((t) => t.x === 17 && t.y === 17));
+});
+test("map edges and corners can be centered at fit and native zoom, including rotation", () => {
+  const image = { width: 9000, height: 4000 };
+  const points = [
+    { x: 0, y: 0 },
+    { x: image.width, y: 0 },
+    { x: 0, y: image.height },
+    { x: image.width, y: image.height },
+    { x: image.width / 2, y: 0 },
+    { x: image.width / 2, y: image.height },
+    { x: 0, y: image.height / 2 },
+    { x: image.width, y: image.height / 2 },
+  ];
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }])
+    for (const rotation of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 3])
+      for (const scale of [fitCamera(image, viewport, rotation).scale, 1]) {
+        const fit = fitCamera(image, viewport, rotation);
+        assert.deepEqual(constrain(fit, image, viewport), fit);
+        for (const point of points) {
+          const camera = constrain(cameraAt(point, viewport, scale, rotation), image, viewport);
+          const screen = worldToScreen(camera, point);
+          assert.ok(Math.abs(screen.x - viewport.width / 2) < 1e-7);
+          assert.ok(Math.abs(screen.y - viewport.height / 2) < 1e-7);
+        }
+      }
+});
+test("panning stops when a map edge reaches the center instead of losing the map", () => {
+  const image = { width: 512, height: 512 },
+    viewport = { width: 390, height: 844 };
+  for (const scale of [fitCamera(image, viewport).scale, 2]) {
+    const topLeft = constrain({ x: 10000, y: 10000, scale }, image, viewport);
+    assert.deepEqual(worldToScreen(topLeft, { x: 0, y: 0 }), { x: 195, y: 422 });
+    const bottomRight = constrain({ x: -10000, y: -10000, scale }, image, viewport);
+    assert.deepEqual(worldToScreen(bottomRight, { x: 512, y: 512 }), { x: 195, y: 422 });
+  }
 });
 test("PNG row filters reconstruct previous-row and left-pixel predictors", () => {
   const previous = Uint8Array.from([10, 20, 30, 40]);

@@ -29,9 +29,11 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   });
   window.matchMedia = () => ({ matches: false }) as MediaQueryList;
   window.devicePixelRatio = 1;
+  let resize = () => {};
   Object.defineProperty(globalThis, "ResizeObserver", {
     configurable: true,
     value: class {
+      constructor(callback: () => void) { resize = callback; }
       observe() {}
       disconnect() {}
     },
@@ -56,9 +58,10 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   };
   const canvas = document.querySelector<HTMLCanvasElement>("canvas")!;
   const backing = createCanvas(390, 844);
+  let viewport = { width: 390, height: 844 };
   Object.defineProperties(canvas, {
-    clientWidth: { value: 390 },
-    clientHeight: { value: 844 },
+    clientWidth: { get: () => viewport.width },
+    clientHeight: { get: () => viewport.height },
     width: {
       get: () => backing.width,
       set: (value: number) => {
@@ -161,6 +164,24 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     step(performance.now() + 100);
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
     step(performance.now() + 300);
+    // At fit zoom, pan a corner to the center and retain it across orientation changes.
+    viewer.panBy(-195, 195);
+    assert.ok(Math.abs(state.view!.center.x) < 1e-7);
+    assert.ok(Math.abs(state.view!.center.y) < 1e-7);
+    viewport = { width: 844, height: 390 };
+    resize();
+    assert.ok(Math.abs(state.view!.center.x) < 1e-7);
+    assert.ok(Math.abs(state.view!.center.y) < 1e-7);
+    // A larger viewport also raises the minimum zoom without shifting the corner.
+    viewport = { width: 844, height: 600 };
+    resize();
+    assert.ok(Math.abs(state.view!.center.x) < 1e-7);
+    assert.ok(Math.abs(state.view!.center.y) < 1e-7);
+    assert.equal(state.view!.scale, 600 / 512);
+    viewport = { width: 390, height: 844 };
+    resize();
+    viewer.fit(false);
+    assert.deepEqual(state.view!.center, { x: 256, y: 256 });
     state.touchLocked = true;
     viewer.updateNavigation(state);
     const saved = structuredClone(state.view);
