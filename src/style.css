@@ -405,7 +405,8 @@ dialog {
   --dialog-from: 10px;
   width: min(440px, calc(100% - 20px));
   max-height: calc(
-    100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
+      var(--keyboard-inset, 0px)
   );
   margin: auto;
   padding: 22px 20px 20px;
@@ -460,7 +461,11 @@ dialog[open]::backdrop {
 @media (max-width: 599px) {
   dialog {
     --dialog-from: 32px;
-    margin-bottom: max(10px, env(safe-area-inset-bottom));
+    /* With the keyboard up, sit just above it rather than under it. */
+    margin-bottom: max(
+      10px + var(--keyboard-inset, 0px),
+      env(safe-area-inset-bottom)
+    );
   }
 }
 #message-dialog {
@@ -743,8 +748,12 @@ dialog textarea {
   --edge-l: max(10px, env(safe-area-inset-left));
   --edge-r: max(10px, env(safe-area-inset-right));
   --hud-top: max(10px, calc(env(safe-area-inset-top) + 2px));
-  /* Sits just above the home indicator instead of a full safe-area gap. */
-  --hud-bottom: max(12px, calc(env(safe-area-inset-bottom) - 10px));
+  /* Sits just above the home indicator instead of a full safe-area gap, or
+     just above the keyboard while typing (search). */
+  --hud-bottom: max(
+    12px + var(--keyboard-inset, 0px),
+    calc(env(safe-area-inset-bottom) - 10px)
+  );
   --dock-h: 54px;
   /* Solid black controls: neon on pure black, like the dark map itself. */
   --glass: #000;
