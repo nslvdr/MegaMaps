@@ -1,3 +1,4 @@
+import { showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { icons } from "./icons";
 
@@ -54,8 +55,6 @@ export function initMapRename(
     mapId = map.id;
     input.value = map.name;
     error.hidden = true;
-    dialog.showModal();
-    input.focus();
-    input.select();
+    showDialog(dialog);
   };
 }

@@ -82,7 +82,6 @@ export function initMapMenu() {
     button.setAttribute("aria-controls", menu.id);
     document.body.append(menu);
     position();
-    menu.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
   };
 
   return { toggle, close: () => close() };

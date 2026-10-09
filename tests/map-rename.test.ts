@@ -16,7 +16,7 @@ function setup(save: (id: string, name: string) => Promise<void>) {
       dialog.dispatchEvent(new window.Event("close"));
     } },
   });
-  Object.defineProperty(input, "select", { value: () => {} });
+  Object.defineProperty(input, "select", { value: () => {}, configurable: true });
   return {
     dialog, input,
     error: dialog.querySelector<HTMLElement>(".dialog-error")!,
@@ -27,6 +27,18 @@ function setup(save: (id: string, name: string) => Promise<void>) {
   };
 }
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test("opening rename leaves the name unselected and gives native focus to the heading", (t) => {
+  const ui = setup(async () => {});
+  const focus = t.mock.method(ui.input, "focus");
+  const select = t.mock.method(ui.input, "select");
+  ui.open({ id: "map", name: "My map" });
+  assert.equal(ui.input.value, "My map");
+  assert.equal(focus.mock.callCount(), 0);
+  assert.equal(select.mock.callCount(), 0);
+  assert.equal(ui.dialog.querySelector("[autofocus]"), ui.dialog.querySelector("h2"));
+  assert.equal(ui.dialog.querySelector("h2")!.tabIndex, -1);
+});
 
 test("rename dialog cancels without saving, rejects blank names and waits for one durable save", async () => {
   const calls: [string, string][] = [];

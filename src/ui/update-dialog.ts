@@ -1,3 +1,4 @@
+import { showDialog } from "./dialog";
 import type { AppUpdate, DownloadProgress } from "../app-update";
 import { formatBytes } from "./format";
 import { icons } from "./icons";
@@ -213,14 +214,14 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
 
   return {
     open() {
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) showDialog(dialog);
       if (!busy) void check();
     },
     /** Explain why updating isn't possible right now. */
     explain(heading: string, message: string) {
       if (busy) return;
       view("info", { icon: icons.rotateRight, title: heading, body: message, confirm: [icons.check, "Got it", () => dialog.close()] });
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) showDialog(dialog);
     },
     get busy() { return busy; },
   };

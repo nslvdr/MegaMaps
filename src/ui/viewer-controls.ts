@@ -1,3 +1,4 @@
+import { showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import type { Point } from "../viewer/camera";
 import type { DarkMode } from "../viewer/appearance";
@@ -204,14 +205,13 @@ export class ViewerControls {
     }
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
     this.renderTool();
-    if (name) this.el(name === "search" ? "map-search" : "close-sheet").focus();
-    else if (returnFocus && previous) this.el(`open-${previous}`).focus();
+    if (!name && returnFocus && previous) this.el(`open-${previous}`).focus();
   }
   private choose(open: boolean) {
     this.sheet(undefined);
     this.choosing = open;
     this.renderTool();
-    this.el(open ? "add-marker" : "open-add").focus();
+    if (!open) this.el("open-add").focus();
   }
   private mode(tool: Tool) {
     this.tool = tool;
@@ -227,9 +227,7 @@ export class ViewerControls {
     this.nameAction = action;
     this.el("name-title").textContent = title;
     this.input("name-input").value = initial;
-    this.dialog("name-dialog").showModal();
-    this.input("name-input").focus();
-    this.input("name-input").select?.();
+    showDialog(this.dialog("name-dialog"));
   }
   private markerKind() {
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
@@ -258,11 +256,7 @@ export class ViewerControls {
     this.el("marker-delete").hidden = !marker;
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
-    this.dialog("marker-dialog").showModal();
-    // The name is prefilled; don't pop the keyboard just to accept it.
-    this.el("marker-dialog")
-      .querySelector<HTMLInputElement>("input[name=marker-kind]:checked")
-      ?.focus();
+    showDialog(this.dialog("marker-dialog"));
   }
   private notes(open: boolean) {
     this.el("marker-note-field").hidden = !open;
@@ -752,9 +746,6 @@ export class ViewerControls {
       this.rowMenu = options.key;
       showMenu();
       this.positionRowMenu();
-      this.rowPopover
-        ?.querySelector<HTMLElement>("button")
-        ?.focus({ preventScroll: true });
     });
     main.append(button, toggle);
     row.append(main);
