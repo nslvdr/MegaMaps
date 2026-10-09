@@ -564,14 +564,12 @@ dialog .dialog-error {
 .danger {
   --accent: var(--danger);
 }
-.secondary {
+/* Cancel / dismiss: a neutral filled pill, so it reads as a button. */
+.secondary,
+.quiet {
   border-color: var(--line);
   background: #ffffff12;
   color: var(--text);
-}
-.quiet {
-  background: none;
-  color: var(--muted);
 }
 .primary svg,
 .secondary svg,
@@ -582,9 +580,22 @@ dialog .dialog-error {
   height: 20px;
 }
 .quiet.danger {
-  border-color: transparent;
-  background: none;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, #000);
   color: var(--danger);
+}
+/* Keyboard focus lights up the pill's own border instead of a detached ring
+   (dialogs focus a button as they open, so this shows often). */
+.primary:focus-visible,
+.secondary:focus-visible,
+.danger:focus-visible,
+.quiet:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+.secondary:focus-visible,
+.quiet:not(.danger):focus-visible {
+  border-color: color-mix(in srgb, var(--text) 45%, transparent);
 }
 .primary:active:not(:disabled),
 .danger:active:not(:disabled) {
@@ -594,6 +605,9 @@ dialog .dialog-error {
 .quiet:active:not(:disabled) {
   background: #ffffff1f;
 }
+.quiet.danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 20%, #000);
+}
 @media (hover: hover) {
   .primary:hover:not(:disabled),
   .danger:hover:not(:disabled) {
@@ -602,11 +616,9 @@ dialog .dialog-error {
   .secondary:hover:not(:disabled),
   .quiet:hover:not(:disabled) {
     background: #ffffff1a;
-    color: var(--text);
   }
   .quiet.danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 12%, #000);
-    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 16%, #000);
   }
 }
 #message-dialog .primary {
