@@ -494,16 +494,8 @@ export class ViewerControls {
       if (degrees <= 4 || degrees >= 356) angle.value = "0";
       this.viewer?.rotateTo((Number(angle.value) * Math.PI) / 180);
     });
-    // Steps land on the 15° grid, so a few taps always reach north again.
-    const step = (direction: 1 | -1) => {
-      const steps = ((this.state.view?.rotation ?? 0) * 12) / Math.PI;
-      const next = direction > 0
-        ? Math.floor(steps + 1e-6) + 1
-        : Math.ceil(steps - 1e-6) - 1;
-      this.viewer?.rotateTo((next * Math.PI) / 12);
-    };
-    this.click("rotate-left", () => step(-1));
-    this.click("rotate-right", () => step(1));
+    this.click("rotate-left", () => this.rotateStep(-1));
+    this.click("rotate-right", () => this.rotateStep(1));
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${level * 100}`);
       this.on(input, "change", () => {
@@ -685,6 +677,17 @@ export class ViewerControls {
       : "Off: original colors";
   }
   /** Keyboard undo while drawing a route; false when there is nothing to undo. */
+  /** Steps land on the 15° grid, so a few presses always reach north again.
+   * False while rotation is locked. */
+  rotateStep(direction: 1 | -1) {
+    if (this.state.rotationLocked || !this.viewer) return false;
+    const steps = ((this.state.view?.rotation ?? 0) * 12) / Math.PI;
+    const next = direction > 0
+      ? Math.floor(steps + 1e-6) + 1
+      : Math.ceil(steps - 1e-6) - 1;
+    this.viewer.rotateTo((next * Math.PI) / 12);
+    return true;
+  }
   undo() {
     const button = this.el<HTMLButtonElement>("route-undo");
     if (button.hidden || button.disabled) return false;

@@ -284,9 +284,15 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       assert.equal(degrees(), expected);
     }
     assert.equal(angle.value, "40");
+    // The [ and ] keys step like the buttons, but only while unlocked.
+    state.view = { ...state.view, rotation: (40 * Math.PI) / 180 };
+    assert.equal(controls.rotateStep(1), true);
+    assert.equal(degrees(), 45);
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
     assert.equal(el("rotation-controls").hidden, true);
+    assert.equal(controls.rotateStep(-1), false);
+    assert.equal(degrees(), 45);
 
     // Highlight with nothing saved explains instead of animating.
     click("spotlight");
