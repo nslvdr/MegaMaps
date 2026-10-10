@@ -6,6 +6,22 @@ const NS = "http://www.w3.org/2000/svg";
 const node = <K extends keyof SVGElementTagNameMap>(tag: K) =>
   document.createElementNS(NS, tag);
 
+// Labels are measured on a canvas: asking SVG text for its length forces a
+// layout, and a search revealing thousands of labels at once froze the map for
+// most of a second. Labels share one font, read from the first one shown.
+let measurer: CanvasRenderingContext2D | null | undefined;
+function textWidth(text: SVGTextElement) {
+  if (measurer === undefined && text.isConnected) {
+    measurer = document.createElement("canvas").getContext?.("2d") ?? null;
+    if (measurer) {
+      const style = getComputedStyle(text);
+      measurer.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    }
+  }
+  return measurer?.measureText(text.textContent!).width ||
+    text.getComputedTextLength?.() || Array.from(text.textContent!).length * 8;
+}
+
 // Shared screen-space labels for detected text, saved places, and routes.
 // Icon markup comes from app-owned symbols; user names only use textContent.
 export class MapCallout {
@@ -59,7 +75,7 @@ export class MapCallout {
       const maxCharacters = Math.max(1, Math.floor((maxWidth - 51) / 8));
       this.text.textContent = characters.length > maxCharacters
         ? `${characters.slice(0, maxCharacters - 1).join("")}…` : this.fullText;
-      const measure = () => this.text.getComputedTextLength?.() || Array.from(this.text.textContent!).length * 8;
+      const measure = () => textWidth(this.text);
       while (Array.from(this.text.textContent!).length > 1 && measure() > maxWidth - 51)
         this.text.textContent = `${Array.from(this.text.textContent!).slice(0, -2).join("")}…`;
       this.width = Math.min(maxWidth, Math.ceil(measure()) + 51);
