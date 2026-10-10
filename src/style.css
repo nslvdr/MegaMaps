@@ -261,6 +261,14 @@ h2 {
   text-align: left;
   padding: 12px;
 }
+/* The card clips the open button's ring to a sliver, so the card shows it. */
+.map-card:has(.map-open:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.map-card .map-open:focus-visible {
+  outline: none;
+}
 .map-open:active:not(:disabled) {
   transform: none;
   background: #ffffff08;
@@ -793,6 +801,19 @@ dialog textarea {
   height: 100%;
   display: block;
   touch-action: none;
+}
+/* The stage would clip the full-screen map's ring and its filter dim it, so
+   the ring is drawn just inside the stage's edge, over the map. */
+.viewer canvas:focus-visible {
+  outline: none;
+}
+.map-stage:has(canvas:focus-visible)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 2px solid var(--accent);
+  pointer-events: none;
 }
 /* The map is the only filtered raster surface. All tools stay in screen space. */
 .map-stage {
@@ -1432,6 +1453,9 @@ dialog form > label.place-note {
 }
 .sheet-content {
   min-height: 0;
+  /* Room inside the scroller for focus rings at its edges; content stays put. */
+  margin: 0 -6px -6px;
+  padding: 0 6px 6px;
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
