@@ -186,7 +186,8 @@ export class ViewerControls {
     toast.textContent = message;
     toast.hidden = false;
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (toast.hidden = true), 2400);
+    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up to 6 s.
+    this.toastTimer = setTimeout(() => (toast.hidden = true), Math.min(6000, 1500 + message.length * 50));
   }
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;

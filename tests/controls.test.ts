@@ -850,6 +850,18 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     key(root, "Escape");
     assert.equal(dock.hidden, false, "Escape restores the navbar too");
     state.markers = originalMarkers;
+
+    // Toasts stay up for as long as they take to read.
+    click("rotation-lock");
+    assert.equal(el("toast").textContent, "Rotation unlocked · twist with two fingers");
+    t.mock.timers.tick(3500);
+    assert.equal(el("toast").hidden, false, "a longer toast stays up longer");
+    t.mock.timers.tick(200);
+    assert.equal(el("toast").hidden, true);
+    click("rotation-lock");
+    assert.equal(el("toast").textContent, "Rotation locked");
+    t.mock.timers.tick(2250);
+    assert.equal(el("toast").hidden, true, "a short one goes soon");
     t.mock.timers.reset();
 
     // Long-press drops a place.
