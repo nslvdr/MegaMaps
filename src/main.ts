@@ -284,8 +284,22 @@ async function refresh() {
     card.querySelector("h3")!.textContent = displayName(map.name);
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
-    card.querySelector(".map-size")!.textContent =
-      formatBytes(map.bytes);
+    const size = card.querySelector(".map-size")!;
+    size.textContent = formatBytes(map.bytes);
+    // What's saved on each map helps pick the right one. Leaving a map may
+    // still be writing its last edits.
+    void pendingViewSave
+      .catch(() => {})
+      .then(() => loadNavigation(map.id))
+      .then(({ markers, routes }) => {
+        if (version !== renderVersion) return;
+        const saved = [
+          markers.length && plural(markers.length, "place"),
+          routes.length && plural(routes.length, "route"),
+        ].filter(Boolean);
+        size.textContent = [formatBytes(map.bytes), ...saved].join(" · ");
+      })
+      .catch(() => {});
     card.querySelector(".map-open")!.addEventListener("click", () => {
       void openMap(map);
     });
