@@ -224,6 +224,13 @@ export class ViewerControls {
     this.input("map-search").focus();
     return true;
   }
+  /** Next (or previous) match. Enter puts the keyboard away, so later
+   * presses arrive from outside the field and step on from there. */
+  stepSearch(back = false) {
+    if (this.openSheet !== "search") return false;
+    this.focusSearch(back ? -1 : this.searchPosition < 0 ? 0 : 1);
+    return true;
+  }
   private choose(open: boolean) {
     this.sheet(undefined);
     this.choosing = open;
@@ -446,7 +453,7 @@ export class ViewerControls {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.isComposing) {
         key.preventDefault();
-        this.focusSearch(key.shiftKey ? -1 : this.searchPosition < 0 ? 0 : 1);
+        this.stepSearch(key.shiftKey);
       }
     });
     for (const sheet of sheets)

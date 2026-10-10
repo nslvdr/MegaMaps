@@ -543,6 +543,10 @@ document.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
   if (event.key === "/" && controls?.openSearch()) event.preventDefault();
+  // Enter on a button presses it; only from the map does it step through matches.
+  const free = event.target === document.body || (event.target as HTMLElement).id === "map-canvas";
+  if (event.key === "Enter" && free && controls?.stepSearch(event.shiftKey))
+    event.preventDefault();
 });
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;

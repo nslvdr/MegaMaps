@@ -705,6 +705,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-search");
     assert.equal(focus.mock.callCount(), 0, "opening Search waits for a click on the input");
     el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(controls.stepSearch(), false, "Enter is left alone with Search closed");
     assert.equal(controls.openSearch(), true);
     assert.equal(el("sheet-search").hidden, false);
     assert.equal(focus.mock.callCount(), 1, "the / key opens Search ready to type");
@@ -745,6 +746,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     Object.defineProperties(previous, { key: { value: "Enter" }, shiftKey: { value: true } });
     el("map-search").dispatchEvent(previous);
     assert.deepEqual(framed.at(-1), secondPolygon, "previous wraps to the last match");
+    // Enter put the keyboard away; the page's Enter keeps stepping.
+    assert.equal(controls.stepSearch(), true);
+    assert.deepEqual(framed.at(-1), polygon);
+    assert.equal(controls.stepSearch(true), true);
+    assert.deepEqual(framed.at(-1), secondPolygon);
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
