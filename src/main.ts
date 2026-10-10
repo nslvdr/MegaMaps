@@ -337,13 +337,28 @@ async function refresh() {
         size.textContent = [formatBytes(map.bytes), ...saved].join(" · ");
       })
       .catch(() => {});
-    card.querySelector(".map-open")!.addEventListener("click", () => {
-      void openMap(map);
-    });
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
     const name = displayName(map.name);
     more.title = "Map options";
     more.setAttribute("aria-label", `Options for ${name}`);
+    const remove = () => {
+      deleting = map;
+      element("delete-name").textContent = name;
+      showDialog(deleteDialog);
+    };
+    // As in file managers: F2 renames a focused card, Delete asks to remove it.
+    const openButton = card.querySelector<HTMLButtonElement>(".map-open")!;
+    openButton.setAttribute("aria-keyshortcuts", "F2 Delete");
+    openButton.addEventListener("click", () => {
+      void openMap(map);
+    });
+    openButton.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.shiftKey) return;
+      if (event.key === "F2" && !event.metaKey) openRenameMap(map);
+      else if (event.key === "Delete" || event.key === "Backspace") remove();
+      else return;
+      event.preventDefault();
+    });
     more.addEventListener("click", () =>
       mapMenu.toggle(more, name, [
         { label: "Share", icon: icons.share, action: () => { void shareMap(map); } },
@@ -362,11 +377,7 @@ async function refresh() {
           label: "Delete",
           icon: icons.trash,
           danger: true,
-          action: () => {
-            deleting = map;
-            element("delete-name").textContent = name;
-            showDialog(deleteDialog);
-          },
+          action: remove,
         },
       ]),
     );
