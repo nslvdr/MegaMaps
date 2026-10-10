@@ -118,3 +118,18 @@ test("crowded labels never land on or draw across anything already placed", () =
   }
   assert.ok(placed > 200, `${placed} labels placed`);
 });
+
+test("a label still takes a spot whose margin just touches neighbouring pins", () => {
+  // Above the pin is free, its 5px margin touching pins on all four sides at
+  // edges between 8px dots.
+  const layout = new CalloutLayout({ width: 400, height: 300 }, [
+    { left: 140, right: 145, top: 100, bottom: 110 },
+    { left: 255, right: 262, top: 100, bottom: 110 },
+    { left: 200, right: 210, top: 80, bottom: 87 },
+    { left: 160, right: 170, top: 133, bottom: 140 },
+  ]);
+  const target = { left: 200, right: 200, top: 150, bottom: 150 };
+  const placement = layout.place({ width: 100, height: 36 }, target);
+  assert.equal(placement?.direction, "above");
+  assert.deepEqual(placement?.bounds, { left: 150, right: 250, top: 92, bottom: 128 });
+});

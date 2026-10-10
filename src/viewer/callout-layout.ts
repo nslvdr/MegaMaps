@@ -27,7 +27,7 @@ export interface CalloutPlacement {
   shift: number;
 }
 
-const CELL = 64;
+const CELL = 64, DOT = 8;
 
 const center = (rect: CalloutBounds) => ({
   x: (rect.left + rect.right) / 2,
@@ -83,6 +83,10 @@ export class CalloutLayout {
   private cells: CalloutBounds[][] = [];
   private columns: number;
   private rows: number;
+  // Pins never move once labels start, so a summed count of the 8px dots
+  // they cover proves most crowded spots taken without walking any list.
+  private pins: CalloutBounds[] = [];
+  private dots?: Int32Array;
 
   constructor(private viewport: Size, obstacles: CalloutBounds[] = []) {
     this.columns = Math.max(1, Math.ceil(viewport.width / CELL));
@@ -92,8 +96,42 @@ export class CalloutLayout {
 
   addObstacle(rect: CalloutBounds) {
     if (rect.right >= 0 && rect.bottom >= 0 &&
-        rect.left <= this.viewport.width && rect.top <= this.viewport.height)
+        rect.left <= this.viewport.width && rect.top <= this.viewport.height) {
       this.index(rect);
+      this.pins.push(rect);
+      this.dots = undefined;
+    }
+  }
+
+  // dots[(row + 1) * (width + 1) + column + 1] counts the covered dots above
+  // and left of that corner. A dot counts when a pin overlaps its inside.
+  private countDots() {
+    const width = Math.ceil(this.viewport.width / DOT), height = Math.ceil(this.viewport.height / DOT);
+    const dots = new Int32Array((width + 1) * (height + 1));
+    for (const pin of this.pins) {
+      const left = Math.max(0, Math.floor(pin.left / DOT)), right = Math.min(width - 1, Math.ceil(pin.right / DOT) - 1);
+      const top = Math.max(0, Math.floor(pin.top / DOT)), bottom = Math.min(height - 1, Math.ceil(pin.bottom / DOT) - 1);
+      for (let row = top; row <= bottom; row++)
+        for (let column = left; column <= right; column++)
+          // Only dots whose inside the pin really reaches; zero-width pins on a dot's edge reach none.
+          if (pin.left < (column + 1) * DOT && pin.right > column * DOT && pin.top < (row + 1) * DOT && pin.bottom > row * DOT)
+            dots[(row + 1) * (width + 1) + column + 1] = 1;
+    }
+    for (let row = 1; row <= height; row++)
+      for (let column = 1; column <= width; column++)
+        dots[row * (width + 1) + column] = dots[row * (width + 1) + column]! + dots[(row - 1) * (width + 1) + column]! +
+          dots[row * (width + 1) + column - 1]! - dots[(row - 1) * (width + 1) + column - 1]!;
+    return dots;
+  }
+
+  // True only if a pin certainly overlaps: a covered dot lies wholly inside.
+  private surelyBlocked(left: number, top: number, right: number, bottom: number) {
+    const dots = this.dots ??= this.countDots(), width = Math.ceil(this.viewport.width / DOT) + 1;
+    const first = Math.max(0, Math.ceil(left / DOT)), last = Math.min(width - 1, Math.floor(right / DOT));
+    const firstRow = Math.max(0, Math.ceil(top / DOT)), lastRow = Math.min(dots.length / width - 1, Math.floor(bottom / DOT));
+    if (first >= last || firstRow >= lastRow) return false;
+    return dots[lastRow * width + last]! - dots[firstRow * width + last]! -
+      dots[lastRow * width + first]! + dots[firstRow * width + first]! > 0;
   }
 
   private occupy(placement: CalloutPlacement) {
@@ -172,6 +210,7 @@ export class CalloutLayout {
           const y = clampY(desiredY + (direction.y ? 0 : shift / 2));
           const right = x + size.width, bottom = y + size.height;
           if ((x < clear.right && right > clear.left && y < clear.bottom && bottom > clear.top) ||
+              this.surelyBlocked(x - 5, y - 5, right + 5, bottom + 5) ||
               this.blocked(x - 5, y - 5, right + 5, bottom + 5)) continue;
           const bounds = { left: x, right, top: y, bottom };
           const padded = expand(bounds, 5);
