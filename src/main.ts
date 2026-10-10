@@ -54,6 +54,19 @@ const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
 const mapMenu = initMapMenu();
+// Up and Down step through the maps; Home and End jump to either end.
+grid.addEventListener("keydown", (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const cards = [...grid.querySelectorAll<HTMLElement>(".map-card")];
+  const current = cards.findIndex((card) => card.contains(event.target as Node));
+  const next = { ArrowDown: current + 1, ArrowUp: current - 1, Home: 0, End: cards.length - 1 }[event.key];
+  const target = next === undefined ? undefined : cards[next];
+  if (!target) return;
+  event.preventDefault();
+  // Stay in the same column: the map itself or its options button.
+  const column = (event.target as Element).closest(".map-more") ? ".map-more" : ".map-open";
+  target.querySelector<HTMLElement>(column)!.focus();
+});
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
