@@ -261,6 +261,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("rotation-controls").hidden, false);
     click("rotate-right");
     assert.ok(Math.abs(rotation - Math.PI / 12) < 1e-9);
+    state.view = { center: { x: 0, y: 0 }, scale: 1, rotation: Math.PI / 12 };
+    controls.options().onView();
+    assert.equal(el("rotation-value").textContent, "15°");
+    assert.equal((el("rotation-angle") as HTMLInputElement).value, "15");
+    // Panning calls this every frame; an unchanged angle leaves the DOM alone.
+    const shown = el("rotation-value").firstChild;
+    controls.options().onView();
+    assert.equal(el("rotation-value").firstChild, shown);
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
     assert.equal(el("rotation-controls").hidden, true);

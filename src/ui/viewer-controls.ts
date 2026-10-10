@@ -45,6 +45,7 @@ export class ViewerControls {
   > &
     Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace">>;
   private ocr?: OcrIndex;
+  private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
   private searchPosition = -1;
@@ -651,6 +652,9 @@ export class ViewerControls {
       ((Math.round(((this.state.view?.rotation ?? 0) * 180) / Math.PI) % 360) +
         360) %
       360;
+    // Runs on every camera move: untouched DOM keeps panning free of layout work.
+    if (rotation === this.shownRotation) return;
+    this.shownRotation = rotation;
     this.input("rotation-angle").value = String(rotation);
     this.el("rotation-value").textContent = `${rotation}°`;
   }
@@ -659,7 +663,6 @@ export class ViewerControls {
       ? darkMessages[this.darkKind]
       : "Off: original colors";
   }
-  /** Backs out one level (sheet → tool → browse); false when already browsing. */
   /** Keyboard undo while drawing a route; false when there is nothing to undo. */
   undo() {
     const button = this.el<HTMLButtonElement>("route-undo");
@@ -667,6 +670,7 @@ export class ViewerControls {
     button.click();
     return true;
   }
+  /** Backs out one level (sheet → tool → browse); false when already browsing. */
   escape() {
     if (this.root.querySelector("dialog[open]")) return false;
     if (this.rowMenu) {
