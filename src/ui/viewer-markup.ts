@@ -19,6 +19,8 @@ const kindPicks = Object.entries(markerKinds)
   )
   .join("");
 
+const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? "⌘Z" : "Ctrl+Z";
+
 // Map-first layout: almost nothing floats over the map.
 //   top left      – Back
 //   bottom pill   – Saved · View open a panel above it; Lock toggles the
@@ -43,7 +45,7 @@ export const viewerMarkup = `
 <div id="tool-bar" class="tool-bar glass" role="status" hidden>
   <p class="tool-hint"><strong id="tool-title"></strong><span id="tool-message"></span></p>
   <div id="tool-actions" class="tool-actions">
-    <button id="route-undo" class="tool-undo" aria-label="Undo last point" title="Undo (⌘Z)">${icons.undo}</button>
+    <button id="route-undo" class="tool-undo" aria-label="Undo last point" title="Undo (${undoKey})">${icons.undo}</button>
     <button id="tool-done" class="tool-done">${icons.check}<span>Done</span></button>
   </div>
 </div>
