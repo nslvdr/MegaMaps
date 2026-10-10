@@ -206,6 +206,8 @@ function showTitle() {
   document.title = currentMap ? `${displayName(currentMap.name)} · ${appTitle}` : appTitle;
 }
 let leavingMap = false;
+// Going home returns to the same place in the list, on the map just closed.
+let libraryScroll = 0;
 // Back acts like Escape: it closes a panel or tool first, then the map.
 window.addEventListener("popstate", (event) => {
   const wanted = (event.state as { map?: string } | null)?.map;
@@ -221,6 +223,7 @@ window.addEventListener("popstate", (event) => {
 });
 function closeViewer() {
   openVersion++;
+  const closed = currentMap?.id;
   if (controls) pendingViewSave = controls.dispose();
   controls = undefined;
   viewer?.dispose();
@@ -239,9 +242,14 @@ function closeViewer() {
   home.hidden = false;
   void refreshFooter();
   document.body.classList.remove("viewing");
-  void refresh().catch((error) =>
-    showMessage("Storage unavailable", String(error)),
-  );
+  void refresh()
+    .then(() => {
+      if (!home.hidden) {
+        window.scrollTo(0, libraryScroll);
+        grid.querySelector<HTMLElement>(`[data-map="${closed}"] .map-open`)?.focus({ preventScroll: true });
+      }
+    })
+    .catch((error) => showMessage("Storage unavailable", String(error)));
 }
 async function openMap(map: MapRecord) {
   const version = ++openVersion;
@@ -249,6 +257,7 @@ async function openMap(map: MapRecord) {
   controls = undefined;
   viewer?.dispose();
   viewer = undefined;
+  if (!home.hidden) libraryScroll = window.scrollY;
   currentMap = map;
   showTitle();
   // An open map gets its own history entry, so the system Back returns home.
@@ -330,6 +339,7 @@ async function refresh() {
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
+    card.dataset.map = map.id;
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
     card.querySelector(".dimensions")!.textContent =
