@@ -803,6 +803,8 @@ export class ViewerControls {
     button.addEventListener("click", () => {
       options.jump();
       this.sheet(undefined);
+      // The keyboard carries on from the map: arrows pan, +/− zoom.
+      this.el("map-canvas").focus({ preventScroll: true });
     });
     const open = this.rowMenu === options.key;
     const toggle = document.createElement("button");
@@ -1108,7 +1110,9 @@ export class ViewerControls {
     if (!count) return;
     this.searchPosition = (Math.max(0, this.searchPosition) + delta + count) % count;
     const match = this.searchMatches[this.searchPosition]!;
-    this.input("map-search").blur();
+    // Hands focus to the map: the on-screen keyboard goes away, and arrows
+    // pan around the match while Enter keeps stepping.
+    this.el("map-canvas").focus({ preventScroll: true });
     this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
     if (match.marker) this.viewer?.jumpTo(match.marker.point);
     else this.viewer?.fitPoints(match.polygons.flat());

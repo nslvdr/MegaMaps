@@ -443,6 +443,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "the same tap can still jump to the place",
     );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
+    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
     root
@@ -829,6 +830,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("map-search").dispatchEvent(enter);
     assert.equal(highlights?.matches.length, 30, "Enter immediately searches the latest query, including notes");
     assert.equal(highlights?.selected, 0);
+    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "Enter hands focus to the map");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     input("map-search", "");
