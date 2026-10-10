@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Viewer } from "../src/viewer/viewer";
-import { worldToScreen, type Camera, type Point } from "../src/viewer/camera";
+import { screenToWorld, worldToScreen, type Camera, type Point } from "../src/viewer/camera";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { payloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
@@ -113,7 +113,8 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   });
   const overlay = document.querySelector<SVGSVGElement>("svg")!;
   const errors: string[] = [],
-    drops: boolean[] = [];
+    drops: boolean[] = [],
+    opened: string[] = [];
   const viewer = new Viewer(
     canvas,
     map,
@@ -124,7 +125,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       overlay,
       onView() {},
       onTap() {},
-      onMarker() {},
+      onMarker: (marker) => opened.push(marker.id),
       onDrop: (moved) => drops.push(moved),
     },
   );
@@ -239,6 +240,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       camera: Camera;
       grab(screen: Point): boolean;
       drop(screen: Point): void;
+      tap(screen: Point): boolean;
     };
     const screen = (p: Point) => worldToScreen(internals.camera, p);
     assert.equal(internals.grab(screen(place.point)), false, "not while browsing");
@@ -276,6 +278,17 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.deepEqual(state.view, away, "no cut");
     step(performance.now() + 300);
     assert.notDeepEqual(state.view, away);
+    // Where pins crowd together, a tap opens the closest one, not the oldest.
+    step(performance.now() + 600);
+    const pin = screen(place.point);
+    state.markers.push({
+      id: "near", label: "Near", kind: "note", note: "", created: 0,
+      point: screenToWorld(internals.camera, { x: pin.x + 16, y: pin.y }),
+    });
+    viewer.updateNavigation(state);
+    assert.equal(internals.tap({ x: pin.x + 12, y: pin.y }), true);
+    assert.equal(internals.tap({ x: pin.x + 2, y: pin.y }), true);
+    assert.deepEqual(opened, ["near", place.id]);
   } finally {
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.

@@ -421,24 +421,16 @@ export class Viewer {
   private tap(screen: Point) {
     const point = screenToWorld(this.camera, screen);
     if (!insideImage(point, this.map)) return this.tool !== "browse";
-    const near = (target: Point, radius: number) => {
-      const p = worldToScreen(this.camera, target);
-      return Math.hypot(p.x - screen.x, p.y - screen.y) < radius;
-    };
-    const markers = this.navigation.layers.places ? this.navigation.markers : [];
+    const marker = this.nearestPlace(screen);
     if (this.tool === "route") {
       // Snap route points onto saved places the user taps.
-      const snap = markers
-        .map((m) => m.point)
-        .find((target) => near(target, 24));
-      this.options?.onTap(snap ? { ...snap } : point);
+      this.options?.onTap(marker ? { ...marker.point } : point);
       return true;
     }
     if (this.tool !== "browse") {
       this.options?.onTap(point);
       return true;
     }
-    const marker = markers.find((marker) => near(marker.point, 24));
     if (marker) {
       this.options?.onMarker(marker);
       return true;
@@ -448,6 +440,17 @@ export class Viewer {
   private near(target: Point, screen: Point) {
     const p = worldToScreen(this.camera, target);
     return Math.hypot(p.x - screen.x, p.y - screen.y);
+  }
+  // A visible place within reach; where pins crowd, the closest one wins.
+  private nearestPlace(screen: Point) {
+    if (!this.navigation.layers.places) return undefined;
+    let nearest: MapMarker | undefined,
+      best = 24;
+    for (const marker of this.navigation.markers) {
+      const distance = this.near(marker.point, screen);
+      if (distance < best) [nearest, best] = [marker, distance];
+    }
+    return nearest;
   }
   // Only while editing: the drawn route's points, or the place being moved.
   private grab(screen: Point) {
@@ -492,10 +495,8 @@ export class Viewer {
     const dragging = this.dragging;
     if (!dragging) return;
     this.dragging = undefined;
-    if (this.tool === "route" && this.navigation.layers.places) {
-      const place = this.navigation.markers.find(
-        (m) => this.near(m.point, screen) < 24,
-      );
+    if (this.tool === "route") {
+      const place = this.nearestPlace(screen);
       if (place) Object.assign(dragging.point, place.point);
     }
     this.options?.onDrop?.(true);
