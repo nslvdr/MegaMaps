@@ -42,7 +42,7 @@ interface PathItem {
 // Text is assigned through textContent; imported/user names never become markup.
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
 export class NavigationOverlay {
-  private points: { element: SVGGElement; point: Point }[] = [];
+  private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
   private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string }[] = [];
   private searchMarkers = new Set<string>();
@@ -235,16 +235,23 @@ export class NavigationOverlay {
       "viewBox",
       `0 0 ${viewport.width} ${viewport.height}`,
     );
+    // A route's five paths share its points: casing, line and flow draw one
+    // outline and both dot layers another, so each is built once per frame.
+    let points: Point[] | undefined, line = "", dots = "";
     for (const path of this.paths) {
-      let d = "";
-      for (const [i, point] of path.points.entries()) {
-        const p = worldToScreen(camera, point);
-        const x = p.x.toFixed(1),
-          y = p.y.toFixed(1);
-        // Zero-length round-capped segments render as vertex dots.
-        d += path.dots ? `M${x},${y}h0` : `${i ? "L" : "M"}${x},${y}`;
+      if (path.points !== points) {
+        points = path.points;
+        line = dots = "";
+        for (const [i, point] of points.entries()) {
+          const p = worldToScreen(camera, point);
+          const x = p.x.toFixed(1),
+            y = p.y.toFixed(1);
+          line += `${i ? "L" : "M"}${x},${y}`;
+          // Zero-length round-capped segments render as vertex dots.
+          dots += `M${x},${y}h0`;
+        }
       }
-      path.element.setAttribute("d", d);
+      path.element.setAttribute("d", path.dots ? dots : line);
     }
     for (const pin of this.points) {
       const p = worldToScreen(camera, pin.point);
@@ -253,8 +260,11 @@ export class NavigationOverlay {
         p.y < -100 ||
         p.x > viewport.width + 100 ||
         p.y > viewport.height + 100;
-      pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
-      pin.element.style.display = outside ? "none" : "";
+      if (outside !== pin.outside) {
+        pin.outside = outside;
+        pin.element.style.display = outside ? "none" : "";
+      }
+      if (!outside) pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
     }
     for (const { callout, point, padding, layer, markerId } of this.callouts) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
@@ -262,6 +272,11 @@ export class NavigationOverlay {
         continue;
       }
       const p = worldToScreen(camera, point);
+      // Anchors reach at most 36px from a pin, so one this far out stays off screen.
+      if (p.x < -40 || p.y < -40 || p.x > viewport.width + 40 || p.y > viewport.height + 40) {
+        callout.element.setAttribute("hidden", "");
+        continue;
+      }
       let bounds = {
         left: p.x - padding, right: p.x + padding,
         top: p.y - padding, bottom: p.y + padding,

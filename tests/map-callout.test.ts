@@ -81,6 +81,36 @@ test("saved places and routes have typed callouts that follow their anchors and 
   overlay.dispose();
 });
 
+test("route outlines and pins follow the camera and drop out while off screen", () => {
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("paths");
+  state.markers = [{ id: "gate", kind: "entrance", label: "Gate", note: "", point: { x: 50, y: 50 }, created: 0 }];
+  state.routes = [{ id: "walk", name: "Walk", created: 0, draft: false,
+    points: [{ x: 10, y: 20 }, { x: 110, y: 70 }, { x: 210, y: 20 }] }];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 400, height: 300 };
+  const pin = () => svg.querySelector<SVGGElement>('[data-layer="places"] > g:not(.map-callout)')!;
+  for (const camera of [{ x: 0, y: 0, scale: 1 }, { x: 30, y: 15, scale: 2 }]) {
+    overlay.draw(camera, viewport);
+    const screen = state.routes[0]!.points.map(point => worldToScreen(camera, point));
+    const line = screen.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("");
+    const dots = screen.map(p => `M${p.x.toFixed(1)},${p.y.toFixed(1)}h0`).join("");
+    const paths = [...svg.querySelectorAll(".route > path")].map(path => path.getAttribute("d"));
+    assert.deepEqual(paths, [line, line, line, dots, dots], "casing, line and flow share one outline");
+    const p = worldToScreen(camera, state.markers[0]!.point);
+    assert.equal(pin().getAttribute("transform"), `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
+    assert.equal(pin().style.display, "");
+  }
+  overlay.draw({ x: -5000, y: -5000, scale: 1 }, viewport);
+  assert.equal(pin().style.display, "none", "an off-screen pin is not drawn");
+  overlay.draw({ x: 100, y: 100, scale: 1 }, viewport);
+  assert.equal(pin().style.display, "", "it returns when panned back");
+  assert.equal(pin().getAttribute("transform"), "translate(150.0,150.0)");
+  overlay.dispose();
+});
 test("search and saved labels share space, including routes starting on a saved place", () => {
   const { document } = parseHTML('<html><body><svg id="saved"></svg><svg id="search"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
