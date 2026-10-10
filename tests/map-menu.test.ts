@@ -20,13 +20,13 @@ test("opening library actions leaves them unfocused; clicking acts and Escape re
   assert.equal(anchor.getAttribute("aria-expanded"), "true");
   document.querySelector(".popover-item")!.dispatchEvent(new window.Event("click"));
   assert.equal(edited, true);
-  assert.equal(document.querySelector(".map-menu"), null);
+  assert.ok(!document.querySelector(".map-menu"), "menu closed");
 
   menu.toggle(anchor, "My map", items);
   const escape = new window.Event("keydown");
   Object.defineProperty(escape, "key", { value: "Escape" });
   document.dispatchEvent(escape);
-  assert.equal(document.querySelector(".map-menu"), null);
+  assert.ok(!document.querySelector(".map-menu"), "menu closed");
   assert.equal(focus.mock.callCount(), 1);
   assert.equal(focus.mock.calls[0]!.this, anchor);
 });

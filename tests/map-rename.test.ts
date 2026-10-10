@@ -36,7 +36,7 @@ test("opening rename leaves the name unselected and gives native focus to the he
   assert.equal(ui.input.value, "My map");
   assert.equal(focus.mock.callCount(), 0);
   assert.equal(select.mock.callCount(), 0);
-  assert.equal(ui.dialog.querySelector("[autofocus]"), ui.dialog.querySelector("h2"));
+  assert.ok(ui.dialog.querySelector("[autofocus]") === ui.dialog.querySelector("h2"), "autofocus on the heading");
   assert.equal(ui.dialog.querySelector("h2")!.tabIndex, -1);
   // The library hides the file extension, so Rename does too.
   ui.dialog.close();

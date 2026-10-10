@@ -65,7 +65,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
         top: p.y - 12, bottom: p.y + 12 }), false, "labels never cover another saved point");
     }
   }
-  assert.equal(svg.querySelector("landmark"), null, "saved names remain literal text");
+  assert.ok(!svg.querySelector("landmark"), "saved names remain literal text");
   overlay.setLayers({ places: false, routes: false, labels: false });
   assert.equal(svg.classList.contains("hide-labels"), true);
   assert.equal(svg.classList.contains("hide-places"), true);

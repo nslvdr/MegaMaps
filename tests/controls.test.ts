@@ -166,7 +166,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("sheet-display").hidden, true);
     assert.equal(el("sheet-title").textContent, "Saved");
     assert.equal(el("share-saved").hidden, false);
-    assert.equal(el("share-saved").parentElement, el("sheet-title").parentElement);
+    assert.ok(el("share-saved").parentElement === el("sheet-title").parentElement, "share sits beside the title");
     assert.equal(el("share-saved").getAttribute("aria-label"), "Share map or selected items");
     for (const id of ["route-list", "marker-list"]) {
       const list = el(id);
@@ -374,7 +374,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("saved-places-count").textContent, "1");
     assert.equal(el("marker-list").querySelector(".navigation-row")?.tagName, "LI");
     // Saved is one list: a Routes section then a Places section, no tabs.
-    assert.equal(document.querySelector("#sheet-saved [role=tab]"), null);
+    assert.ok(!document.querySelector("#sheet-saved [role=tab]"), "no tabs in Saved");
     assert.equal(
       el("marker-list").querySelector(".row-icon svg circle")?.getAttribute("fill"),
       "#7dff8a",
