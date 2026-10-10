@@ -10,7 +10,7 @@ export interface MapMarker {
   point: Point;
   label: string;
   note: string;
-  kind: "bookmark" | "entrance" | "junction" | "landmark" | "note";
+  kind: "entrance" | "junction" | "landmark" | "note";
   created: number;
 }
 /** Saved by older versions; now loaded as places. */
@@ -76,12 +76,17 @@ export function defaultNavigation(mapId: string): NavigationState {
 }
 // Older saves predate layer visibility; fill any missing fields from defaults.
 // Saves from before the manual position was removed may still carry it; drop it.
-// Checkpoints were merged into places, so older ones become landmark places.
-type StoredNavigation = Partial<NavigationState> & {
+// Bookmarks and older checkpoints now share the landmark type.
+type StoredMarker = Omit<MapMarker, "kind"> & { kind: MapMarker["kind"] | "bookmark" };
+type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   mapId: string;
+  markers?: StoredMarker[];
   position?: unknown;
   checkpoints?: LegacyCheckpoint[];
 };
+/** Keep saved points and shared files compatible with the merged landmark type. */
+export const normalizeMarkerKind = (kind: StoredMarker["kind"]): MapMarker["kind"] =>
+  kind === "bookmark" ? "landmark" : kind;
 export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const defaults = defaultNavigation(stored.mapId);
   const current: StoredNavigation = { ...stored };
@@ -92,7 +97,7 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
     if (typeof stored.layers?.[name] === "boolean")
       layers[name] = stored.layers[name];
   const markers = [
-    ...(stored.markers ?? []),
+    ...(stored.markers ?? []).map((marker) => ({ ...marker, kind: normalizeMarkerKind(marker.kind) })),
     ...(stored.checkpoints ?? []).map(
       (checkpoint): MapMarker => ({
         id: checkpoint.id,
@@ -117,7 +122,6 @@ export const markerKinds = {
   landmark: { label: "Landmark", color: "#ff9a5c" },
   entrance: { label: "Entrance", color: "#7dff8a" },
   junction: { label: "Junction", color: "#ffd23f" },
-  bookmark: { label: "Bookmark", color: "#7fb8ff" },
   note: { label: "Note", color: "#e3e3e3" },
 } as const satisfies Record<MapMarker["kind"], { label: string; color: string }>;
 export function captureView(camera: Camera, viewport: Size): SavedView {

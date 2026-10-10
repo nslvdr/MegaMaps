@@ -291,8 +291,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-add-note").hidden, false);
     assert.equal(
       el("marker-dialog").querySelectorAll(".kind-pick svg circle").length,
-      5,
+      4,
       "kinds show the map's pins",
+    );
+    assert.deepEqual(
+      Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
+      ["landmark", "entrance", "junction", "note"],
+      "landmarks and bookmarks share one option",
     );
     const entrance = root.querySelector<HTMLInputElement>(
       'input[name="marker-kind"][value="entrance"]',

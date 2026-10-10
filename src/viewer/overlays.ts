@@ -21,18 +21,14 @@ const node = <K extends keyof SVGElementTagNameMap>(
 };
 // Small glyphs drawn inside 22px pins, in pin-local coordinates.
 export const glyphs: Record<MapMarker["kind"], { d: string; fill?: boolean }> = {
-  landmark: {
-    d: "M0,-6.5L1.9,-2.1 6.5,-2.1 2.8,0.9 4,5.6 0,2.9 -4,5.6 -2.8,0.9 -6.5,-2.1 -1.9,-2.1Z",
-    fill: true,
-  },
-  entrance: { d: "M-5,5V0A5,5 0 0 1 5,0V5" },
-  junction: { d: "M0,6V0M0,0L-5,-5M0,0L5,-5" },
-  bookmark: { d: "M-3,6V-6H5L3,-3L5,0H-3" },
-  note: { d: "M-4,-3H4M-4,0H4M-4,3H1" },
+  landmark: { d: "M-4,6V-6H5L2,-2L5,1H-4" },
+  entrance: { d: "M-7,5L-5,-2L-1,-6L4,-4L7,5Z M-3,5V1A3,3 0 0 1 3,1V5" },
+  junction: { d: "M0,6V1L-5,-4 M0,1L5,-4 M-5,-1V-4H-2 M2,-4H5V-1" },
+  note: { d: "M-6,-5H6V3H-1L-5,6V3H-6Z M-3,-1H3" },
 };
 // Trusted app glyphs shared by saved-place and search callouts.
 export const markerCalloutIcon = (kind: MapMarker["kind"]) => {
-  const glyph = glyphs[kind] ?? glyphs.bookmark;
+  const glyph = glyphs[kind] ?? glyphs.landmark;
   return `<svg viewBox="-9 -9 18 18" aria-hidden="true"><path d="${glyph.d}" fill="${glyph.fill ? "currentColor" : "none"}" stroke="currentColor" stroke-width="${glyph.fill ? 0.8 : 2}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 };
 export const CASING = "#05070a";
@@ -170,8 +166,8 @@ export class NavigationOverlay {
     }
     const places = group("places");
     for (const marker of state.markers) {
-      const { color } = markerKinds[marker.kind] ?? markerKinds.bookmark;
-      const glyph = glyphs[marker.kind] ?? glyphs.bookmark;
+      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
+      const glyph = glyphs[marker.kind] ?? glyphs.landmark;
       const { element, body } = pin(places, marker.point);
       if (marker.id === this.moving) element.classList.add("moving");
       body.append(

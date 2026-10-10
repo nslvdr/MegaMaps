@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { markerKinds, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { markerKinds, normalizeMarkerKind, type MapMarker, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -83,9 +83,10 @@ export function validateManifest(value: unknown): ShareManifest {
   };
   const markers = value.markers.map((value: unknown): MapMarker => {
     if (!object(value) || !name(value.label, 100) || !text(value.note, 2000) ||
-        typeof value.kind !== "string" || !Object.hasOwn(markerKinds, value.kind)) invalid();
+        typeof value.kind !== "string" ||
+        (value.kind !== "bookmark" && !Object.hasOwn(markerKinds, value.kind))) invalid();
     return { ...identity(value, "marker"), label: value.label, note: value.note,
-      kind: value.kind as MapMarker["kind"], point: point(value.point) };
+      kind: normalizeMarkerKind(value.kind as MapMarker["kind"] | "bookmark"), point: point(value.point) };
   });
   let points = 0;
   const routes = value.routes.map((value: unknown): PlannedRoute => {

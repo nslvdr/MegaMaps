@@ -363,7 +363,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
             text.className = "share-choice-text";
             text.textContent = "label" in item ? item.label : item.name;
             const detail = root.ownerDocument.createElement("small");
-            detail.textContent = "label" in item ? (markerKinds[item.kind] ?? markerKinds.bookmark).label : plural(item.points.length, "point");
+            detail.textContent = "label" in item ? (markerKinds[item.kind] ?? markerKinds.landmark).label : plural(item.points.length, "point");
             text.append(detail);
             const input = root.ownerDocument.createElement("input");
             input.type = "checkbox";

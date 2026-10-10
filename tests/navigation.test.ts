@@ -157,6 +157,30 @@ test("notes, routes and settings persist; deletion blocks late writes", async ()
   assert.equal(await lastMap(), null);
 });
 
+test("legacy bookmarks become landmarks on load and survive queued saves", async () => {
+  const mapId = "merged-point-types";
+  await saveMap(map(mapId));
+  const bookmark = {
+    id: "old-bookmark", kind: "bookmark" as const, label: "Waterfall",
+    note: "Stay left", point: { x: 150, y: 250 }, created: 7,
+  };
+  const landmark = { ...bookmark, id: "old-landmark", kind: "landmark" as const };
+  const stored = { ...defaultNavigation(mapId), markers: [bookmark, landmark],
+    importedItems: [`marker:${bookmark.id}`] };
+  await transact("navigation", "readwrite", (s) => s.put(stored));
+  const migrated = { ...bookmark, kind: "landmark" };
+  assert.deepEqual((await loadNavigation(mapId)).markers, [migrated, landmark]);
+  assert.equal(stored.markers[0]!.kind, "bookmark", "loading does not mutate the input");
+
+  // A queued snapshot predates the bookmark import; reconciliation must migrate it too.
+  const queued = defaultNavigation(mapId);
+  queued.markers = [landmark];
+  await saveNavigation(queued);
+  assert.deepEqual(await transact("navigation", "readonly", (s) => s.get(mapId)),
+    { ...queued, markers: [landmark, migrated], importedItems: stored.importedItems });
+  assert.deepEqual((await loadNavigation(mapId)).markers, [landmark, migrated]);
+});
+
 test("update preparation saves pending changes and blocks reload after a failed write", async () => {
   await saveMap(map("update-save"));
   const state = defaultNavigation("update-save");

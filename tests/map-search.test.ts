@@ -6,7 +6,7 @@ import type { OcrIndex } from "../src/ocr/index";
 
 const places: MapMarker[] = [
   { id: "church", kind: "landmark", label: "Église du Nord", note: "Entrée principale", point: { x: 100, y: 200 }, created: 1 },
-  { id: "church-copy", kind: "bookmark", label: "Église du Nord", note: "", point: { x: 500, y: 600 }, created: 2 },
+  { id: "church-copy", kind: "landmark", label: "Église du Nord", note: "", point: { x: 500, y: 600 }, created: 2 },
   { id: "camp", kind: "note", label: "Camp", note: "Water and supplies", point: { x: 800, y: 900 }, created: 3 },
 ];
 const polygon = [{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 30 }, { x: 10, y: 30 }];

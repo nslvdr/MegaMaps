@@ -33,7 +33,9 @@ export async function saveNavigation(state: NavigationState) {
       if (request.result?.status === "ready") {
         const navigation = tx.objectStore("navigation");
         const saved: IDBRequest<NavigationState | undefined> = navigation.get(state.mapId);
-        saved.onsuccess = () => navigation.put(preserveUnseenImports(state, saved.result));
+        saved.onsuccess = () => navigation.put(preserveUnseenImports(
+          state, saved.result ? normalizeNavigation(saved.result) : undefined,
+        ));
       }
     };
     tx.oncomplete = () => resolve();
