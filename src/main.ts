@@ -476,6 +476,13 @@ document.addEventListener("keydown", (event) => {
   )
     return;
   if (event.key === "Escape" && !controls?.escape()) closeViewer();
+  // ⌘Z, Ctrl+Z or Backspace takes back the last route point.
+  const undo = event.key === "Backspace" ||
+    (event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey);
+  if (undo && controls?.undo()) {
+    event.preventDefault();
+    return;
+  }
   // Leave browser shortcuts such as Find (⌘F) and reset zoom (⌘0) alone.
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();

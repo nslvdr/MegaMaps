@@ -469,6 +469,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("tool-actions").hidden, false);
     assert.equal(done.disabled, true);
     assert.equal((el("route-undo") as HTMLButtonElement).disabled, true);
+    assert.equal(controls.undo(), false, "keyboard undo has nothing to take back");
     tap(900, 1000);
     tap(1500, 1700);
     assert.equal(done.disabled, false);
@@ -488,7 +489,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // An interrupted drag leaves no Undo step behind.
     options.onDragStart?.();
     options.onDrop?.(false);
-    click("route-undo");
+    assert.equal(controls.undo(), true, "⌘Z works like the Undo button");
     assert.equal(state.routes[0]?.points.length, 1);
     tap(1400, 1600);
     click("tool-done");

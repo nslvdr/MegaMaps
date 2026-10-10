@@ -652,6 +652,13 @@ export class ViewerControls {
       : "Off: original colors";
   }
   /** Backs out one level (sheet → tool → browse); false when already browsing. */
+  /** Keyboard undo while drawing a route; false when there is nothing to undo. */
+  undo() {
+    const button = this.el<HTMLButtonElement>("route-undo");
+    if (button.hidden || button.disabled) return false;
+    button.click();
+    return true;
+  }
   escape() {
     if (this.root.querySelector("dialog[open]")) return false;
     if (this.rowMenu) {
