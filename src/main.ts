@@ -613,7 +613,9 @@ element("delete-confirm").addEventListener("click", () => {
 });
 element("back").addEventListener("click", closeViewer);
 document.addEventListener("keydown", (event) => {
+  // Keys a list already used (typing to jump to a row) are not shortcuts too.
   if (
+    event.defaultPrevented ||
     !viewer ||
     document.querySelector("dialog[open]") ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(

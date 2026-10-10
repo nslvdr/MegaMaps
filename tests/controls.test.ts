@@ -590,6 +590,16 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.ok(focusedLast() === el("marker-list").querySelector(".navigation-jump"), "Down reaches the place below");
     key(el("marker-list").querySelector(".row-more")!, "ArrowUp");
     assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "⋯ stays in its column");
+    // Typing a row's first letters jumps to it, ahead of the map's shortcuts.
+    const names = [...el("sheet-saved").querySelectorAll("strong")].map((title) => title.textContent!);
+    const routeJump = el("route-list").querySelector(".navigation-jump")!,
+      placeJump = el("marker-list").querySelector(".navigation-jump")!;
+    const typed = new window.Event("keydown", { bubbles: true, cancelable: true });
+    Object.defineProperty(typed, "key", { value: "e" });
+    routeJump.dispatchEvent(typed);
+    assert.deepEqual(names, ["Route 1", "<Entrance>"]);
+    assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
+    assert.equal(typed.defaultPrevented, true);
 
     // Rename via the name dialog, delete needs two taps; all behind ⋯.
     const openMenu = () => {

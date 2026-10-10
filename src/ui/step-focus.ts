@@ -14,3 +14,31 @@ export function stepFocus(event: KeyboardEvent, items: readonly HTMLElement[], w
   item.focus();
   return true;
 }
+
+const TYPEAHEAD_MS = 700;
+
+/** Typing a name's first letters focuses the next of `items` whose name starts
+ * with them; repeating one letter cycles through the matches. Each list keeps
+ * its own typed letters. True when the key was used. */
+export function typeahead(name: (item: HTMLElement) => string) {
+  let typed = "", typedAt = 0;
+  return (event: KeyboardEvent, items: readonly HTMLElement[]) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || !/^[\p{L}\p{N}]$/u.test(event.key)) return false;
+    const current = items.findIndex((item) => item.contains(event.target as Node));
+    if (current < 0) return false;
+    const now = Date.now();
+    typed = (now - typedAt > TYPEAHEAD_MS ? "" : typed) + event.key.toLowerCase();
+    typedAt = now;
+    const repeat = [...typed].every((letter) => letter === typed.charAt(0));
+    const prefix = repeat ? typed.charAt(0) : typed;
+    for (let step = repeat ? 1 : 0; step <= items.length; step++) {
+      const item = items[(current + step) % items.length]!;
+      // Leading quotes or brackets are skipped: "(Old) Gate" is found by O.
+      if (!name(item).toLowerCase().replace(/^[^\p{L}\p{N}]+/u, "").startsWith(prefix)) continue;
+      event.preventDefault();
+      item.focus();
+      return true;
+    }
+    return false;
+  };
+}
