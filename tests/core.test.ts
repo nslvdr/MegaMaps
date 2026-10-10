@@ -10,6 +10,7 @@ import {
   constrain,
   chooseLevel,
   visibleTiles,
+  viewBounds,
 } from "../src/viewer/camera";
 import { readHeader } from "../src/processing/headers";
 import { decodePNG, unfilter } from "../src/processing/png";
@@ -86,6 +87,10 @@ test("fit, bounds, and DPR-aware tile selection", () => {
   );
   assert.ok(visible.every((t) => t.x >= 0 && t.y >= 0 && t.x < 18 && t.y < 18));
   assert.ok(visible.some((t) => t.x === 17 && t.y === 17));
+  // A quarter turn swaps the screen's extents in world space.
+  const turned = viewBounds({ x: 844, y: 0, scale: 2, rotation: Math.PI / 2 }, { width: 844, height: 390 });
+  for (const [side, expected] of Object.entries({ left: 0, top: 0, right: 195, bottom: 422 }))
+    assert.ok(Math.abs(turned[side as keyof typeof turned] - expected) < 1e-9, side);
 });
 test("map edges and corners can be centered at fit and native zoom, including rotation", () => {
   const image = { width: 9000, height: 4000 };

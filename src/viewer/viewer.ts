@@ -6,6 +6,7 @@ import {
   zoomAt,
   chooseLevel,
   visibleTiles,
+  viewBounds,
   type Camera,
   type Point,
   cameraAt,
@@ -593,13 +594,18 @@ export class Viewer {
     const entries = this.cache.tiles
       .filter((t) => t.level >= level)
       .sort((a, b) => b.level - a.level);
+    // Cached tiles from earlier views stay decoded but are not drawn off screen.
+    const viewport = this.viewport();
+    const bounds = viewBounds(this.camera, viewport);
     for (const tile of entries) {
       const scale = this.map.levels[tile.level]!.scale;
-      ctx.imageSmoothingEnabled = this.camera.scale * scale * this.dpr < 1;
       const x = tile.x * TILE_SIZE * scale,
         y = tile.y * TILE_SIZE * scale;
       const width = Math.min(tile.bitmap.width * scale, this.map.width - x),
         height = Math.min(tile.bitmap.height * scale, this.map.height - y);
+      if (x > bounds.right || y > bounds.bottom || x + width < bounds.left || y + height < bounds.top)
+        continue;
+      ctx.imageSmoothingEnabled = this.camera.scale * scale * this.dpr < 1;
       // Clip rounded pyramid edges; level dimensions are ceil(original / scale).
       ctx.drawImage(
         tile.bitmap,
@@ -613,7 +619,6 @@ export class Viewer {
         height,
       );
     }
-    const viewport = this.viewport();
     const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
     this.searchOverlay?.reserve(this.camera, labels);
     this.overlay?.reserve(this.camera, labels);
