@@ -6,6 +6,7 @@ import {
   cameraAt,
   fitCamera,
   worldToScreen,
+  screenToWorld,
   zoomAt,
   constrain,
   chooseLevel,
@@ -91,6 +92,24 @@ test("fit, bounds, and DPR-aware tile selection", () => {
   const turned = viewBounds({ x: 844, y: 0, scale: 2, rotation: Math.PI / 2 }, { width: 844, height: 390 });
   for (const [side, expected] of Object.entries({ left: 0, top: 0, right: 195, bottom: 422 }))
     assert.ok(Math.abs(turned[side as keyof typeof turned] - expected) < 1e-9, side);
+});
+test("a turned screen loads only the tiles it shows", () => {
+  const level = pyramid(9000, 9000)[0]!,
+    viewport = { width: 1280, height: 800 };
+  const camera = cameraAt({ x: 4500, y: 4500 }, viewport, 1, Math.PI / 4);
+  const keys = new Set(visibleTiles(level, camera, viewport).map((t) => `${t.x},${t.y}`));
+  // Every tile under a screen pixel is still there…
+  for (let x = 0; x <= viewport.width; x += 20)
+    for (let y = 0; y <= viewport.height; y += 20) {
+      const world = screenToWorld(camera, { x, y });
+      const key = `${Math.floor(world.x / TILE_SIZE)},${Math.floor(world.y / TILE_SIZE)}`;
+      assert.ok(keys.has(key), `tile ${key} under ${x},${y}`);
+    }
+  // …but the corners of the box around the turned screen are not.
+  const box = viewBounds(camera, viewport);
+  const boxed = (Math.floor(box.right / TILE_SIZE) - Math.floor(box.left / TILE_SIZE) + 1) *
+    (Math.floor(box.bottom / TILE_SIZE) - Math.floor(box.top / TILE_SIZE) + 1);
+  assert.ok(keys.size < boxed * 0.75, `${keys.size} of ${boxed}`);
 });
 test("map edges and corners can be centered at fit and native zoom, including rotation", () => {
   const image = { width: 9000, height: 4000 };

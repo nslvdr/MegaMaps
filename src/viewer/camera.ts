@@ -135,7 +135,9 @@ export function visibleTiles(level: Level, camera: Camera, viewport: Size) {
   });
   const tiles: { x: number; y: number }[] = [];
   for (let y = y0; y <= y1; y++)
-    for (let x = x0; x <= x1; x++) tiles.push({ x, y });
+    for (let x = x0; x <= x1; x++)
+      if (onScreen(camera, viewport, { x: x * extent, y: y * extent, width: extent, height: extent }))
+        tiles.push({ x, y });
   return tiles.sort(
     (a, b) =>
       (a.x + 0.5 - center.x / extent) ** 2 +
@@ -143,4 +145,19 @@ export function visibleTiles(level: Level, camera: Camera, viewport: Size) {
       (b.x + 0.5 - center.x / extent) ** 2 -
       (b.y + 0.5 - center.y / extent) ** 2,
   );
+}
+/** Whether a world-space rectangle inside the `viewBounds` box reaches the
+ * screen. The box alone also takes in its corners beside a turned screen. */
+export function onScreen(
+  camera: Camera,
+  viewport: Size,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  const { c, s } = trig(camera.rotation ?? 0),
+    center = worldToScreen(camera, { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+  // Half the rectangle's on-screen extents, turned with the map.
+  const w = (camera.scale * (Math.abs(c) * rect.width + Math.abs(s) * rect.height)) / 2,
+    h = (camera.scale * (Math.abs(s) * rect.width + Math.abs(c) * rect.height)) / 2;
+  return center.x + w >= 0 && center.x - w <= viewport.width &&
+    center.y + h >= 0 && center.y - h <= viewport.height;
 }

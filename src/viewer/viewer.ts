@@ -6,6 +6,7 @@ import {
   zoomAt,
   chooseLevel,
   visibleTiles,
+  onScreen,
   viewBounds,
   type Camera,
   type Point,
@@ -607,7 +608,8 @@ export class Viewer {
         y = tile.y * TILE_SIZE * scale;
       const width = Math.min(tile.bitmap.width * scale, this.map.width - x),
         height = Math.min(tile.bitmap.height * scale, this.map.height - y);
-      if (x > bounds.right || y > bounds.bottom || x + width < bounds.left || y + height < bounds.top)
+      if (x > bounds.right || y > bounds.bottom || x + width < bounds.left || y + height < bounds.top ||
+          !onScreen(this.camera, viewport, { x, y, width, height }))
         continue;
       ctx.imageSmoothingEnabled = this.camera.scale * scale * this.dpr < 1;
       // Clip rounded pyramid edges; level dimensions are ceil(original / scale).
