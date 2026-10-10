@@ -418,9 +418,14 @@ home.addEventListener("drop", (event) => {
 });
 // Pasting a copied image or screenshot imports it too.
 document.addEventListener("paste", (event) => {
-  const file = event.clipboardData?.files[0];
+  let file = event.clipboardData?.files[0];
   if (!file || !canDrop()) return;
   event.preventDefault();
+  // Screenshots arrive as "image.png"; a dated name tells them apart.
+  if (/^image\.\w+$/i.test(file.name)) {
+    const date = new Date().toLocaleDateString(undefined, { dateStyle: "medium" });
+    file = new File([file], `Pasted map ${date}${file.name.slice(5)}`, { type: file.type });
+  }
   void importFile(file);
 });
 function importImage(file: File) {
