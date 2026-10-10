@@ -161,6 +161,15 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("sheet-saved").hidden, false);
     assert.equal(el("sheet-display").hidden, true);
     assert.equal(el("sheet-title").textContent, "Saved");
+    assert.equal(el("share-saved").hidden, false);
+    assert.equal(el("share-saved").parentElement, el("sheet-title").parentElement);
+    assert.equal(el("share-saved").getAttribute("aria-label"), "Share map or selected items");
+    for (const id of ["route-list", "marker-list"]) {
+      const list = el(id);
+      assert.equal(list.tagName, "UL");
+      assert.equal(list.firstElementChild?.tagName, "LI");
+      assert.ok(document.getElementById(list.getAttribute("aria-labelledby")!));
+    }
     assert.equal(
       sheet.dataset.panel,
       "saved",
@@ -195,6 +204,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("close-sheet");
     click("open-display");
     assert.equal(el("sheet-title").textContent, "View");
+    assert.equal(el("share-saved").hidden, true, "sharing appears only in Saved");
     assert.equal(el("sheet-dismiss").hidden, false);
     click("open-display");
     assert.equal(sheet.hidden, true);
@@ -321,6 +331,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Saved list renders names as text, never markup.
     assert.match(el("marker-list").textContent!, /<Entrance>/);
     assert.equal(el("saved-places-count").textContent, "1");
+    assert.equal(el("marker-list").querySelector(".navigation-row")?.tagName, "LI");
     // Saved is one list: a Routes section then a Places section, no tabs.
     assert.equal(document.querySelector("#sheet-saved [role=tab]"), null);
     assert.equal(
@@ -471,6 +482,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.routes[0]?.draft, false);
     assert.equal(toolBar.hidden, true);
     assert.equal(tools.at(-1), "browse");
+    assert.equal(el("route-list").querySelector(".navigation-row")?.tagName, "LI");
 
     // Editing a finished route down to one point restores it.
     const editPoints = () => {
