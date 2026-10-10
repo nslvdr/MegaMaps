@@ -216,6 +216,13 @@ export class ViewerControls {
     this.renderTool();
     if (!name && returnFocus && previous) this.el(`open-${previous}`).focus();
   }
+  /** "/" opens Search ready to type: a keyboard is already at hand, unlike a tap. */
+  openSearch() {
+    if (this.tool !== "browse" || this.root.querySelector("dialog[open]")) return false;
+    this.sheet("search");
+    this.input("map-search").focus();
+    return true;
+  }
   private choose(open: boolean) {
     this.sheet(undefined);
     this.choosing = open;

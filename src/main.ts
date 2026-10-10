@@ -486,6 +486,7 @@ document.addEventListener("keydown", (event) => {
   // Leave browser shortcuts such as Find (⌘F) and reset zoom (⌘0) alone.
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
+  if (event.key === "/" && controls?.openSearch()) event.preventDefault();
 });
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;

@@ -22,7 +22,7 @@ Production preview: **http://localhost:4173**. Import a map, wait for **Availabl
 
 ## Search map text
 
-Importing a map also runs local OCR. **Search** in the viewer’s bottom bar opens a text box: matching words remain clear while the rest of the map darkens. Search ignores case and accents, supports phrases and partial words, and offers previous/next controls to frame results. Clearing the query or closing Search restores the normal view.
+Importing a map also runs local OCR. **Search** in the viewer’s bottom bar opens a text box: matching words remain clear while the rest of the map darkens. Search ignores case and accents, supports phrases and partial words, and offers previous/next controls to frame results. Clearing the query or closing Search restores the normal view. On a keyboard, **/** opens Search ready to type.
 
 Older maps automatically run detection when opened if they have no current OCR index. In the library, **Advanced settings (tools icon) → Rerun text detection** starts a fresh scan; you can stop it there. The previous index remains usable until a replacement completes. Stopping OCR during import keeps the saved map. Share, Rename and Delete are also available on each map card.
 

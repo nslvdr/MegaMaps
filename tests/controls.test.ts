@@ -676,6 +676,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     focus.mock.resetCalls();
     click("open-search");
     assert.equal(focus.mock.callCount(), 0, "opening Search waits for a click on the input");
+    el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(controls.openSearch(), true);
+    assert.equal(el("sheet-search").hidden, false);
+    assert.equal(focus.mock.callCount(), 1, "the / key opens Search ready to type");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
