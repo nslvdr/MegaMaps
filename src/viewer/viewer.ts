@@ -148,10 +148,11 @@ export class Viewer {
           ArrowDown: [0, -movement],
         };
         const delta = deltas[event.key];
+        // Arrows glide like +/−; a held key chains its steps into one smooth pan.
         if (delta) {
           event.preventDefault();
           this.interactions.stop();
-          this.setCamera({
+          this.animate({
             ...camera,
             x: camera.x + delta[0],
             y: camera.y + delta[1],

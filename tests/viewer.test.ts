@@ -200,11 +200,22 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     const panned = () => (viewer as unknown as { camera: Camera }).camera.x;
     let before = panned();
     assert.equal(press("ArrowLeft"), true);
+    step(performance.now() + 100);
+    assert.ok(panned() - before > 0 && panned() - before < 60, "arrows glide rather than jump");
+    step(performance.now() + 1000);
     assert.notDeepEqual(state.view, fitted);
     assert.equal(panned() - before, 60);
     before = panned();
     assert.equal(press("ArrowRight", { shiftKey: true }), true);
+    step(performance.now() + 1000);
     assert.equal(before - panned(), 195, "Shift pans half a screen");
+    // A held arrow's repeats add up to one pan.
+    before = panned();
+    press("ArrowLeft");
+    step(performance.now() + 50);
+    press("ArrowLeft", { repeat: true });
+    step(performance.now() + 1000);
+    assert.equal(panned() - before, 120);
     // Quick presses add up: each one starts from where the last was heading.
     viewer.fit(false);
     const scale = () => (viewer as unknown as { camera: Camera }).camera.scale;
