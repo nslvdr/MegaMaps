@@ -323,7 +323,9 @@ export function attachInteractions(
     "dblclick",
     (event) => {
       event.preventDefault();
-      doubleZoom(point(event));
+      // Shift reverses it, as a two-finger tap does on touch.
+      if (!event.shiftKey) doubleZoom(point(event));
+      else if (!host.locked?.() && !host.editing?.()) zoomOut(point(event));
     },
     { signal },
   );

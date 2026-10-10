@@ -12,7 +12,7 @@ class Canvas extends EventTarget {
 function emit(
   canvas: Canvas,
   type: string,
-  properties: Record<string, number | string>,
+  properties: Record<string, number | string | boolean>,
 ) {
   const event = new Event(type, { cancelable: true });
   Object.assign(event, properties);
@@ -190,6 +190,11 @@ test("a two-finger tap zooms out around its center; a pinch does not", () => {
   emit(canvas, "pointerdown", pointer(1, 300, 300));
   emit(canvas, "pointerup", pointer(1, 300, 300));
   assert.equal(h.animations(), 2, "double tap still zooms in");
+  // Shift reverses a mouse double-click the same way.
+  const zoomed = h.camera().scale;
+  emit(canvas, "dblclick", { clientX: 150, clientY: 100, shiftKey: true });
+  assert.equal(h.animations(), 3);
+  assert.ok(Math.abs(h.camera().scale - zoomed / 2.5) < 1e-9);
   h.interactions.dispose();
 });
 test("long press fires once without panning; moving or editing cancels it", async () => {
