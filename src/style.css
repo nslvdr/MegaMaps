@@ -2092,6 +2092,8 @@ button.share-row:active:not(:disabled) { transform: none; background: #ffffff0f;
   button.share-row:hover:not(:disabled) { background: #ffffff0a; }
 }
 button.share-row:disabled > svg:last-child { visibility: hidden; }
+/* The summary clips its rows to its rounded box, so a row's ring sits inside. */
+button.share-row:focus-visible { outline-offset: -4px; border-radius: calc(var(--radius-md) - 4px); }
 .share-row-icon {
   display: grid;
   place-items: center;
