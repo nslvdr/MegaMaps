@@ -195,8 +195,13 @@ svg {
   color: var(--c);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 65%, transparent));
 }
-.library-action:active:not(:disabled) {
+.library-action:active:not(:disabled),
+.dropping .import-trigger {
   background: color-mix(in srgb, var(--c) 18%, #000);
+}
+/* A file dragged over the library lights Import, where it will go. */
+.dropping .import-trigger {
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
 }
 @media (hover: hover) {
   .library-action:hover:not(:disabled) {

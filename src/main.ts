@@ -365,12 +365,40 @@ for (const [id, accept] of [
     fileInput.accept = accept;
     fileInput.click();
   });
-fileInput.addEventListener("change", async () => {
+fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   fileInput.value = "";
-  if (!file || importing) return;
+  if (file) void importFile(file);
+});
+async function importFile(file: File) {
+  if (importing) return;
   if (await isShareFile(file).catch(() => false)) void sharing.openImport(file);
   else importImage(file);
+}
+// Desktop: a map or .megamap file dropped on the library imports like Import.
+// Anywhere else, a dropped file must not replace the app with the raw image.
+const carriesFiles = (event: DragEvent) =>
+  !!event.dataTransfer?.types.includes("Files");
+const canDrop = () =>
+  !home.hidden && !importing && !document.querySelector("dialog[open]");
+for (const type of ["dragover", "drop"] as const)
+  window.addEventListener(type, (event) => {
+    if (carriesFiles(event)) event.preventDefault();
+  });
+home.addEventListener("dragover", (event) => {
+  if (!carriesFiles(event)) return;
+  const accepted = canDrop();
+  event.dataTransfer!.dropEffect = accepted ? "copy" : "none";
+  home.classList.toggle("dropping", accepted);
+});
+home.addEventListener("dragleave", (event) => {
+  if (!home.contains(event.relatedTarget as Node | null))
+    home.classList.remove("dropping");
+});
+home.addEventListener("drop", (event) => {
+  home.classList.remove("dropping");
+  const file = event.dataTransfer?.files[0];
+  if (file && canDrop()) void importFile(file);
 });
 function importImage(file: File) {
   if (importing) return;
