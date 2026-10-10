@@ -29,12 +29,12 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 // Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
 <div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
-<button class="glass corner-button corner-left" id="back" aria-label="Back to library">${icons.arrow}</button>
+<button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
 <p id="toast" class="toast glass" role="status" aria-live="polite" hidden></p>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-controls="sheet" aria-expanded="false">${icons.list}<span>Saved</span></button>
   <button id="open-display" data-sheet="display" aria-controls="sheet" aria-expanded="false">${icons.layers}<span>View</span></button>
-  <button id="open-search" data-sheet="search" aria-controls="sheet" aria-expanded="false">${icons.search}<span>Search</span></button>
+  <button id="open-search" data-sheet="search" aria-controls="sheet" aria-expanded="false" title="Search (/)" aria-keyshortcuts="/">${icons.search}<span>Search</span></button>
   <button id="open-add" aria-controls="add-bar" aria-expanded="false">${icons.plus}<span id="open-add-label">Add</span></button>
   <button id="rotation-lock" aria-label="Unlock rotation" aria-pressed="true">${icons.rotationLock}<span>Lock</span></button>
 </nav>
@@ -45,7 +45,7 @@ export const viewerMarkup = `
 <div id="tool-bar" class="tool-bar glass" role="status" hidden>
   <p class="tool-hint"><strong id="tool-title"></strong><span id="tool-message"></span></p>
   <div id="tool-actions" class="tool-actions">
-    <button id="route-undo" class="tool-undo" aria-label="Undo last point" title="Undo (${undoKey})">${icons.undo}</button>
+    <button id="route-undo" class="tool-undo" aria-label="Undo last point" title="Undo (${undoKey})" aria-keyshortcuts="Meta+Z Control+Z Backspace">${icons.undo}</button>
     <button id="tool-done" class="tool-done">${icons.check}<span>Done</span></button>
   </div>
 </div>
@@ -63,7 +63,7 @@ export const viewerMarkup = `
       <div class="panel-card">
         <label class="panel-row">${rowIcon(icons.moon)}<span class="row-text"><strong>Dark map</strong><small id="dark-status"></small></span><input type="checkbox" role="switch" class="switch" id="dark-map"></label>
         <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>Brightness</strong></span><div class="brightness-options" role="radiogroup" aria-label="Map brightness">${brightnessChoices}</div></div>
-        <div class="panel-row stacked" id="rotation-controls">${rowIcon(icons.rotateRight)}<span class="row-text"><strong>Rotation</strong></span><output id="rotation-value">0°</output><div class="row-slider"><button id="rotate-left" class="slider-step" aria-label="Rotate map left 15 degrees">${icons.rotateLeft}</button><input id="rotation-angle" aria-label="Map rotation" type="range" min="0" max="359" step="1"><button id="rotate-right" class="slider-step" aria-label="Rotate map right 15 degrees">${icons.rotateRight}</button></div></div>
+        <div class="panel-row stacked" id="rotation-controls">${rowIcon(icons.rotateRight)}<span class="row-text"><strong>Rotation</strong></span><output id="rotation-value">0°</output><div class="row-slider"><button id="rotate-left" class="slider-step" aria-label="Rotate map left 15 degrees" title="Rotate left ([)" aria-keyshortcuts="[">${icons.rotateLeft}</button><input id="rotation-angle" aria-label="Map rotation" type="range" min="0" max="359" step="1"><button id="rotate-right" class="slider-step" aria-label="Rotate map right 15 degrees" title="Rotate right (])" aria-keyshortcuts="]">${icons.rotateRight}</button></div></div>
       </div>
       <h3>Show on map</h3>
       <div class="layer-toggles" role="group" aria-label="Show on map">
