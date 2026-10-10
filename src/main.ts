@@ -73,8 +73,10 @@ let viewer: Viewer | undefined,
   maps: MapRecord[] = [];
 let importing: AbortController | undefined,
   deleting: MapRecord | undefined,
-  thumbnailURLs: string[] = [],
   renderVersion = 0;
+// Library previews by map id. A map's tiles never change, so returning home
+// reuses them instead of reading storage and flashing placeholders again.
+const thumbnails = new Map<string, string>();
 const channel =
   typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel("map-viewer-library")
@@ -271,8 +273,11 @@ async function refresh() {
         .catch(() => {});
     }
   }
-  for (const url of thumbnailURLs) URL.revokeObjectURL(url);
-  thumbnailURLs = [];
+  for (const [id, url] of thumbnails)
+    if (!maps.some((map) => map.id === id)) {
+      URL.revokeObjectURL(url);
+      thumbnails.delete(id);
+    }
   mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
@@ -334,17 +339,28 @@ async function refresh() {
       ]),
     );
     grid.append(card);
+    const showThumbnail = (url: string) => {
+      const img = new Image();
+      img.src = url;
+      img.alt = "";
+      img.loading = "lazy";
+      card.querySelector(".thumbnail")!.prepend(img);
+    };
+    const cached = thumbnails.get(map.id);
+    if (cached) {
+      showThumbnail(cached);
+      continue;
+    }
     void payloadStore(map.backend)
       .get(map.id, tileKey(map.levels.length - 1, 0, 0))
       .then((blob) => {
-        if (version !== renderVersion) return;
-        const url = URL.createObjectURL(blob);
-        thumbnailURLs.push(url);
-        const img = new Image();
-        img.src = url;
-        img.alt = "";
-        img.loading = "lazy";
-        card.querySelector(".thumbnail")!.prepend(img);
+        // An overlapping refresh may have loaded it first.
+        let url = thumbnails.get(map.id);
+        if (!url) {
+          url = URL.createObjectURL(blob);
+          thumbnails.set(map.id, url);
+        }
+        if (version === renderVersion) showThumbnail(url);
       })
       .catch(() => {
         card.querySelector(".thumbnail-placeholder")!.textContent =
