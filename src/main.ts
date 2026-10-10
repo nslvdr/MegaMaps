@@ -278,6 +278,8 @@ async function refresh() {
       URL.revokeObjectURL(url);
       thumbnails.delete(id);
     }
+  // Behind an open map the grid is unseen; going home renders it afresh.
+  if (home.hidden) return;
   mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
