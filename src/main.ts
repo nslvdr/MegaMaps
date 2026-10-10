@@ -187,6 +187,11 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
     );
   return work();
 }
+const appTitle = document.title;
+/** The open map names the tab and the app switcher entry. */
+function showTitle() {
+  document.title = currentMap ? `${displayName(currentMap.name)} · ${appTitle}` : appTitle;
+}
 let leavingMap = false;
 // Back acts like Escape: it closes a panel or tool first, then the map.
 window.addEventListener("popstate", (event) => {
@@ -208,6 +213,7 @@ function closeViewer() {
   viewer?.dispose();
   viewer = undefined;
   currentMap = undefined;
+  showTitle();
   void setLastMap(null).catch((error) =>
     showMessage("Could not save home view", String(error)),
   );
@@ -231,6 +237,7 @@ async function openMap(map: MapRecord) {
   viewer?.dispose();
   viewer = undefined;
   currentMap = map;
+  showTitle();
   // An open map gets its own history entry, so the system Back returns home.
   if (history.state?.map) history.replaceState({ map: map.id }, "");
   else history.pushState({ map: map.id }, "");
@@ -281,6 +288,7 @@ async function refresh() {
     const updated = maps.find((map) => map.id === currentMap!.id);
     if (updated) {
       Object.assign(currentMap, updated);
+      showTitle();
       controls?.refreshMetadata();
       void loadOcr(updated.id)
         .then((index) => {
