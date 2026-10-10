@@ -270,6 +270,12 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       [128, 64],
     );
     viewer.setTool("browse");
+    // Jumping to a place glides there instead of cutting.
+    const away = structuredClone(state.view);
+    viewer.jumpTo({ x: 400, y: 120 });
+    assert.deepEqual(state.view, away, "no cut");
+    step(performance.now() + 300);
+    assert.notDeepEqual(state.view, away);
   } finally {
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.

@@ -389,8 +389,9 @@ export class ViewerControls {
   private moveMarker(marker: MapMarker) {
     this.movingMarker = marker.id;
     this.moveFrom = { ...marker.point };
-    this.viewer?.jumpTo(marker.point);
+    // Switching tools stops camera motion, so the glide starts after it.
     this.mode("move");
+    this.viewer?.jumpTo(marker.point);
   }
   private finishMove(keep: boolean) {
     const marker = this.movingPlace(),

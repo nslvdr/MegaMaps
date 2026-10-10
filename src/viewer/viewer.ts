@@ -371,10 +371,11 @@ export class Viewer {
       }),
     );
   }
+  // Glides rather than cuts, so it's clear where on the map the place is.
   jumpTo(point: Point) {
     if (this.navigation.touchLocked) return;
     this.interactions.reset();
-    this.setCamera(
+    this.animate(
       cameraAt(
         point,
         this.viewport(),
