@@ -695,6 +695,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
+    assert.equal(el("toast").textContent, "Route deleted");
     assert.ok(focusedLast() === el("marker-list").querySelector(".row-more"), "the next row takes the deleted one's focus");
 
     // Layers hide/show and the highlight briefly reveals everything.

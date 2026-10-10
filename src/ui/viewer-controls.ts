@@ -718,7 +718,6 @@ export class ViewerControls {
       ? darkMessages[this.darkKind]
       : "Off: original colors";
   }
-  /** Keyboard undo while drawing a route; false when there is nothing to undo. */
   /** Steps land on the 15° grid, so a few presses always reach north again.
    * False while rotation is locked. */
   rotateStep(direction: 1 | -1) {
@@ -730,6 +729,7 @@ export class ViewerControls {
     this.viewer.rotateTo((next * Math.PI) / 12);
     return true;
   }
+  /** Keyboard undo while drawing a route; false when there is nothing to undo. */
   undo() {
     const button = this.el<HTMLButtonElement>("route-undo");
     if (button.hidden || button.disabled) return false;
@@ -1094,6 +1094,7 @@ export class ViewerControls {
                 this.mode("browse");
               }
               this.changed();
+              this.toast("Route deleted");
             }),
           },
         ],
