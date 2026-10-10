@@ -801,6 +801,21 @@ dialog textarea {
   overflow: hidden;
   background: #000;
 }
+/* Placing from the keyboard: Enter puts the point under this mark. */
+.viewer:not([data-tool="browse"]) .map-stage:has(canvas:focus-visible)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  translate: -50% -50%;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
+  pointer-events: none;
+}
 .map-shade {
   position: absolute;
   inset: 0;

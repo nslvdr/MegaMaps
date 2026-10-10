@@ -114,7 +114,8 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   const overlay = document.querySelector<SVGSVGElement>("svg")!;
   const errors: string[] = [],
     drops: boolean[] = [],
-    opened: string[] = [];
+    opened: string[] = [],
+    taps: Point[] = [];
   const viewer = new Viewer(
     canvas,
     map,
@@ -124,7 +125,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       navigation: state,
       overlay,
       onView() {},
-      onTap() {},
+      onTap: (point) => taps.push(point),
       onMarker: (marker) => opened.push(marker.id),
       onDrop: (moved) => drops.push(moved),
     },
@@ -291,7 +292,14 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       [Math.round(place.point.x), Math.round(place.point.y)],
       [128, 64],
     );
+    // From the keyboard, Enter or Space taps the middle of the screen.
+    const middle = screenToWorld(internals.camera, { x: 195, y: 422 });
+    assert.equal(press("Enter"), true);
+    assert.equal(press(" ", { repeat: true }), true, "a held key puts down one point");
+    assert.deepEqual(taps, [middle]);
     viewer.setTool("browse");
+    assert.equal(press("Enter"), false, "browsing leaves Enter to search");
+    assert.deepEqual(taps, [middle]);
     // Jumping to a place glides there instead of cutting.
     const away = structuredClone(state.view);
     viewer.jumpTo({ x: 400, y: 120 });

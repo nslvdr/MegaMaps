@@ -137,6 +137,13 @@ export class Viewer {
         if (this.navigation.touchLocked) return;
         // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
         if (event.metaKey || event.ctrlKey || event.altKey) return;
+        // While adding or moving, Enter or Space taps the middle of the screen:
+        // the keyboard pans there with the arrows, then puts the point down.
+        if ((event.key === "Enter" || event.key === " ") && this.tool !== "browse") {
+          event.preventDefault();
+          if (!event.repeat) this.tap({ x: this.width / 2, y: this.height / 2 });
+          return;
+        }
         // Shift crosses half a screen per press, for long trips across the map.
         // Each press starts from where the last one was heading.
         const camera = this.destination ?? this.camera,
