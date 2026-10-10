@@ -575,8 +575,6 @@ export class Viewer {
     ctx.scale(this.camera.scale, this.camera.scale);
     ctx.fillStyle = black;
     ctx.fillRect(0, 0, this.map.width, this.map.height);
-    if (this.base)
-      ctx.drawImage(this.base, 0, 0, this.map.width, this.map.height);
     let level = chooseLevel(this.map.levels, this.camera.scale, this.dpr);
     let tiles = visibleTiles(
       this.map.levels[level]!,
@@ -591,8 +589,14 @@ export class Viewer {
         this.viewport(),
       );
     this.cache.plan(tiles.map((t) => ({ ...t, level })));
+    // The overview stays beneath everything: it hides hairline seams where
+    // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
+    // ones load.
+    if (this.base)
+      ctx.drawImage(this.base, 0, 0, this.map.width, this.map.height);
+    const covered = this.cache.complete;
     const entries = this.cache.tiles
-      .filter((t) => t.level >= level)
+      .filter((t) => (covered ? t.level === level : t.level >= level))
       .sort((a, b) => b.level - a.level);
     // Cached tiles from earlier views stay decoded but are not drawn off screen.
     const viewport = this.viewport();
