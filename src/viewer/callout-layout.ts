@@ -101,6 +101,23 @@ export class CalloutLayout {
       (size.width + target.right - target.left) / 2,
       (size.height + target.bottom - target.top) / 2,
     );
+    // Every candidate and its leader stay within this reach of the target, so
+    // only what overlaps it can block one; crowded labels try 480 positions.
+    const clampX = (x: number) => Math.max(8, Math.min(x, this.viewport.width - size.width - 8));
+    const clampY = (y: number) => Math.max(8, Math.min(y, this.viewport.height - size.height - 8));
+    const reach = {
+      left: Math.min(target.left, clampX(Math.min(target.left - 278 - size.width, anchor.x - size.width / 2 - 80))) - 5,
+      right: Math.max(target.right, clampX(Math.max(target.right + 278, anchor.x - size.width / 2 + 80)) + size.width) + 5,
+      top: Math.min(target.top, clampY(Math.min(target.top - 198 - size.height, anchor.y - size.height / 2 - 40))) - 5,
+      bottom: Math.max(target.bottom, clampY(Math.max(target.bottom + 198, anchor.y - size.height / 2 + 40)) + size.height) + 5,
+    };
+    const near = (rect: CalloutBounds) => rect.left <= reach.right && rect.right >= reach.left &&
+      rect.top <= reach.bottom && rect.bottom >= reach.top;
+    const obstacles = this.obstacles.filter(near), labels = this.labels.filter(near), clear = expand(target, 22);
+    const leaders = this.leaders.filter(({ from, to }) => near({
+      left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
+      top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y),
+    }));
     // Further rings let dense clusters spread into nearby unused map space.
     for (let gap = 22; gap <= 198; gap += 16) {
       for (const direction of directions) {
@@ -109,22 +126,22 @@ export class CalloutLayout {
             : direction.x > 0 ? target.right + gap : anchor.x - size.width / 2;
           const desiredY = direction.y < 0 ? target.top - gap - size.height
             : direction.y > 0 ? target.bottom + gap : anchor.y - size.height / 2;
-          const x = Math.max(8, Math.min(desiredX + (direction.y ? shift : 0), this.viewport.width - size.width - 8));
-          const y = Math.max(8, Math.min(desiredY + (direction.y ? 0 : shift / 2), this.viewport.height - size.height - 8));
+          const x = clampX(desiredX + (direction.y ? shift : 0));
+          const y = clampY(desiredY + (direction.y ? 0 : shift / 2));
           const bounds = { left: x, right: x + size.width, top: y, bottom: y + size.height };
           const padded = expand(bounds, 5);
-          if (boundsOverlap(bounds, expand(target, 22)) ||
-              this.obstacles.some(rect => boundsOverlap(padded, rect)) ||
-              this.labels.some(rect => boundsOverlap(padded, rect)) ||
-              this.leaders.some(line => segmentCrossesBounds(line.from, line.to, padded))) continue;
+          if (boundsOverlap(bounds, clear) ||
+              obstacles.some(rect => boundsOverlap(padded, rect)) ||
+              labels.some(rect => boundsOverlap(padded, rect)) ||
+              leaders.some(line => segmentCrossesBounds(line.from, line.to, padded))) continue;
           const to = edge(target, center(bounds));
           const from = edge(bounds, to);
           // Attach away from the label's rounded corners.
           if (Math.abs(from.x - bounds.left) < 1e-6 || Math.abs(from.x - bounds.right) < 1e-6)
             from.y = Math.max(bounds.top + 12, Math.min(from.y, bounds.bottom - 12));
           else from.x = Math.max(bounds.left + 12, Math.min(from.x, bounds.right - 12));
-          if (this.obstacles.some(rect => segmentCrossesBounds(from, to, rect)) ||
-              this.labels.some(rect => segmentCrossesBounds(from, to, rect))) continue;
+          if (obstacles.some(rect => segmentCrossesBounds(from, to, rect)) ||
+              labels.some(rect => segmentCrossesBounds(from, to, rect))) continue;
           const sideX = bounds.left >= target.right ? 1 : bounds.right <= target.left ? -1 : 0;
           const sideY = bounds.top >= target.bottom ? 1 : bounds.bottom <= target.top ? -1 : 0;
           const actualDirection = directions.find(candidate => candidate.x === sideX && candidate.y === sideY)!.name;
