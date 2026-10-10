@@ -18,6 +18,7 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
+import { initLibraryKeys } from "./ui/library-keys";
 import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
@@ -54,18 +55,15 @@ const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
 const mapMenu = initMapMenu();
-// Up and Down step through the maps; Home and End jump to either end.
-grid.addEventListener("keydown", (event) => {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-  const cards = [...grid.querySelectorAll<HTMLElement>(".map-card")];
-  const current = cards.findIndex((card) => card.contains(event.target as Node));
-  const next = { ArrowDown: current + 1, ArrowUp: current - 1, Home: 0, End: cards.length - 1 }[event.key];
-  const target = next === undefined ? undefined : cards[next];
-  if (!target) return;
-  event.preventDefault();
-  // Stay in the same column: the map itself or its options button.
-  const column = (event.target as Element).closest(".map-more") ? ".map-more" : ".map-open";
-  target.querySelector<HTMLElement>(column)!.focus();
+initLibraryKeys(grid, {
+  rename(id) {
+    const map = maps.find((map) => map.id === id);
+    if (map) openRenameMap(map);
+  },
+  remove(id) {
+    const map = maps.find((map) => map.id === id);
+    if (map) confirmDelete(map);
+  },
 });
 let selectedMap: MapRecord | undefined;
 let ocrJob:
@@ -294,6 +292,11 @@ async function openMap(map: MapRecord) {
     }
   }
 }
+function confirmDelete(map: MapRecord) {
+  deleting = map;
+  element("delete-name").textContent = displayName(map.name);
+  showDialog(deleteDialog);
+}
 async function refresh() {
   const version = ++renderVersion;
   const records = await listMaps();
@@ -364,23 +367,10 @@ async function refresh() {
     const name = displayName(map.name);
     more.title = "Map options";
     more.setAttribute("aria-label", `Options for ${name}`);
-    const remove = () => {
-      deleting = map;
-      element("delete-name").textContent = name;
-      showDialog(deleteDialog);
-    };
-    // As in file managers: F2 renames a focused card, Delete asks to remove it.
     const openButton = card.querySelector<HTMLButtonElement>(".map-open")!;
     openButton.setAttribute("aria-keyshortcuts", "F2 Delete");
     openButton.addEventListener("click", () => {
       void openMap(map);
-    });
-    openButton.addEventListener("keydown", (event) => {
-      if (event.altKey || event.ctrlKey || event.shiftKey) return;
-      if (event.key === "F2" && !event.metaKey) openRenameMap(map);
-      else if (event.key === "Delete" || event.key === "Backspace") remove();
-      else return;
-      event.preventDefault();
     });
     more.addEventListener("click", () =>
       mapMenu.toggle(more, name, [
@@ -400,7 +390,7 @@ async function refresh() {
           label: "Delete",
           icon: icons.trash,
           danger: true,
-          action: remove,
+          action: () => confirmDelete(map),
         },
       ]),
     );
