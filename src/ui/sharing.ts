@@ -133,7 +133,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       }
       exportBusy(true);
       // The file is prepared before this click, preserving native user activation.
-      await navigator.share({ files: [file], title: prepared?.map.name });
+      await navigator.share({ files: [file], title: prepared && displayName(prepared.map.name) });
       sendDialog.close();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("share-error", error);
@@ -312,7 +312,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       const parsed = await readShare(input);
       if (version !== receiveVersion) return;
       const share = parsed.manifest;
-      el("receive-summary").textContent = `${share.map.name}\n${plural(share.markers.length, "place")} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
+      el("receive-summary").textContent = `${displayName(share.map.name)}\n${plural(share.markers.length, "place")} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
       const available = (await options.maps()).filter((map) => map.status === "ready" && map.width === share.map.width && map.height === share.map.height);
       const exact = await matchingMaps(share, available, controller.signal);
       const states = await Promise.all(exact.map((id) => loadNavigation(id)));
