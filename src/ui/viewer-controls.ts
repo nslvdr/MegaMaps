@@ -779,6 +779,7 @@ export class ViewerControls {
       detail: string;
       icon: string;
       jump: () => void;
+      rename: () => void;
       actions: {
         label: string;
         icon: string;
@@ -827,6 +828,20 @@ export class ViewerControls {
       this.rowMenu = options.key;
       showMenu();
       this.positionRowMenu();
+    });
+    // As in the library, F2 renames and Delete arms the menu's Delete, so
+    // Enter then removes the item.
+    button.setAttribute("aria-keyshortcuts", "F2 Delete");
+    button.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.shiftKey) return;
+      if (event.key === "F2" && !event.metaKey) options.rename();
+      else if (event.key === "Delete" || event.key === "Backspace") {
+        if (this.rowMenu !== options.key) toggle.click();
+        const remove = this.rowPopover?.querySelector<HTMLElement>(".danger");
+        if (this.confirming !== options.key) remove?.click();
+        remove?.focus();
+      } else return;
+      event.preventDefault();
     });
     main.append(button, toggle);
     row.append(main);
@@ -968,6 +983,7 @@ export class ViewerControls {
         detail: `${kind.label}${marker.note ? " · " + marker.note : ""}`,
         icon: placeIcon(marker.kind),
         jump: () => this.viewer?.jumpTo(marker.point),
+        rename: () => this.editMarker(marker),
         actions: [
           {
             label: "Edit",
@@ -997,7 +1013,12 @@ export class ViewerControls {
         ],
       });
     }
-    for (const route of this.state.routes)
+    for (const route of this.state.routes) {
+      const rename = () =>
+        this.name("Rename route", route.name, (name) => {
+          route.name = name;
+          this.changed();
+        });
       this.row(routes, {
         key: route.id,
         label: route.name,
@@ -1007,6 +1028,7 @@ export class ViewerControls {
           `<svg style="color:${routeColor(this.state, route.id)}" `,
         ),
         jump: () => this.viewer?.fitPoints(route.points),
+        rename,
         actions: [
           {
             label: route.draft ? "Continue" : "Edit points",
@@ -1016,11 +1038,7 @@ export class ViewerControls {
           {
             label: "Rename",
             icon: icons.text,
-            action: () =>
-              this.name("Rename route", route.name, (name) => {
-                route.name = name;
-                this.changed();
-              }),
+            action: rename,
           },
           ...(this.onShare && !route.draft ? [{ label: "Share", icon: icons.share,
             action: () => this.onShare?.({ kind: "route", id: route.id }) }] : []),
@@ -1042,6 +1060,7 @@ export class ViewerControls {
           },
         ],
       });
+    }
     for (const [container, empty] of [
       [markers, "No places yet. Use Add › Place."],
       [routes, "No routes yet. Use Add › Route, then tap along passages."],

@@ -603,6 +603,24 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(names, ["Route 1", "<Entrance>"]);
     assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
     assert.equal(typed.defaultPrevented, true);
+    // As in the library, F2 renames a row and Delete arms its menu's Delete.
+    key(routeJump, "F2");
+    assert.equal(el("name-dialog").hasAttribute("open"), true);
+    assert.equal(el("name-title").textContent, "Rename route");
+    click("name-cancel");
+    assert.equal(el("name-dialog").hasAttribute("open"), false);
+    key(placeJump, "F2");
+    assert.equal(el("marker-dialog").hasAttribute("open"), true, "a place edits its name and kind");
+    click("marker-cancel");
+    key(routeJump, "Delete");
+    assert.equal(routeJump.closest(".navigation-row")!.querySelector(".row-more")!.getAttribute("aria-expanded"), "true");
+    const armed = root.querySelector(".row-popover .danger")!;
+    assert.match(armed.textContent!, /Tap again/);
+    assert.ok(focusedLast() === armed, "Enter then deletes");
+    key(routeJump, "Delete");
+    assert.equal(state.routes.length, 1, "repeating Delete never deletes");
+    key(root, "Escape");
+    assert.equal(root.querySelector(".row-popover"), null);
 
     // Rename via the name dialog, delete needs two taps; all behind ⋯.
     const openMenu = () => {
