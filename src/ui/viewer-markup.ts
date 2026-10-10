@@ -28,7 +28,7 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 //                   cancel) while Place / Route, then the tap hint, float above
 // Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, plus and minus zoom, F fits, slash searches."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library">${icons.arrow}</button>
 <p id="toast" class="toast glass" role="status" aria-live="polite" hidden></p>
 <nav class="dock glass" id="dock" aria-label="Map menu">

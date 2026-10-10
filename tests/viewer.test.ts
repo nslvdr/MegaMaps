@@ -196,8 +196,14 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.equal(press("ArrowLeft", { altKey: true }), false);
     assert.equal(press("-", { ctrlKey: true }), false);
     assert.deepEqual(state.view, fitted);
+    const panned = () => (viewer as unknown as { camera: Camera }).camera.x;
+    let before = panned();
     assert.equal(press("ArrowLeft"), true);
     assert.notDeepEqual(state.view, fitted);
+    assert.equal(panned() - before, 60);
+    before = panned();
+    assert.equal(press("ArrowRight", { shiftKey: true }), true);
+    assert.equal(before - panned(), 195, "Shift pans half a screen");
     viewer.fit(false);
     state.touchLocked = true;
     viewer.updateNavigation(state);

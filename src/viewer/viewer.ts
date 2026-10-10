@@ -133,8 +133,9 @@ export class Viewer {
         if (this.navigation.touchLocked) return;
         // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
         if (event.metaKey || event.ctrlKey || event.altKey) return;
+        // Shift crosses half a screen per press, for long trips across the map.
         const camera = this.camera,
-          movement = 60;
+          movement = event.shiftKey ? Math.min(this.width, this.height) / 2 : 60;
         const deltas: Record<string, [number, number]> = {
           ArrowLeft: [movement, 0],
           ArrowRight: [-movement, 0],
