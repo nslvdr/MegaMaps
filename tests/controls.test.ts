@@ -582,6 +582,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       .dispatchEvent(new window.Event("click"));
     assert.deepEqual(framed.at(-1), state.routes[0]!.points);
 
+    // Arrows walk the Saved rows, staying in the jump or ⋯ column.
+    assert.equal(state.markers.length, 1);
+    const focusedLast = () => focus.mock.calls.at(-1)?.this;
+    key(el("route-list").querySelector(".navigation-jump")!, "ArrowDown");
+    assert.ok(focusedLast() === el("marker-list").querySelector(".navigation-jump"), "Down reaches the place below");
+    key(el("marker-list").querySelector(".row-more")!, "ArrowUp");
+    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "⋯ stays in its column");
+
     // Rename via the name dialog, delete needs two taps; all behind ⋯.
     const openMenu = () => {
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
@@ -597,6 +605,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
       ["Edit points", "Rename", "Share", "Delete"],
     );
+    // An open menu takes the arrows, entering from ⋯ and wrapping around.
+    key(el("route-list").querySelector(".row-more")!, "ArrowDown");
+    assert.ok(focusedLast() === rowButton(/Edit points/), "Down enters the menu");
+    key(rowButton(/Edit points/), "ArrowUp");
+    assert.ok(focusedLast() === rowButton(/Delete/), "Up wraps to the last action");
     rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
     assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
     click("share-saved");

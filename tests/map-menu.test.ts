@@ -30,3 +30,35 @@ test("opening library actions leaves them unfocused; clicking acts and Escape re
   assert.equal(focus.mock.callCount(), 1);
   assert.equal(focus.mock.calls[0]!.this, anchor);
 });
+
+test("arrow keys walk the library menu from its button and wrap around", () => {
+  const { window, document } = parseHTML('<html><body><button class="map-more">Actions</button></body></html>');
+  Object.defineProperties(globalThis, {
+    document: { value: document, configurable: true },
+    window: { value: window, configurable: true },
+  });
+  let focused: Element | undefined;
+  window.HTMLElement.prototype.focus = function (this: HTMLElement) { focused = this; };
+  const anchor = document.querySelector<HTMLButtonElement>("button")!;
+  const menu = initMapMenu();
+  menu.toggle(anchor, "My map", ["Share", "Rename", "Delete"].map((label) => ({ label, icon: "", action() {} })));
+  const press = (target: Element, key: string) => {
+    const event = new window.Event("keydown", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "key", { value: key });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const items = [...document.querySelectorAll(".popover-item")];
+  assert.equal(press(anchor, "ArrowDown"), true);
+  assert.ok(focused === items[0], "Down from the button enters at the top");
+  press(items[0]!, "ArrowUp");
+  assert.ok(focused === items[2], "Up from the top wraps to the bottom");
+  press(items[2]!, "ArrowDown");
+  assert.ok(focused === items[0], "Down from the bottom wraps to the top");
+  press(items[0]!, "End");
+  assert.ok(focused === items[2]);
+  menu.close();
+  focused = undefined;
+  assert.equal(press(anchor, "ArrowDown"), false, "a closed menu leaves the arrows alone");
+  assert.equal(focused, undefined);
+});

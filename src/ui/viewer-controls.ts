@@ -26,6 +26,7 @@ import {
   type OcrIndex,
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { stepFocus } from "./step-focus";
 const sheets = ["display", "saved", "search"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number];
@@ -464,9 +465,18 @@ export class ViewerControls {
     this.click("sheet-dismiss", () => this.sheet(undefined, true));
     this.bindSheetDrag();
     this.on(this.root, "keydown", (event) => {
-      if ((event as KeyboardEvent).key !== "Escape" || !this.escape()) return;
-      event.preventDefault();
-      event.stopPropagation();
+      const key = event as KeyboardEvent, target = key.target as Element;
+      if (key.key === "Escape") {
+        if (!this.escape()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      // Arrows walk an open row menu (from its ⋯ too), otherwise the Saved rows.
+      } else if (this.rowPopover && (target === this.rowMenuAnchor || this.rowPopover.contains(target)))
+        stepFocus(key, [...this.rowPopover.querySelectorAll<HTMLElement>(".popover-item")], true);
+      else if (target.closest?.("#sheet-saved .navigation-row")) {
+        const column = target.closest(".row-more") ? ".row-more" : ".navigation-jump";
+        stepFocus(key, [...this.el("sheet-saved").querySelectorAll<HTMLElement>(`.navigation-row ${column}`)]);
+      }
     });
     this.on(this.input("dark-map"), "change", () => {
       this.state.inverted = this.input("dark-map").checked;
