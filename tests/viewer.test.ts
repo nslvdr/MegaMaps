@@ -182,6 +182,23 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     resize();
     viewer.fit(false);
     assert.deepEqual(state.view!.center, { x: 256, y: 256 });
+    // Modified keys belong to the browser (⌘+ zooms the page, ⌥← goes back).
+    const press = (key: string, modifiers: Partial<KeyboardEvent> = {}) => {
+      const event = new window.Event("keydown", { cancelable: true });
+      Object.defineProperties(event, Object.fromEntries(
+        Object.entries({ key, ...modifiers }).map(([name, value]) => [name, { value }]),
+      ));
+      canvas.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const fitted = structuredClone(state.view);
+    assert.equal(press("=", { metaKey: true }), false);
+    assert.equal(press("ArrowLeft", { altKey: true }), false);
+    assert.equal(press("-", { ctrlKey: true }), false);
+    assert.deepEqual(state.view, fitted);
+    assert.equal(press("ArrowLeft"), true);
+    assert.notDeepEqual(state.view, fitted);
+    viewer.fit(false);
     state.touchLocked = true;
     viewer.updateNavigation(state);
     const saved = structuredClone(state.view);

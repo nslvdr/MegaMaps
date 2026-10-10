@@ -462,6 +462,8 @@ document.addEventListener("keydown", (event) => {
   )
     return;
   if (event.key === "Escape" && !controls?.escape()) closeViewer();
+  // Leave browser shortcuts such as Find (⌘F) and reset zoom (⌘0) alone.
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
 });
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {

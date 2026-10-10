@@ -131,6 +131,8 @@ export class Viewer {
       "keydown",
       (event) => {
         if (this.navigation.touchLocked) return;
+        // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
         const camera = this.camera,
           movement = 60;
         const deltas: Record<string, [number, number]> = {
