@@ -81,6 +81,8 @@ export class ViewerControls {
   private choosing = false;
   private openSheet?: Sheet;
   private darkKind: DarkMode["kind"] = "inverted";
+  /** New places start as the kind last saved, for runs of entrances or notes. */
+  private newMarkerKind: MapMarker["kind"] = "landmark";
   constructor(
     private root: HTMLElement,
     private map: MapRecord,
@@ -270,7 +272,7 @@ export class ViewerControls {
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
-    const kind = marker?.kind ?? "landmark";
+    const kind = marker?.kind ?? this.newMarkerKind;
     this.autoMarkerName = marker
       ? ""
       : `${markerKinds[kind].label} ${this.state.markers.length + 1}`;
@@ -624,6 +626,7 @@ export class ViewerControls {
       };
       this.state.markers = this.state.markers.filter((m) => m.id !== marker.id);
       this.state.markers.push(marker);
+      if (!existing) this.newMarkerKind = marker.kind;
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");

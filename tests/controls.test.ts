@@ -845,9 +845,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
-    assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 2");
+    assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 2",
+      "a new place starts as the kind last added");
+    assert.deepEqual(previews.at(-1), { point: { x: 2000, y: 2100 }, kind: "entrance" });
     submit("marker-form");
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
+    assert.equal(state.markers.at(-1)?.kind, "entrance");
   } finally {
     controls.dispose();
     await controls.flush();
