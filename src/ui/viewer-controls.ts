@@ -589,6 +589,13 @@ export class ViewerControls {
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
     this.on(this.dialog("marker-dialog"), "close", () => this.viewer?.previewPlace?.());
+    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
+    this.on(this.el("marker-note"), "keydown", (event) => {
+      const key = event as KeyboardEvent;
+      if (key.key !== "Enter" || !(key.metaKey || key.ctrlKey) || key.isComposing) return;
+      key.preventDefault();
+      this.el<HTMLFormElement>("marker-form").requestSubmit();
+    });
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
       if (!this.markerPoint) return;

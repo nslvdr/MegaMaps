@@ -361,7 +361,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.equal(el("marker-delete").hidden, false);
     input("marker-note", "Updated note");
-    submit("marker-form");
+    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
+    (el("marker-form") as HTMLFormElement).requestSubmit = () => submit("marker-form");
+    const save = new window.Event("keydown", { cancelable: true });
+    Object.defineProperties(save, { key: { value: "Enter" }, metaKey: { value: true } });
+    el("marker-note").dispatchEvent(save);
+    assert.equal(save.defaultPrevented, true);
     assert.equal(state.markers[0]?.note, "Updated note");
     assert.equal(state.markers.length, 1);
     // Saved list renders names as text, never markup.
