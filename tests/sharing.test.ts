@@ -53,6 +53,19 @@ test("portable shares round trip annotations and optional original bytes", async
   assert.equal((await readShare(encodeShare(imageOnly, original))).manifest.markers.length, 0);
 });
 
+test("older shared bookmarks import as landmarks and re-export with the merged type", async () => {
+  const { manifest } = await fixture();
+  const legacy = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "bookmark" }] };
+  const decoded = await readShare(rawFile(legacy));
+  assert.deepEqual(decoded.manifest.markers, [{ ...manifest.markers[0]!, kind: "landmark" }]);
+  assert.deepEqual((await readShare(encodeShare(decoded.manifest))).manifest, decoded.manifest);
+
+  const destination = { ...record("legacy-bookmark-import"), fingerprint: manifest.map.fingerprint };
+  await saveMap(destination);
+  await importAnnotations(destination.id, decoded.manifest);
+  assert.deepEqual((await loadNavigation(destination.id)).markers, decoded.manifest.markers);
+});
+
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
   const bytes = new Uint8Array(3 * 1024 * 1024 + 17).fill(73);
   const blob = new Blob([bytes]);
@@ -186,8 +199,8 @@ test("replace swaps places and finished routes for the shared ones but keeps dra
   const state = defaultNavigation(map.id);
   state.dimming = 0.3;
   state.markers = [
-    { id: "mine", point: { x: 1, y: 1 }, label: "Mine", note: "", kind: "bookmark", created: 1 },
-    { id: "theirs-edited", point: { x: 2, y: 2 }, label: "Edited", note: "", kind: "bookmark", created: 1 },
+    { id: "mine", point: { x: 1, y: 1 }, label: "Mine", note: "", kind: "landmark", created: 1 },
+    { id: "theirs-edited", point: { x: 2, y: 2 }, label: "Edited", note: "", kind: "landmark", created: 1 },
   ];
   state.routes = [
     { id: "done", name: "Done", points: [{ x: 1, y: 1 }, { x: 5, y: 5 }], draft: false, created: 1 },

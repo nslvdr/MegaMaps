@@ -30,7 +30,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
   const camera = { x: 150, y: 250, scale: 0.5, rotation: Math.PI / 4 };
   overlay.draw(camera, viewport);
   const callouts = [...svg.querySelectorAll<SVGGElement>(".map-callout")];
-  assert.equal(callouts.length, 6, "every saved item has a callout");
+  assert.equal(callouts.length, state.markers.length + state.routes.length, "every saved item has a callout");
   const route = svg.querySelector<SVGGElement>('[data-layer="routes"] .map-callout')!;
   assert.equal(route.querySelector("text")!.textContent, "<Exit route>");
   assert.equal(route.style.getPropertyValue("--callout-color"), routeColor(state, "exit-route"));
@@ -74,7 +74,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
   overlay.draw(camera, viewport);
   assert.ok(svg.querySelector(".route.editing"));
   assert.ok(svg.querySelector(".moving .pin-body"), "place anchors remain available while moving");
-  assert.equal(svg.querySelectorAll(".map-callout").length, 6);
+  assert.equal(svg.querySelectorAll(".map-callout").length, state.markers.length + state.routes.length);
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   assert.ok([...svg.querySelectorAll(".map-callout")].every(callout => callout.hasAttribute("hidden")),
     "offscreen saved items do not leave detached labels in view");

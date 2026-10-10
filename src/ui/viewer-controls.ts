@@ -894,7 +894,7 @@ export class ViewerControls {
     markers.replaceChildren();
     routes.replaceChildren();
     for (const marker of this.state.markers) {
-      const kind = markerKinds[marker.kind] ?? markerKinds.bookmark;
+      const kind = markerKinds[marker.kind] ?? markerKinds.landmark;
       this.row(markers, {
         key: marker.id,
         label: marker.label,
