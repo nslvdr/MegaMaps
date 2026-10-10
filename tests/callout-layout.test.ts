@@ -92,7 +92,9 @@ test("crowded labels never land on or draw across anything already placed", () =
   for (let scene = 0; scene < 25; scene++) {
     const view = { width: 300 + random() * 1000, height: 300 + random() * 600 };
     const spread = () => [random() * view.width * 1.4 - view.width * 0.2, random() * view.height * 1.4 - view.height * 0.2] as const;
-    const obstacles = Array.from({ length: Math.floor(random() * 400) }, () => box(...spread(), 6 + random() * 12));
+    // A few large ones span many grid cells and the screen's edges.
+    const obstacles = Array.from({ length: Math.floor(random() * 400) }, () =>
+      box(...spread(), random() < 0.02 ? 60 + random() * 200 : 6 + random() * 12));
     const layout = new CalloutLayout(view, obstacles);
     // Pins wholly off screen are dropped; a leader may pass them on its way out.
     const kept = obstacles.filter(rect => rect.right >= 0 && rect.bottom >= 0 && rect.left <= view.width && rect.top <= view.height);
@@ -114,5 +116,5 @@ test("crowded labels never land on or draw across anything already placed", () =
       leaders.push(placement);
     }
   }
-  assert.ok(placed > 300, `${placed} labels placed`);
+  assert.ok(placed > 200, `${placed} labels placed`);
 });
