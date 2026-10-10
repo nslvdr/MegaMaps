@@ -416,6 +416,13 @@ home.addEventListener("drop", (event) => {
   const file = event.dataTransfer?.files[0];
   if (file && canDrop()) void importFile(file);
 });
+// Pasting a copied image or screenshot imports it too.
+document.addEventListener("paste", (event) => {
+  const file = event.clipboardData?.files[0];
+  if (!file || !canDrop()) return;
+  event.preventDefault();
+  void importFile(file);
+});
 function importImage(file: File) {
   if (importing) return;
   importing = new AbortController();
