@@ -301,6 +301,10 @@ export class Viewer {
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
     this.invalidate();
   }
+  previewPlace(place?: Pick<MapMarker, "point" | "kind">) {
+    this.overlay?.setPreview(place);
+    this.invalidate();
+  }
   // Floating controls can move while the map itself is idle.
   refreshLabels() {
     this.invalidate();

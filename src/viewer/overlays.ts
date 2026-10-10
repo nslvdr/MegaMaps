@@ -49,12 +49,18 @@ export class NavigationOverlay {
   private anchors: CalloutBounds[] = [];
   private editing?: string;
   private moving?: string;
+  private preview?: Pick<MapMarker, "point" | "kind">;
   private state?: NavigationState;
   constructor(private svg: SVGSVGElement) {}
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
   setEditing(routeId?: string, markerId?: string) {
     this.editing = routeId;
     this.moving = markerId;
+    if (this.state) this.rebuild(this.state);
+  }
+  /** An unsaved place, lifted like a moving pin while its details are chosen. */
+  setPreview(place?: Pick<MapMarker, "point" | "kind">) {
+    this.preview = place;
     if (this.state) this.rebuild(this.state);
   }
   // Search owns matching place labels, avoiding duplicate callouts at the same pin.
@@ -164,12 +170,9 @@ export class NavigationOverlay {
         );
       }
     }
-    const places = group("places");
-    for (const marker of state.markers) {
-      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
-      const glyph = glyphs[marker.kind] ?? glyphs.landmark;
-      const { element, body } = pin(places, marker.point);
-      if (marker.id === this.moving) element.classList.add("moving");
+    const placeBody = (body: SVGGElement, kind: MapMarker["kind"]) => {
+      const { color } = markerKinds[kind] ?? markerKinds.landmark;
+      const glyph = glyphs[kind] ?? glyphs.landmark;
       body.append(
         node("circle", { r: "11", fill: color, stroke: CASING, "stroke-width": "2.5" }),
         node("path", {
@@ -181,8 +184,23 @@ export class NavigationOverlay {
           "stroke-linejoin": "round",
         }),
       );
+    };
+    const places = group("places");
+    for (const marker of state.markers) {
+      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
+      const { element, body } = pin(places, marker.point);
+      if (marker.id === this.moving) element.classList.add("moving");
+      placeBody(body, marker.kind);
       const moving = marker.id === this.moving;
       label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, moving ? 18 : 12, "places", moving ? 2 : 0, marker.id);
+    }
+    // Shown even with the places layer hidden: it is what the user is adding.
+    if (this.preview) {
+      const preview = node("g", { class: "place-preview" });
+      this.svg.append(preview);
+      const { element, body } = pin(preview, this.preview.point);
+      element.classList.add("moving");
+      placeBody(body, this.preview.kind);
     }
   }
   private visible(layer: Layer) {
@@ -206,6 +224,7 @@ export class NavigationOverlay {
       for (const route of this.state?.routes ?? [])
         for (const point of route.points)
           reservePoint(point, route.id === this.editing ? 10 : 8);
+    if (this.preview) reservePoint(this.preview.point, 18);
   }
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
     const labels = layout ?? new CalloutLayout(viewport);

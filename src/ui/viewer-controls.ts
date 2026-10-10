@@ -42,7 +42,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
@@ -264,6 +264,8 @@ export class ViewerControls {
     this.el("marker-delete").hidden = !marker;
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
+    // A new place shows where it will go while it is named.
+    if (!marker) this.viewer?.previewPlace?.({ point, kind });
     showDialog(this.dialog("marker-dialog"));
   }
   private notes(open: boolean) {
@@ -568,7 +570,10 @@ export class ViewerControls {
           this.autoMarkerName = `${markerKinds[this.markerKind()].label} ${this.state.markers.length + 1}`;
           label.value = this.autoMarkerName;
         }
+        if (!this.editingMarker && this.markerPoint)
+          this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
+    this.on(this.dialog("marker-dialog"), "close", () => this.viewer?.previewPlace?.());
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
       if (!this.markerPoint) return;

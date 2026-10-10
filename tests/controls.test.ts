@@ -58,6 +58,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   // A touch lock saved by an older version must not trap the map.
   state.touchLocked = true;
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
+  const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
@@ -80,6 +81,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     refreshLabels() {
       labelRefreshes++;
+    },
+    previewPlace(place) {
+      previews.push(place && { point: place.point, kind: place.kind });
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -281,6 +285,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     tap(500, 600);
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 1");
+    assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "landmark" }, "the new pin shows where it goes");
     assert.notEqual(
       document.activeElement,
       el("marker-label"),
@@ -309,6 +314,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       radio.checked = radio === entrance;
     entrance.dispatchEvent(new window.Event("change"));
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1");
+    assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
     input("marker-label", "<Entrance>");
     click("marker-add-note");
     assert.equal(el("marker-note-field").hidden, false);
@@ -318,6 +324,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.markers[0]?.label, "<Entrance>");
     assert.equal(state.markers[0]?.kind, "entrance");
     assert.deepEqual(state.markers[0]?.point, { x: 500, y: 600 });
+    el("marker-dialog").dispatchEvent(new window.Event("close"));
+    assert.equal(previews.at(-1), undefined, "the saved pin replaces the preview");
     assert.equal(toolBar.hidden, true);
     assert.equal(el("open-add-label").textContent, "Add");
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
