@@ -646,11 +646,15 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
     click("share-saved");
     assert.equal(shares.at(-1), undefined, "the map-level action opens selection of all annotations");
+    const focusIn = (target: Element) => target.dispatchEvent(new window.Event("focusin", { bubbles: true }));
+    click("open-saved");
+    focusIn(el("route-list").querySelector(".row-more")!);
     openMenu();
     rowButton(/Rename/).dispatchEvent(new window.Event("click"));
     input("name-input", "Exit plan");
     submit("name-form");
     assert.equal(state.routes[0]?.name, "Exit plan");
+    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "focus returns to the rebuilt row");
     await controls.flush();
     assert.equal(
       (await loadNavigation("controls")).routes[0]?.name,
@@ -691,6 +695,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
+    assert.ok(focusedLast() === el("marker-list").querySelector(".row-more"), "the next row takes the deleted one's focus");
 
     // Layers hide/show and the highlight briefly reveals everything.
     assert.equal(el("layer-places-count").textContent, "1");

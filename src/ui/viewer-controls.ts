@@ -80,6 +80,10 @@ export class ViewerControls {
   /** Add was tapped: Place / Route float above the pill until one is picked. */
   private choosing = false;
   private openSheet?: Sheet;
+  // Deleting or renaming rebuilds the Saved rows, which would drop keyboard
+  // focus to the page. It returns to the same row, or after a delete to the
+  // one that took its place.
+  private savedFocus?: { key: string; part: string; index: number; element: Element };
   private darkKind: DarkMode["kind"] = "inverted";
   /** New places start as the kind last saved, for runs of entrances or notes. */
   private newMarkerKind: MapMarker["kind"] = "landmark";
@@ -118,8 +122,9 @@ export class ViewerControls {
     target: EventTarget,
     type: string,
     action: (event: Event) => void,
+    capture = false,
   ) {
-    target.addEventListener(type, action, { signal: this.controller.signal });
+    target.addEventListener(type, action, { signal: this.controller.signal, capture });
   }
   private click(id: string, action: () => void) {
     this.on(this.el(id), "click", action);
@@ -484,6 +489,26 @@ export class ViewerControls {
         if (!typeToJump(key, rows)) stepFocus(key, rows);
       }
     });
+    this.on(this.root, "focusin", (event) => {
+      const target = event.target as Element;
+      const row = target.closest?.<HTMLElement>("#sheet-saved .navigation-row");
+      if (row)
+        this.savedFocus = {
+          key: row.dataset.row!,
+          part: target.closest(".row-more") ? ".row-more" : ".navigation-jump",
+          index: [...this.el("sheet-saved").querySelectorAll(".navigation-row")].indexOf(row),
+          element: target,
+        };
+      // Its menu and dialogs hand focus back to the row.
+      else if (!target.closest?.(".row-popover, dialog")) this.savedFocus = undefined;
+    });
+    // Tapping elsewhere leaves the page focused on purpose.
+    this.on(document, "pointerdown", (event) => {
+      if (!(event.target as Element | null)?.closest?.(".navigation-row, .row-popover, dialog"))
+        this.savedFocus = undefined;
+    });
+    // A dialog hands focus back to its opener, which may be gone.
+    this.on(this.root, "close", () => this.restoreSavedFocus(), true);
     this.on(this.input("dark-map"), "change", () => {
       this.state.inverted = this.input("dark-map").checked;
       this.changed();
@@ -877,6 +902,19 @@ export class ViewerControls {
     };
     if (open) showMenu();
   }
+  private restoreSavedFocus() {
+    const saved = this.savedFocus;
+    if (!saved || this.openSheet !== "saved") return;
+    // Focus left in a just-closed dialog is about to fall to the page too.
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest("dialog:not([open])")) return;
+    const rows = this.el("sheet-saved").querySelectorAll<HTMLElement>(".navigation-row");
+    const row = [...rows].find((row) => row.dataset.row === saved.key) ??
+      rows[Math.min(saved.index, rows.length - 1)];
+    const target = saved.element.isConnected ? saved.element as HTMLElement
+      : row?.querySelector<HTMLElement>(saved.part) ?? this.el("close-sheet");
+    target.focus({ preventScroll: true });
+  }
   // Dismiss without rebuilding rows: pointerdown must not remove the pending click target.
   private closeRowMenu(returnFocus = false) {
     if (!this.rowMenu && !this.rowPopover) return;
@@ -1077,6 +1115,7 @@ export class ViewerControls {
       this.root
         .querySelectorAll<HTMLButtonElement>(".row-popover button")
         [focusedMenuIndex]?.focus({ preventScroll: true });
+    this.restoreSavedFocus();
     this.renderView();
     this.renderTool();
   }
