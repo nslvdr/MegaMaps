@@ -202,6 +202,8 @@ export class NavigationOverlay {
       element.classList.add("moving");
       placeBody(body, this.preview.kind);
     }
+    // Higher priority claims space first; sorted here, not on every frame.
+    this.callouts.sort((a, b) => b.priority - a.priority);
   }
   private visible(layer: Layer) {
     return !!this.svg.parentElement?.classList.contains("spotlight") ||
@@ -254,7 +256,7 @@ export class NavigationOverlay {
       pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
       pin.element.style.display = outside ? "none" : "";
     }
-    for (const { callout, point, padding, layer, markerId } of [...this.callouts].sort((a, b) => b.priority - a.priority)) {
+    for (const { callout, point, padding, layer, markerId } of this.callouts) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.element.setAttribute("hidden", "");
         continue;
