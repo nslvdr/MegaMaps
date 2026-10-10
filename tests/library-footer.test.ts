@@ -46,7 +46,9 @@ test("footer reports live and offline availability independently and keeps the l
   const previous = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
   // Use DOM events without starting real polling or opening a browser.
   Object.defineProperty(window, "setInterval", { value: () => 0, configurable: true });
+  let requests = 0;
   const globals = { document, window, navigator: browser, fetch: async () => {
+    requests++;
     if (!reachable) throw new TypeError("Host unavailable");
     return Response.json({ app: "mega-maps" });
   } };
@@ -75,6 +77,17 @@ test("footer reports live and offline availability independently and keeps the l
     assert.equal(text("internet-status"), "Internet unconfirmed");
     assert.equal(text("app-availability"), "Live app unavailable");
     assert.equal(text("offline-availability"), "Available offline");
+
+    // While a map is open the footer is hidden: connection changes wait.
+    home.hidden = true;
+    const before = requests;
+    window.dispatchEvent(new window.Event("online"));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(requests, before);
+    home.hidden = false;
+    window.dispatchEvent(new window.Event("online"));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(requests, before + 1);
   } finally {
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
