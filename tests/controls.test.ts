@@ -268,7 +268,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Panning calls this every frame; an unchanged angle leaves the DOM alone.
     const shown = el("rotation-value").firstChild;
     controls.options().onView();
-    assert.equal(el("rotation-value").firstChild, shown);
+    assert.ok(el("rotation-value").firstChild === shown, "readout rewritten");
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
     assert.equal(el("rotation-controls").hidden, true);
