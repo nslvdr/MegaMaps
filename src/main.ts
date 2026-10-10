@@ -187,6 +187,20 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
     );
   return work();
 }
+let leavingMap = false;
+// Back acts like Escape: it closes a panel or tool first, then the map.
+window.addEventListener("popstate", (event) => {
+  const wanted = (event.state as { map?: string } | null)?.map;
+  if (leavingMap) leavingMap = false;
+  else if (currentMap && !wanted) {
+    if (document.querySelector("dialog[open]") || controls?.escape())
+      history.pushState({ map: currentMap.id }, "");
+    else closeViewer();
+  } else if (!currentMap && wanted) {
+    const map = maps.find((map) => map.id === wanted);
+    if (map) void openMap(map);
+  }
+});
 function closeViewer() {
   openVersion++;
   if (controls) pendingViewSave = controls.dispose();
@@ -197,6 +211,11 @@ function closeViewer() {
   void setLastMap(null).catch((error) =>
     showMessage("Could not save home view", String(error)),
   );
+  // Drop the map's history entry so Back from home leaves the app as usual.
+  if (history.state?.map) {
+    leavingMap = true;
+    history.back();
+  }
   viewerSection.hidden = true;
   home.hidden = false;
   void refreshFooter();
@@ -212,6 +231,9 @@ async function openMap(map: MapRecord) {
   viewer?.dispose();
   viewer = undefined;
   currentMap = map;
+  // An open map gets its own history entry, so the system Back returns home.
+  if (history.state?.map) history.replaceState({ map: map.id }, "");
+  else history.pushState({ map: map.id }, "");
   home.hidden = true;
   viewerSection.hidden = false;
   document.body.classList.add("viewing");

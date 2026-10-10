@@ -125,7 +125,7 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 - **Top left:** **Back** to the library.
 - **Bottom pill:** **Saved** (routes, places) · **View** (dark map, brightness, rotation, layers, highlight) · **Add** (place, route) · **Lock** (map rotation lock; orange while locked).
 
-**Saved** and **View** open a panel just above the pill, and their button stays highlighted while it is open: tap another button to switch, or the same button, the map, Close or Escape to dismiss (you can also swipe the panel header down). Keyboard: arrows pan (Shift+arrow pans half a screen), `+`/`−` zoom, `0` or `F` fits; Escape closes the panel or the Add choice, then finishes the current tool, then returns home. The viewer supports native resolution and up to 400% CSS zoom; native-level pixels are not interpolated when enlarged.
+**Saved** and **View** open a panel just above the pill, and their button stays highlighted while it is open: tap another button to switch, or the same button, the map, Close or Escape to dismiss (you can also swipe the panel header down). Keyboard: arrows pan (Shift+arrow pans half a screen), `+`/`−` zoom, `0` or `F` fits; Escape closes the panel or the Add choice, then finishes the current tool, then returns home. The system Back button or gesture does the same. The viewer supports native resolution and up to 400% CSS zoom; native-level pixels are not interpolated when enlarged.
 
 ### Cave and quarry tools
 
