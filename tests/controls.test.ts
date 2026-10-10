@@ -444,6 +444,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
     assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
+    // An application role names the map and hands it the arrow keys from screen readers.
+    assert.equal(el("map-canvas").getAttribute("role"), "application");
+    assert.match(el("map-canvas").getAttribute("aria-label")!, /^Map: .*Arrows pan/);
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
     root
