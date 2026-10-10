@@ -209,8 +209,12 @@ export class Viewer {
       2,
       Math.sqrt(4_000_000 / (this.width * this.height)),
     );
-    this.canvas.width = Math.round(this.width * this.dpr);
-    this.canvas.height = Math.round(this.height * this.dpr);
+    const width = Math.round(this.width * this.dpr),
+      height = Math.round(this.height * this.dpr);
+    // Assigning a size clears the canvas, even when it is unchanged.
+    const cleared = this.canvas.width !== width || this.canvas.height !== height;
+    if (this.canvas.width !== width) this.canvas.width = width;
+    if (this.canvas.height !== height) this.canvas.height = height;
     if (wasFit) this.fit(false);
     else
       this.setCamera(
@@ -221,6 +225,15 @@ export class Viewer {
           this.camera.rotation ?? 0,
         ),
       );
+    // Repaint before the browser shows the cleared canvas: the dark filter
+    // turns it light grey until the next frame, which a busy thread delays.
+    if (cleared) this.drawNow();
+  }
+  private drawNow() {
+    if (this.disposed) return;
+    cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.draw(performance.now());
   }
   private async loadBase() {
     try {
