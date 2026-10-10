@@ -65,6 +65,33 @@ initLibraryKeys(grid, {
     if (map) confirmDelete(map);
   },
 });
+// Renaming or deleting rebuilds the cards, which would drop keyboard focus to
+// the top of the page. It returns to the same map, or after a delete to the
+// one that took its place. Mouse and touch use is left alone.
+let libraryFocus: { id: string; part: string; index: number; element: Element } | undefined;
+grid.addEventListener("focusin", (event) => {
+  const target = event.target as Element, card = target.closest<HTMLElement>(".map-card");
+  libraryFocus = card && target.matches(":focus-visible")
+    ? {
+        id: card.dataset.map!,
+        part: target.closest(".map-more") ? ".map-more" : ".map-open",
+        index: [...grid.querySelectorAll(".map-card")].indexOf(card),
+        element: target,
+      }
+    : undefined;
+});
+function restoreLibraryFocus() {
+  if (home.hidden || !libraryFocus || libraryFocus.element.isConnected) return;
+  // Focus left in a just-closed dialog is about to fall to the page too.
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest("dialog:not([open])")) return;
+  const cards = grid.querySelectorAll<HTMLElement>(".map-card");
+  const card = grid.querySelector(`[data-map="${libraryFocus.id}"]`) ??
+    cards[Math.min(libraryFocus.index, cards.length - 1)];
+  (card?.querySelector<HTMLElement>(libraryFocus.part) ?? element("import-open")).focus({ preventScroll: true });
+}
+// A dialog hands focus back to its opener, which a rebuild may have replaced.
+document.addEventListener("close", restoreLibraryFocus, true);
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
@@ -428,6 +455,7 @@ async function refresh() {
           "Preview unavailable";
       });
   }
+  restoreLibraryFocus();
 }
 const importDialog = element<HTMLDialogElement>("import-dialog");
 element("import-open").addEventListener("click", () => showDialog(importDialog));
