@@ -118,7 +118,7 @@ The original remains locally stored. Metadata is committed as ready **only after
 
 The main-menu footer shows the release date of the loaded version, internet connectivity, live-site availability and verified offline-shell readiness. A fresh request checks the live site; cached files cannot produce a successful online check. When the browser reports a network but the site cannot be reached, internet connectivity is shown as unconfirmed. Offline readiness covers application files. Maps are stored locally when import completes; the footer does not check map tiles.
 
-Drag to pan; pinch to zoom. **Double-tap and drag** down/up zooms with one thumb; a plain double tap zooms in (at deep zoom it returns to fit). **Long-press** the map to drop a place. Wheel/trackpad zoom is centered on the cursor.
+Drag to pan; pinch to zoom. **Double-tap and drag** down/up zooms with one thumb; a plain double tap zooms in (at deep zoom it returns to fit) and a **two-finger tap** zooms out. **Long-press** the map to drop a place. Wheel/trackpad zoom is centered on the cursor.
 
 The map fills the screen. Fingers move it, so there are no zoom or pan buttons; only a few controls float over it:
 

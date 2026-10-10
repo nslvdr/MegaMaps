@@ -162,6 +162,36 @@ test("double-tap and drag zooms with one finger around the tapped point", () => 
   assert.equal(h.animations(), 1);
   h.interactions.dispose();
 });
+test("a two-finger tap zooms out around its center; a pinch does not", () => {
+  Object.defineProperty(globalThis, "cancelAnimationFrame", {
+    value: () => {},
+    configurable: true,
+  });
+  const canvas = new Canvas(),
+    h = host(canvas);
+  const center = screenToWorld(h.camera(), { x: 150, y: 100 });
+  emit(canvas, "pointerdown", pointer(1, 100, 100));
+  emit(canvas, "pointerdown", pointer(2, 200, 100));
+  emit(canvas, "pointerup", pointer(1, 100, 100));
+  emit(canvas, "pointerup", pointer(2, 200, 100));
+  assert.equal(h.animations(), 1);
+  assert.ok(Math.abs(h.camera().scale - 1 / 2.5) < 1e-9);
+  const after = screenToWorld(h.camera(), { x: 150, y: 100 });
+  assert.ok(Math.abs(after.x - center.x) < 1e-9 && Math.abs(after.y - center.y) < 1e-9);
+  emit(canvas, "pointerdown", pointer(1, 100, 100));
+  emit(canvas, "pointerdown", pointer(2, 200, 100));
+  emit(canvas, "pointermove", pointer(2, 260, 100));
+  emit(canvas, "pointerup", pointer(1, 100, 100));
+  emit(canvas, "pointerup", pointer(2, 260, 100));
+  assert.equal(h.animations(), 1, "a pinch is not a tap");
+  // A single tap afterwards is still a tap, not a leftover pair.
+  emit(canvas, "pointerdown", pointer(1, 300, 300));
+  emit(canvas, "pointerup", pointer(1, 300, 300));
+  emit(canvas, "pointerdown", pointer(1, 300, 300));
+  emit(canvas, "pointerup", pointer(1, 300, 300));
+  assert.equal(h.animations(), 2, "double tap still zooms in");
+  h.interactions.dispose();
+});
 test("long press fires once without panning; moving or editing cancels it", async () => {
   Object.defineProperty(globalThis, "cancelAnimationFrame", {
     value: () => {},
