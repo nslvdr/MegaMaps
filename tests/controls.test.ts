@@ -269,6 +269,21 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const shown = el("rotation-value").firstChild;
     controls.options().onView();
     assert.ok(el("rotation-value").firstChild === shown, "readout rewritten");
+    // Steps land on the 15° grid, so a few taps always reach north.
+    const degrees = () => Math.round((rotation * 180) / Math.PI);
+    state.view = { ...state.view, rotation: (22 * Math.PI) / 180 };
+    click("rotate-left");
+    assert.equal(degrees(), 15);
+    click("rotate-right");
+    assert.equal(degrees(), 30);
+    // The slider snaps to north near either end.
+    const angle = el("rotation-angle") as HTMLInputElement;
+    for (const [value, expected] of [["357", 0], ["3", 0], ["40", 40]] as const) {
+      angle.value = value;
+      angle.dispatchEvent(new window.Event("input"));
+      assert.equal(degrees(), expected);
+    }
+    assert.equal(angle.value, "40");
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
     assert.equal(el("rotation-controls").hidden, true);

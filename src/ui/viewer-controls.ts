@@ -479,17 +479,23 @@ export class ViewerControls {
           : "Rotation unlocked · twist with two fingers",
       );
     });
-    this.on(this.input("rotation-angle"), "input", () =>
-      this.viewer?.rotateTo(
-        (Number(this.input("rotation-angle").value) * Math.PI) / 180,
-      ),
-    );
-    this.click("rotate-left", () =>
-      this.viewer?.rotateTo((this.state.view?.rotation ?? 0) - Math.PI / 12),
-    );
-    this.click("rotate-right", () =>
-      this.viewer?.rotateTo((this.state.view?.rotation ?? 0) + Math.PI / 12),
-    );
+    this.on(this.input("rotation-angle"), "input", () => {
+      const angle = this.input("rotation-angle");
+      // North sits at both ends of the slider; a near miss snaps to it.
+      const degrees = Number(angle.value);
+      if (degrees <= 4 || degrees >= 356) angle.value = "0";
+      this.viewer?.rotateTo((Number(angle.value) * Math.PI) / 180);
+    });
+    // Steps land on the 15° grid, so a few taps always reach north again.
+    const step = (direction: 1 | -1) => {
+      const steps = ((this.state.view?.rotation ?? 0) * 12) / Math.PI;
+      const next = direction > 0
+        ? Math.floor(steps + 1e-6) + 1
+        : Math.ceil(steps - 1e-6) - 1;
+      this.viewer?.rotateTo((next * Math.PI) / 12);
+    };
+    this.click("rotate-left", () => step(-1));
+    this.click("rotate-right", () => step(1));
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${level * 100}`);
       this.on(input, "change", () => {
