@@ -256,13 +256,18 @@ async function openMap(map: MapRecord) {
   viewer?.dispose();
   viewer = undefined;
   if (!home.hidden) libraryScroll = window.scrollY;
+  const fromLibrary = home.contains(document.activeElement);
   currentMap = map;
   showTitle();
   // An open map gets its own history entry, so the system Back returns home.
   if (history.state?.map) history.replaceState({ map: map.id }, "");
   else history.pushState({ map: map.id }, "");
-  home.hidden = true;
   viewerSection.hidden = false;
+  // The keyboard carries on from the map, so arrows pan and +/− zoom straight
+  // away. Moving focus before the library hides its button keeps the focus
+  // ring to keyboard use.
+  if (fromLibrary) element("map-canvas").focus({ preventScroll: true });
+  home.hidden = true;
   document.body.classList.add("viewing");
   element("viewer-error").hidden = true;
   try {
