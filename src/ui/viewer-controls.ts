@@ -97,7 +97,6 @@ export class ViewerControls {
       DEFAULT_DIMMING,
     );
     this.bind();
-    this.el("share-saved").hidden = !onShare;
     this.sheet(undefined);
     this.render();
   }
@@ -201,6 +200,7 @@ export class ViewerControls {
     this.el("sheet").style.transform = "";
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
+    this.el("share-saved").hidden = name !== "saved" || !this.onShare;
     for (const sheet of sheets) {
       const panel = this.el(`sheet-${sheet}`);
       panel.hidden = sheet !== name;
@@ -705,7 +705,7 @@ export class ViewerControls {
     this.el<HTMLButtonElement>("tool-done").disabled =
       this.tool === "route" && count < 2;
   }
-  // Saved rows: tap to jump; the ⋯ button opens that row's actions underneath.
+  // Saved list items: tap to jump; ⋯ opens actions outside the scrolling list.
   private row(
     container: HTMLElement,
     options: {
@@ -722,7 +722,7 @@ export class ViewerControls {
       }[];
     },
   ) {
-    const row = document.createElement("div");
+    const row = document.createElement("li");
     row.className = "navigation-row";
     row.dataset.row = options.key;
     const main = document.createElement("div");
@@ -737,7 +737,9 @@ export class ViewerControls {
     icon.innerHTML = options.icon;
     text.className = "row-text";
     title.textContent = options.label;
+    title.title = options.label;
     description.textContent = options.detail;
+    description.title = options.detail;
     text.append(title, description);
     button.append(icon, text);
     button.addEventListener("click", () => {
@@ -978,10 +980,10 @@ export class ViewerControls {
       [routes, "No routes yet. Use Add › Route, then tap along passages."],
     ] as const)
       if (!container.childElementCount && empty) {
-        const p = document.createElement("p");
-        p.className = "empty-list";
-        p.textContent = empty;
-        container.append(p);
+        const item = document.createElement("li");
+        item.className = "empty-list";
+        item.textContent = empty;
+        container.append(item);
       }
     // Measure only after all rows are back in the list and the panel has its final height.
     this.positionRowMenu();

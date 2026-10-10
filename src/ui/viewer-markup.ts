@@ -2,7 +2,7 @@ import { icons } from "./icons";
 import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, markerKinds } from "../viewer/navigation";
 import { placeIcon } from "./place-icon";
 
-// Panels are stacked cards of rows: icon, label, then the row's control.
+// View settings use cards; Saved uses compact inset lists with row actions.
 const rowIcon = (icon: string, tint = "") =>
   `<i class="row-icon ${tint}">${icon}</i>`;
 // The whole icon tile toggles its layer through a native, keyboard-accessible input.
@@ -50,7 +50,7 @@ export const viewerMarkup = `
 <button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" tabindex="-1" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
   <div class="sheet-grabber" id="sheet-grabber"><span></span></div>
-  <div class="sheet-header"><h2 id="sheet-title"></h2><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
+  <div class="sheet-header"><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-search" data-panel="search" data-title="Search this map" hidden>
       <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><span id="search-count" class="search-count" hidden></span></div>
@@ -72,11 +72,10 @@ export const viewerMarkup = `
       <button id="spotlight" class="panel-action spotlight-action">${icons.sparkle}<span>Highlight</span></button>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>
-      <button id="share-saved" class="panel-action">${icons.share}<span>Share map or selected items</span></button>
-      <h3 class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>
-      <div id="route-list" class="panel-card navigation-list"></div>
-      <h3 class="section-title places">${icons.pin}<span>Places</span><small id="saved-places-count"></small></h3>
-      <div id="marker-list" class="panel-card navigation-list"></div>
+      <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>
+      <ul id="route-list" class="navigation-list" aria-labelledby="saved-routes-title"></ul>
+      <h3 id="saved-places-title" class="section-title places">${icons.pin}<span>Places</span><small id="saved-places-count"></small></h3>
+      <ul id="marker-list" class="navigation-list" aria-labelledby="saved-places-title"></ul>
     </div>
   </div>
 </section>

@@ -1426,7 +1426,7 @@ dialog form > label.place-note {
   overflow-wrap: anywhere;
 }
 
-/* View and Saved: stacked cards of rows (icon · label · control). */
+/* View settings: stacked cards of rows (icon · label · control). */
 .panel-card {
   border-radius: var(--radius-md);
   background: var(--fill);
@@ -1706,7 +1706,49 @@ input[type="range"] {
   background: color-mix(in srgb, var(--c) 18%, transparent);
 }
 
-/* Saved: a Routes section, then a Places section. */
+/* Saved: compact inset groups with full-size touch targets. */
+.navigation-list {
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
+  border-radius: 13px;
+  background: #101214;
+}
+.navigation-row + .navigation-row {
+  border-top: 1px solid var(--line);
+}
+.sheet[data-panel="saved"] .section-title {
+  margin: 12px 2px 5px;
+  font-size: 11px;
+}
+.sheet[data-panel="saved"] .sheet-header {
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.sheet[data-panel="saved"] .sheet-header h2 {
+  font-size: 19px;
+}
+.sheet[data-panel="saved"] .sheet-close,
+.sheet-share {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  background: none;
+}
+.sheet[data-panel="saved"] .sheet-close::after {
+  content: none;
+}
+.sheet-share {
+  color: var(--neon-saved);
+  border-radius: 50%;
+}
+.sheet-share svg {
+  width: 20px;
+  height: 20px;
+}
 .section-title {
   display: flex;
   align-items: center;
@@ -1731,16 +1773,17 @@ input[type="range"] {
 }
 .row-main {
   gap: 4px;
-  padding: 0 6px 0 0;
+  min-height: 48px;
+  padding: 0;
 }
 .navigation-jump {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 60px;
-  padding: 8px 0 8px 14px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 5px 0;
   background: none;
   text-align: left;
 }
@@ -1749,11 +1792,27 @@ input[type="range"] {
   opacity: 0.7;
 }
 .navigation-jump .row-icon {
-  background: var(--fill-strong);
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: #ffffff0a;
 }
 .navigation-jump .row-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+}
+.navigation-jump .row-text strong,
+.navigation-jump .row-text small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.navigation-jump .row-text strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+.navigation-jump .row-text small {
+  font-size: 11px;
 }
 .row-more {
   display: grid;
@@ -1837,8 +1896,8 @@ input[type="range"] {
 }
 .empty-list {
   margin: 0;
-  padding: 18px;
-  text-align: center;
+  padding: 10px 4px;
+  text-align: left;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.5;
@@ -2096,4 +2155,3 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
 .share-segments .share-segment-danger { --c: var(--danger); }
 .share-segments label:has(input:focus-visible) { outline: 2px solid var(--c); outline-offset: 2px; }
 dialog #receive-note { margin: 10px 2px 0; }
-#share-saved { margin-bottom: 18px; }
