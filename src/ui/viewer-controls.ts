@@ -18,6 +18,7 @@ import {
   type PlannedRoute,
 } from "../viewer/navigation";
 import { icons } from "./icons";
+import { plural } from "./format";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
@@ -319,7 +320,7 @@ export class ViewerControls {
         this.toast(`${route.name} unchanged`);
       } else if (route.points.length >= 2) {
         route.draft = false;
-        this.toast(`${route.name} saved · ${route.points.length} points`);
+        this.toast(`${route.name} saved · ${plural(route.points.length, "point")}`);
       } else {
         this.state.routes = this.state.routes.filter((r) => r.id !== route.id);
         if (route.points.length)
@@ -703,7 +704,7 @@ export class ViewerControls {
       ],
       marker: ["New place", "Tap the map where it goes"],
       route: [
-        `${route?.name ?? "Route"} · ${count} point${count === 1 ? "" : "s"}`,
+        `${route?.name ?? "Route"} · ${plural(count, "point")}`,
         count ? "Tap to add, drag points to adjust" : "Tap where the route starts",
       ],
     };
@@ -946,7 +947,7 @@ export class ViewerControls {
       this.row(routes, {
         key: route.id,
         label: route.name,
-        detail: `${route.points.length} points${route.draft ? " · unfinished" : ""}`,
+        detail: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
         icon: icons.route.replace(
           "<svg ",
           `<svg style="color:${routeColor(this.state, route.id)}" `,
