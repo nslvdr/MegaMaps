@@ -42,19 +42,25 @@ interface PathItem {
 // Text is assigned through textContent; imported/user names never become markup.
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
 export class NavigationOverlay {
-  private points: { element: SVGGElement; point: Point }[] = [];
+  private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
   private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string }[] = [];
   private searchMarkers = new Set<string>();
   private anchors: CalloutBounds[] = [];
   private editing?: string;
   private moving?: string;
+  private preview?: Pick<MapMarker, "point" | "kind">;
   private state?: NavigationState;
   constructor(private svg: SVGSVGElement) {}
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
   setEditing(routeId?: string, markerId?: string) {
     this.editing = routeId;
     this.moving = markerId;
+    if (this.state) this.rebuild(this.state);
+  }
+  /** An unsaved place, lifted like a moving pin while its details are chosen. */
+  setPreview(place?: Pick<MapMarker, "point" | "kind">) {
+    this.preview = place;
     if (this.state) this.rebuild(this.state);
   }
   // Search owns matching place labels, avoiding duplicate callouts at the same pin.
@@ -164,12 +170,9 @@ export class NavigationOverlay {
         );
       }
     }
-    const places = group("places");
-    for (const marker of state.markers) {
-      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
-      const glyph = glyphs[marker.kind] ?? glyphs.landmark;
-      const { element, body } = pin(places, marker.point);
-      if (marker.id === this.moving) element.classList.add("moving");
+    const placeBody = (body: SVGGElement, kind: MapMarker["kind"]) => {
+      const { color } = markerKinds[kind] ?? markerKinds.landmark;
+      const glyph = glyphs[kind] ?? glyphs.landmark;
       body.append(
         node("circle", { r: "11", fill: color, stroke: CASING, "stroke-width": "2.5" }),
         node("path", {
@@ -181,9 +184,26 @@ export class NavigationOverlay {
           "stroke-linejoin": "round",
         }),
       );
+    };
+    const places = group("places");
+    for (const marker of state.markers) {
+      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
+      const { element, body } = pin(places, marker.point);
+      if (marker.id === this.moving) element.classList.add("moving");
+      placeBody(body, marker.kind);
       const moving = marker.id === this.moving;
       label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, moving ? 18 : 12, "places", moving ? 2 : 0, marker.id);
     }
+    // Shown even with the places layer hidden: it is what the user is adding.
+    if (this.preview) {
+      const preview = node("g", { class: "place-preview" });
+      this.svg.append(preview);
+      const { element, body } = pin(preview, this.preview.point);
+      element.classList.add("moving");
+      placeBody(body, this.preview.kind);
+    }
+    // Higher priority claims space first; sorted here, not on every frame.
+    this.callouts.sort((a, b) => b.priority - a.priority);
   }
   private visible(layer: Layer) {
     return !!this.svg.parentElement?.classList.contains("spotlight") ||
@@ -206,6 +226,7 @@ export class NavigationOverlay {
       for (const route of this.state?.routes ?? [])
         for (const point of route.points)
           reservePoint(point, route.id === this.editing ? 10 : 8);
+    if (this.preview) reservePoint(this.preview.point, 18);
   }
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
     const labels = layout ?? new CalloutLayout(viewport);
@@ -214,16 +235,23 @@ export class NavigationOverlay {
       "viewBox",
       `0 0 ${viewport.width} ${viewport.height}`,
     );
+    // A route's five paths share its points: casing, line and flow draw one
+    // outline and both dot layers another, so each is built once per frame.
+    let points: Point[] | undefined, line = "", dots = "";
     for (const path of this.paths) {
-      let d = "";
-      for (const [i, point] of path.points.entries()) {
-        const p = worldToScreen(camera, point);
-        const x = p.x.toFixed(1),
-          y = p.y.toFixed(1);
-        // Zero-length round-capped segments render as vertex dots.
-        d += path.dots ? `M${x},${y}h0` : `${i ? "L" : "M"}${x},${y}`;
+      if (path.points !== points) {
+        points = path.points;
+        line = dots = "";
+        for (const [i, point] of points.entries()) {
+          const p = worldToScreen(camera, point);
+          const x = p.x.toFixed(1),
+            y = p.y.toFixed(1);
+          line += `${i ? "L" : "M"}${x},${y}`;
+          // Zero-length round-capped segments render as vertex dots.
+          dots += `M${x},${y}h0`;
+        }
       }
-      path.element.setAttribute("d", d);
+      path.element.setAttribute("d", path.dots ? dots : line);
     }
     for (const pin of this.points) {
       const p = worldToScreen(camera, pin.point);
@@ -232,15 +260,23 @@ export class NavigationOverlay {
         p.y < -100 ||
         p.x > viewport.width + 100 ||
         p.y > viewport.height + 100;
-      pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
-      pin.element.style.display = outside ? "none" : "";
+      if (outside !== pin.outside) {
+        pin.outside = outside;
+        pin.element.style.display = outside ? "none" : "";
+      }
+      if (!outside) pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
     }
-    for (const { callout, point, padding, layer, markerId } of [...this.callouts].sort((a, b) => b.priority - a.priority)) {
+    for (const { callout, point, padding, layer, markerId } of this.callouts) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.element.setAttribute("hidden", "");
         continue;
       }
       const p = worldToScreen(camera, point);
+      // Anchors reach at most 36px from a pin, so one this far out stays off screen.
+      if (p.x < -40 || p.y < -40 || p.x > viewport.width + 40 || p.y > viewport.height + 40) {
+        callout.element.setAttribute("hidden", "");
+        continue;
+      }
       let bounds = {
         left: p.x - padding, right: p.x + padding,
         top: p.y - padding, bottom: p.y + padding,

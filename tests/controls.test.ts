@@ -58,6 +58,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   // A touch lock saved by an older version must not trap the map.
   state.touchLocked = true;
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
+  const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
@@ -80,6 +81,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     refreshLabels() {
       labelRefreshes++;
+    },
+    previewPlace(place) {
+      previews.push(place && { point: place.point, kind: place.kind });
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -162,7 +166,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("sheet-display").hidden, true);
     assert.equal(el("sheet-title").textContent, "Saved");
     assert.equal(el("share-saved").hidden, false);
-    assert.equal(el("share-saved").parentElement, el("sheet-title").parentElement);
+    assert.ok(el("share-saved").parentElement === el("sheet-title").parentElement, "share sits beside the title");
     assert.equal(el("share-saved").getAttribute("aria-label"), "Share map or selected items");
     for (const id of ["route-list", "marker-list"]) {
       const list = el(id);
@@ -257,9 +261,38 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("rotation-controls").hidden, false);
     click("rotate-right");
     assert.ok(Math.abs(rotation - Math.PI / 12) < 1e-9);
+    state.view = { center: { x: 0, y: 0 }, scale: 1, rotation: Math.PI / 12 };
+    controls.options().onView();
+    assert.equal(el("rotation-value").textContent, "15°");
+    assert.equal((el("rotation-angle") as HTMLInputElement).value, "15");
+    // Panning calls this every frame; an unchanged angle leaves the DOM alone.
+    const shown = el("rotation-value").firstChild;
+    controls.options().onView();
+    assert.ok(el("rotation-value").firstChild === shown, "readout rewritten");
+    // Steps land on the 15° grid, so a few taps always reach north.
+    const degrees = () => Math.round((rotation * 180) / Math.PI);
+    state.view = { ...state.view, rotation: (22 * Math.PI) / 180 };
+    click("rotate-left");
+    assert.equal(degrees(), 15);
+    click("rotate-right");
+    assert.equal(degrees(), 30);
+    // The slider snaps to north near either end.
+    const angle = el("rotation-angle") as HTMLInputElement;
+    for (const [value, expected] of [["357", 0], ["3", 0], ["40", 40]] as const) {
+      angle.value = value;
+      angle.dispatchEvent(new window.Event("input"));
+      assert.equal(degrees(), expected);
+    }
+    assert.equal(angle.value, "40");
+    // The [ and ] keys step like the buttons, but only while unlocked.
+    state.view = { ...state.view, rotation: (40 * Math.PI) / 180 };
+    assert.equal(controls.rotateStep(1), true);
+    assert.equal(degrees(), 45);
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
     assert.equal(el("rotation-controls").hidden, true);
+    assert.equal(controls.rotateStep(-1), false);
+    assert.equal(degrees(), 45);
 
     // Highlight with nothing saved explains instead of animating.
     click("spotlight");
@@ -281,6 +314,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     tap(500, 600);
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 1");
+    assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "landmark" }, "the new pin shows where it goes");
     assert.notEqual(
       document.activeElement,
       el("marker-label"),
@@ -309,6 +343,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       radio.checked = radio === entrance;
     entrance.dispatchEvent(new window.Event("change"));
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1");
+    assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
     input("marker-label", "<Entrance>");
     click("marker-add-note");
     assert.equal(el("marker-note-field").hidden, false);
@@ -318,6 +353,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.markers[0]?.label, "<Entrance>");
     assert.equal(state.markers[0]?.kind, "entrance");
     assert.deepEqual(state.markers[0]?.point, { x: 500, y: 600 });
+    el("marker-dialog").dispatchEvent(new window.Event("close"));
+    assert.equal(previews.at(-1), undefined, "the saved pin replaces the preview");
     assert.equal(toolBar.hidden, true);
     assert.equal(el("open-add-label").textContent, "Add");
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
@@ -330,7 +367,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.equal(el("marker-delete").hidden, false);
     input("marker-note", "Updated note");
-    submit("marker-form");
+    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
+    (el("marker-form") as HTMLFormElement).requestSubmit = () => submit("marker-form");
+    const save = new window.Event("keydown", { cancelable: true });
+    Object.defineProperties(save, { key: { value: "Enter" }, metaKey: { value: true } });
+    el("marker-note").dispatchEvent(save);
+    assert.equal(save.defaultPrevented, true);
     assert.equal(state.markers[0]?.note, "Updated note");
     assert.equal(state.markers.length, 1);
     // Saved list renders names as text, never markup.
@@ -338,7 +380,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("saved-places-count").textContent, "1");
     assert.equal(el("marker-list").querySelector(".navigation-row")?.tagName, "LI");
     // Saved is one list: a Routes section then a Places section, no tabs.
-    assert.equal(document.querySelector("#sheet-saved [role=tab]"), null);
+    assert.ok(!document.querySelector("#sheet-saved [role=tab]"), "no tabs in Saved");
     assert.equal(
       el("marker-list").querySelector(".row-icon svg circle")?.getAttribute("fill"),
       "#7dff8a",
@@ -401,6 +443,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "the same tap can still jump to the place",
     );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
+    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
+    // An application role names the map and hands it the arrow keys from screen readers.
+    assert.equal(el("map-canvas").getAttribute("role"), "application");
+    assert.match(el("map-canvas").getAttribute("aria-label")!, /^Map: .*Arrows pan/);
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
     root
@@ -461,6 +507,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("tool-actions").hidden, false);
     assert.equal(done.disabled, true);
     assert.equal((el("route-undo") as HTMLButtonElement).disabled, true);
+    assert.equal(controls.undo(), false, "keyboard undo has nothing to take back");
     tap(900, 1000);
     tap(1500, 1700);
     assert.equal(done.disabled, false);
@@ -480,7 +527,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // An interrupted drag leaves no Undo step behind.
     options.onDragStart?.();
     options.onDrop?.(false);
-    click("route-undo");
+    assert.equal(controls.undo(), true, "⌘Z works like the Undo button");
     assert.equal(state.routes[0]?.points.length, 1);
     tap(1400, 1600);
     click("tool-done");
@@ -539,6 +586,42 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       .dispatchEvent(new window.Event("click"));
     assert.deepEqual(framed.at(-1), state.routes[0]!.points);
 
+    // Arrows walk the Saved rows, staying in the jump or ⋯ column.
+    assert.equal(state.markers.length, 1);
+    const focusedLast = () => focus.mock.calls.at(-1)?.this;
+    key(el("route-list").querySelector(".navigation-jump")!, "ArrowDown");
+    assert.ok(focusedLast() === el("marker-list").querySelector(".navigation-jump"), "Down reaches the place below");
+    key(el("marker-list").querySelector(".row-more")!, "ArrowUp");
+    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "⋯ stays in its column");
+    // Typing a row's first letters jumps to it, ahead of the map's shortcuts.
+    const names = [...el("sheet-saved").querySelectorAll("strong")].map((title) => title.textContent!);
+    const routeJump = el("route-list").querySelector(".navigation-jump")!,
+      placeJump = el("marker-list").querySelector(".navigation-jump")!;
+    const typed = new window.Event("keydown", { bubbles: true, cancelable: true });
+    Object.defineProperty(typed, "key", { value: "e" });
+    routeJump.dispatchEvent(typed);
+    assert.deepEqual(names, ["Route 1", "<Entrance>"]);
+    assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
+    assert.equal(typed.defaultPrevented, true);
+    // As in the library, F2 renames a row and Delete arms its menu's Delete.
+    key(routeJump, "F2");
+    assert.equal(el("name-dialog").hasAttribute("open"), true);
+    assert.equal(el("name-title").textContent, "Rename route");
+    click("name-cancel");
+    assert.equal(el("name-dialog").hasAttribute("open"), false);
+    key(placeJump, "F2");
+    assert.equal(el("marker-dialog").hasAttribute("open"), true, "a place edits its name and kind");
+    click("marker-cancel");
+    key(routeJump, "Delete");
+    assert.equal(routeJump.closest(".navigation-row")!.querySelector(".row-more")!.getAttribute("aria-expanded"), "true");
+    const armed = root.querySelector(".row-popover .danger")!;
+    assert.match(armed.textContent!, /Tap again/);
+    assert.ok(focusedLast() === armed, "Enter then deletes");
+    key(routeJump, "Delete");
+    assert.equal(state.routes.length, 1, "repeating Delete never deletes");
+    key(root, "Escape");
+    assert.equal(root.querySelector(".row-popover"), null);
+
     // Rename via the name dialog, delete needs two taps; all behind ⋯.
     const openMenu = () => {
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
@@ -554,15 +637,24 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
       ["Edit points", "Rename", "Share", "Delete"],
     );
+    // An open menu takes the arrows, entering from ⋯ and wrapping around.
+    key(el("route-list").querySelector(".row-more")!, "ArrowDown");
+    assert.ok(focusedLast() === rowButton(/Edit points/), "Down enters the menu");
+    key(rowButton(/Edit points/), "ArrowUp");
+    assert.ok(focusedLast() === rowButton(/Delete/), "Up wraps to the last action");
     rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
     assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
     click("share-saved");
     assert.equal(shares.at(-1), undefined, "the map-level action opens selection of all annotations");
+    const focusIn = (target: Element) => target.dispatchEvent(new window.Event("focusin", { bubbles: true }));
+    click("open-saved");
+    focusIn(el("route-list").querySelector(".row-more")!);
     openMenu();
     rowButton(/Rename/).dispatchEvent(new window.Event("click"));
     input("name-input", "Exit plan");
     submit("name-form");
     assert.equal(state.routes[0]?.name, "Exit plan");
+    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "focus returns to the rebuilt row");
     await controls.flush();
     assert.equal(
       (await loadNavigation("controls")).routes[0]?.name,
@@ -603,6 +695,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
+    assert.equal(el("toast").textContent, "Route deleted");
+    assert.ok(focusedLast() === el("marker-list").querySelector(".row-more"), "the next row takes the deleted one's focus");
 
     // Layers hide/show and the highlight briefly reveals everything.
     assert.equal(el("layer-places-count").textContent, "1");
@@ -667,6 +761,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     focus.mock.resetCalls();
     click("open-search");
     assert.equal(focus.mock.callCount(), 0, "opening Search waits for a click on the input");
+    el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(controls.stepSearch(), false, "Enter is left alone with Search closed");
+    assert.equal(controls.openSearch(), true);
+    assert.equal(el("sheet-search").hidden, false);
+    assert.equal(focus.mock.callCount(), 1, "the / key opens Search ready to type");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
@@ -704,6 +803,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     Object.defineProperties(previous, { key: { value: "Enter" }, shiftKey: { value: true } });
     el("map-search").dispatchEvent(previous);
     assert.deepEqual(framed.at(-1), secondPolygon, "previous wraps to the last match");
+    // Enter put the keyboard away; the page's Enter keeps stepping.
+    assert.equal(controls.stepSearch(), true);
+    assert.deepEqual(framed.at(-1), polygon);
+    assert.equal(controls.stepSearch(true), true);
+    assert.deepEqual(framed.at(-1), secondPolygon);
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
@@ -763,6 +867,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("map-search").dispatchEvent(enter);
     assert.equal(highlights?.matches.length, 30, "Enter immediately searches the latest query, including notes");
     assert.equal(highlights?.selected, 0);
+    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "Enter hands focus to the map");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     input("map-search", "");
@@ -772,14 +877,29 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     key(root, "Escape");
     assert.equal(dock.hidden, false, "Escape restores the navbar too");
     state.markers = originalMarkers;
+
+    // Toasts stay up for as long as they take to read.
+    click("rotation-lock");
+    assert.equal(el("toast").textContent, "Rotation unlocked · twist with two fingers");
+    t.mock.timers.tick(3500);
+    assert.equal(el("toast").hidden, false, "a longer toast stays up longer");
+    t.mock.timers.tick(200);
+    assert.equal(el("toast").hidden, true);
+    click("rotation-lock");
+    assert.equal(el("toast").textContent, "Rotation locked");
+    t.mock.timers.tick(2250);
+    assert.equal(el("toast").hidden, true, "a short one goes soon");
     t.mock.timers.reset();
 
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
-    assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 2");
+    assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 2",
+      "a new place starts as the kind last added");
+    assert.deepEqual(previews.at(-1), { point: { x: 2000, y: 2100 }, kind: "entrance" });
     submit("marker-form");
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
+    assert.equal(state.markers.at(-1)?.kind, "entrance");
   } finally {
     controls.dispose();
     await controls.flush();

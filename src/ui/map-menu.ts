@@ -1,4 +1,5 @@
 import { popoverPosition } from "./popover-position";
+import { stepFocus } from "./step-focus";
 
 export type MapMenuItem = {
   label: string;
@@ -49,7 +50,11 @@ export function initMapMenu() {
     close();
   });
   document.addEventListener("keydown", (event) => {
-    if (menu && event.key === "Escape") close(true);
+    if (!menu) return;
+    if (event.key === "Escape") close(true);
+    // Arrows walk the items, from the open menu's button too.
+    else if (event.target === anchor || menu.contains(event.target as Node))
+      stepFocus(event, [...menu.querySelectorAll<HTMLElement>(".popover-item")], true);
   });
   window.addEventListener("scroll", () => close(), true);
   window.addEventListener("resize", () => close());

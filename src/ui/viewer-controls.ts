@@ -18,6 +18,7 @@ import {
   type PlannedRoute,
 } from "../viewer/navigation";
 import { icons } from "./icons";
+import { plural } from "./format";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
@@ -25,6 +26,7 @@ import {
   type OcrIndex,
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { stepFocus, typeahead } from "./step-focus";
 const sheets = ["display", "saved", "search"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number];
@@ -42,8 +44,9 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace">>;
   private ocr?: OcrIndex;
+  private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
   private searchPosition = -1;
@@ -77,7 +80,13 @@ export class ViewerControls {
   /** Add was tapped: Place / Route float above the pill until one is picked. */
   private choosing = false;
   private openSheet?: Sheet;
+  // Deleting or renaming rebuilds the Saved rows, which would drop keyboard
+  // focus to the page. It returns to the same row, or after a delete to the
+  // one that took its place.
+  private savedFocus?: { key: string; part: string; index: number; element: Element };
   private darkKind: DarkMode["kind"] = "inverted";
+  /** New places start as the kind last saved, for runs of entrances or notes. */
+  private newMarkerKind: MapMarker["kind"] = "landmark";
   constructor(
     private root: HTMLElement,
     private map: MapRecord,
@@ -113,8 +122,9 @@ export class ViewerControls {
     target: EventTarget,
     type: string,
     action: (event: Event) => void,
+    capture = false,
   ) {
-    target.addEventListener(type, action, { signal: this.controller.signal });
+    target.addEventListener(type, action, { signal: this.controller.signal, capture });
   }
   private click(id: string, action: () => void) {
     this.on(this.el(id), "click", action);
@@ -181,7 +191,8 @@ export class ViewerControls {
     toast.textContent = message;
     toast.hidden = false;
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (toast.hidden = true), 2400);
+    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up to 6 s.
+    this.toastTimer = setTimeout(() => (toast.hidden = true), Math.min(6000, 1500 + message.length * 50));
   }
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;
@@ -214,6 +225,20 @@ export class ViewerControls {
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
     this.renderTool();
     if (!name && returnFocus && previous) this.el(`open-${previous}`).focus();
+  }
+  /** "/" opens Search ready to type: a keyboard is already at hand, unlike a tap. */
+  openSearch() {
+    if (this.tool !== "browse" || this.root.querySelector("dialog[open]")) return false;
+    this.sheet("search");
+    this.input("map-search").focus();
+    return true;
+  }
+  /** Next (or previous) match. Enter puts the keyboard away, so later
+   * presses arrive from outside the field and step on from there. */
+  stepSearch(back = false) {
+    if (this.openSheet !== "search") return false;
+    this.focusSearch(back ? -1 : this.searchPosition < 0 ? 0 : 1);
+    return true;
   }
   private choose(open: boolean) {
     this.sheet(undefined);
@@ -253,7 +278,7 @@ export class ViewerControls {
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
-    const kind = marker?.kind ?? "landmark";
+    const kind = marker?.kind ?? this.newMarkerKind;
     this.autoMarkerName = marker
       ? ""
       : `${markerKinds[kind].label} ${this.state.markers.length + 1}`;
@@ -264,6 +289,8 @@ export class ViewerControls {
     this.el("marker-delete").hidden = !marker;
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
+    // A new place shows where it will go while it is named.
+    if (!marker) this.viewer?.previewPlace?.({ point, kind });
     showDialog(this.dialog("marker-dialog"));
   }
   private notes(open: boolean) {
@@ -317,7 +344,7 @@ export class ViewerControls {
         this.toast(`${route.name} unchanged`);
       } else if (route.points.length >= 2) {
         route.draft = false;
-        this.toast(`${route.name} saved · ${route.points.length} points`);
+        this.toast(`${route.name} saved · ${plural(route.points.length, "point")}`);
       } else {
         this.state.routes = this.state.routes.filter((r) => r.id !== route.id);
         if (route.points.length)
@@ -378,8 +405,9 @@ export class ViewerControls {
   private moveMarker(marker: MapMarker) {
     this.movingMarker = marker.id;
     this.moveFrom = { ...marker.point };
-    this.viewer?.jumpTo(marker.point);
+    // Switching tools stops camera motion, so the glide starts after it.
     this.mode("move");
+    this.viewer?.jumpTo(marker.point);
   }
   private finishMove(keep: boolean) {
     const marker = this.movingPlace(),
@@ -434,7 +462,7 @@ export class ViewerControls {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.isComposing) {
         key.preventDefault();
-        this.focusSearch(key.shiftKey ? -1 : this.searchPosition < 0 ? 0 : 1);
+        this.stepSearch(key.shiftKey);
       }
     });
     for (const sheet of sheets)
@@ -444,11 +472,43 @@ export class ViewerControls {
     this.click("close-sheet", () => this.sheet(undefined, true));
     this.click("sheet-dismiss", () => this.sheet(undefined, true));
     this.bindSheetDrag();
+    const typeToJump = typeahead((item) => item.closest(".navigation-row")?.querySelector("strong")?.textContent ?? "");
     this.on(this.root, "keydown", (event) => {
-      if ((event as KeyboardEvent).key !== "Escape" || !this.escape()) return;
-      event.preventDefault();
-      event.stopPropagation();
+      const key = event as KeyboardEvent, target = key.target as Element;
+      if (key.key === "Escape") {
+        if (!this.escape()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      // Arrows walk an open row menu (from its ⋯ too), otherwise the Saved rows,
+      // where typing a name's first letters also jumps to it.
+      } else if (this.rowPopover && (target === this.rowMenuAnchor || this.rowPopover.contains(target)))
+        stepFocus(key, [...this.rowPopover.querySelectorAll<HTMLElement>(".popover-item")], true);
+      else if (target.closest?.("#sheet-saved .navigation-row")) {
+        const column = target.closest(".row-more") ? ".row-more" : ".navigation-jump";
+        const rows = [...this.el("sheet-saved").querySelectorAll<HTMLElement>(`.navigation-row ${column}`)];
+        if (!typeToJump(key, rows)) stepFocus(key, rows);
+      }
     });
+    this.on(this.root, "focusin", (event) => {
+      const target = event.target as Element;
+      const row = target.closest?.<HTMLElement>("#sheet-saved .navigation-row");
+      if (row)
+        this.savedFocus = {
+          key: row.dataset.row!,
+          part: target.closest(".row-more") ? ".row-more" : ".navigation-jump",
+          index: [...this.el("sheet-saved").querySelectorAll(".navigation-row")].indexOf(row),
+          element: target,
+        };
+      // Its menu and dialogs hand focus back to the row.
+      else if (!target.closest?.(".row-popover, dialog")) this.savedFocus = undefined;
+    });
+    // Tapping elsewhere leaves the page focused on purpose.
+    this.on(document, "pointerdown", (event) => {
+      if (!(event.target as Element | null)?.closest?.(".navigation-row, .row-popover, dialog"))
+        this.savedFocus = undefined;
+    });
+    // A dialog hands focus back to its opener, which may be gone.
+    this.on(this.root, "close", () => this.restoreSavedFocus(), true);
     this.on(this.input("dark-map"), "change", () => {
       this.state.inverted = this.input("dark-map").checked;
       this.changed();
@@ -468,17 +528,15 @@ export class ViewerControls {
           : "Rotation unlocked · twist with two fingers",
       );
     });
-    this.on(this.input("rotation-angle"), "input", () =>
-      this.viewer?.rotateTo(
-        (Number(this.input("rotation-angle").value) * Math.PI) / 180,
-      ),
-    );
-    this.click("rotate-left", () =>
-      this.viewer?.rotateTo((this.state.view?.rotation ?? 0) - Math.PI / 12),
-    );
-    this.click("rotate-right", () =>
-      this.viewer?.rotateTo((this.state.view?.rotation ?? 0) + Math.PI / 12),
-    );
+    this.on(this.input("rotation-angle"), "input", () => {
+      const angle = this.input("rotation-angle");
+      // North sits at both ends of the slider; a near miss snaps to it.
+      const degrees = Number(angle.value);
+      if (degrees <= 4 || degrees >= 356) angle.value = "0";
+      this.viewer?.rotateTo((Number(angle.value) * Math.PI) / 180);
+    });
+    this.click("rotate-left", () => this.rotateStep(-1));
+    this.click("rotate-right", () => this.rotateStep(1));
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${level * 100}`);
       this.on(input, "change", () => {
@@ -568,7 +626,17 @@ export class ViewerControls {
           this.autoMarkerName = `${markerKinds[this.markerKind()].label} ${this.state.markers.length + 1}`;
           label.value = this.autoMarkerName;
         }
+        if (!this.editingMarker && this.markerPoint)
+          this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
+    this.on(this.dialog("marker-dialog"), "close", () => this.viewer?.previewPlace?.());
+    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
+    this.on(this.el("marker-note"), "keydown", (event) => {
+      const key = event as KeyboardEvent;
+      if (key.key !== "Enter" || !(key.metaKey || key.ctrlKey) || key.isComposing) return;
+      key.preventDefault();
+      this.el<HTMLFormElement>("marker-form").requestSubmit();
+    });
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
       if (!this.markerPoint) return;
@@ -587,6 +655,7 @@ export class ViewerControls {
       };
       this.state.markers = this.state.markers.filter((m) => m.id !== marker.id);
       this.state.markers.push(marker);
+      if (!existing) this.newMarkerKind = marker.kind;
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");
@@ -638,6 +707,9 @@ export class ViewerControls {
       ((Math.round(((this.state.view?.rotation ?? 0) * 180) / Math.PI) % 360) +
         360) %
       360;
+    // Runs on every camera move: untouched DOM keeps panning free of layout work.
+    if (rotation === this.shownRotation) return;
+    this.shownRotation = rotation;
     this.input("rotation-angle").value = String(rotation);
     this.el("rotation-value").textContent = `${rotation}°`;
   }
@@ -645,6 +717,24 @@ export class ViewerControls {
     this.el("dark-status").textContent = this.state.inverted
       ? darkMessages[this.darkKind]
       : "Off: original colors";
+  }
+  /** Steps land on the 15° grid, so a few presses always reach north again.
+   * False while rotation is locked. */
+  rotateStep(direction: 1 | -1) {
+    if (this.state.rotationLocked || !this.viewer) return false;
+    const steps = ((this.state.view?.rotation ?? 0) * 12) / Math.PI;
+    const next = direction > 0
+      ? Math.floor(steps + 1e-6) + 1
+      : Math.ceil(steps - 1e-6) - 1;
+    this.viewer.rotateTo((next * Math.PI) / 12);
+    return true;
+  }
+  /** Keyboard undo while drawing a route; false when there is nothing to undo. */
+  undo() {
+    const button = this.el<HTMLButtonElement>("route-undo");
+    if (button.hidden || button.disabled) return false;
+    button.click();
+    return true;
   }
   /** Backs out one level (sheet → tool → browse); false when already browsing. */
   escape() {
@@ -691,7 +781,7 @@ export class ViewerControls {
       ],
       marker: ["New place", "Tap the map where it goes"],
       route: [
-        `${route?.name ?? "Route"} · ${count} point${count === 1 ? "" : "s"}`,
+        `${route?.name ?? "Route"} · ${plural(count, "point")}`,
         count ? "Tap to add, drag points to adjust" : "Tap where the route starts",
       ],
     };
@@ -714,6 +804,7 @@ export class ViewerControls {
       detail: string;
       icon: string;
       jump: () => void;
+      rename: () => void;
       actions: {
         label: string;
         icon: string;
@@ -745,6 +836,8 @@ export class ViewerControls {
     button.addEventListener("click", () => {
       options.jump();
       this.sheet(undefined);
+      // The keyboard carries on from the map: arrows pan, +/− zoom.
+      this.el("map-canvas").focus({ preventScroll: true });
     });
     const open = this.rowMenu === options.key;
     const toggle = document.createElement("button");
@@ -760,6 +853,20 @@ export class ViewerControls {
       this.rowMenu = options.key;
       showMenu();
       this.positionRowMenu();
+    });
+    // As in the library, F2 renames and Delete arms the menu's Delete, so
+    // Enter then removes the item.
+    button.setAttribute("aria-keyshortcuts", "F2 Delete");
+    button.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.shiftKey) return;
+      if (event.key === "F2" && !event.metaKey) options.rename();
+      else if (event.key === "Delete" || event.key === "Backspace") {
+        if (this.rowMenu !== options.key) toggle.click();
+        const remove = this.rowPopover?.querySelector<HTMLElement>(".danger");
+        if (this.confirming !== options.key) remove?.click();
+        remove?.focus();
+      } else return;
+      event.preventDefault();
     });
     main.append(button, toggle);
     row.append(main);
@@ -794,6 +901,19 @@ export class ViewerControls {
       this.root.append(menu);
     };
     if (open) showMenu();
+  }
+  private restoreSavedFocus() {
+    const saved = this.savedFocus;
+    if (!saved || this.openSheet !== "saved") return;
+    // Focus left in a just-closed dialog is about to fall to the page too.
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest("dialog:not([open])")) return;
+    const rows = this.el("sheet-saved").querySelectorAll<HTMLElement>(".navigation-row");
+    const row = [...rows].find((row) => row.dataset.row === saved.key) ??
+      rows[Math.min(saved.index, rows.length - 1)];
+    const target = saved.element.isConnected ? saved.element as HTMLElement
+      : row?.querySelector<HTMLElement>(saved.part) ?? this.el("close-sheet");
+    target.focus({ preventScroll: true });
   }
   // Dismiss without rebuilding rows: pointerdown must not remove the pending click target.
   private closeRowMenu(returnFocus = false) {
@@ -901,6 +1021,7 @@ export class ViewerControls {
         detail: `${kind.label}${marker.note ? " · " + marker.note : ""}`,
         icon: placeIcon(marker.kind),
         jump: () => this.viewer?.jumpTo(marker.point),
+        rename: () => this.editMarker(marker),
         actions: [
           {
             label: "Edit",
@@ -930,16 +1051,22 @@ export class ViewerControls {
         ],
       });
     }
-    for (const route of this.state.routes)
+    for (const route of this.state.routes) {
+      const rename = () =>
+        this.name("Rename route", route.name, (name) => {
+          route.name = name;
+          this.changed();
+        });
       this.row(routes, {
         key: route.id,
         label: route.name,
-        detail: `${route.points.length} points${route.draft ? " · unfinished" : ""}`,
+        detail: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
         icon: icons.route.replace(
           "<svg ",
           `<svg style="color:${routeColor(this.state, route.id)}" `,
         ),
         jump: () => this.viewer?.fitPoints(route.points),
+        rename,
         actions: [
           {
             label: route.draft ? "Continue" : "Edit points",
@@ -949,11 +1076,7 @@ export class ViewerControls {
           {
             label: "Rename",
             icon: icons.text,
-            action: () =>
-              this.name("Rename route", route.name, (name) => {
-                route.name = name;
-                this.changed();
-              }),
+            action: rename,
           },
           ...(this.onShare && !route.draft ? [{ label: "Share", icon: icons.share,
             action: () => this.onShare?.({ kind: "route", id: route.id }) }] : []),
@@ -971,10 +1094,12 @@ export class ViewerControls {
                 this.mode("browse");
               }
               this.changed();
+              this.toast("Route deleted");
             }),
           },
         ],
       });
+    }
     for (const [container, empty] of [
       [markers, "No places yet. Use Add › Place."],
       [routes, "No routes yet. Use Add › Route, then tap along passages."],
@@ -991,6 +1116,7 @@ export class ViewerControls {
       this.root
         .querySelectorAll<HTMLButtonElement>(".row-popover button")
         [focusedMenuIndex]?.focus({ preventScroll: true });
+    this.restoreSavedFocus();
     this.renderView();
     this.renderTool();
   }
@@ -1050,7 +1176,9 @@ export class ViewerControls {
     if (!count) return;
     this.searchPosition = (Math.max(0, this.searchPosition) + delta + count) % count;
     const match = this.searchMatches[this.searchPosition]!;
-    this.input("map-search").blur();
+    // Hands focus to the map: the on-screen keyboard goes away, and arrows
+    // pan around the match while Enter keeps stepping.
+    this.el("map-canvas").focus({ preventScroll: true });
     this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
     if (match.marker) this.viewer?.jumpTo(match.marker.point);
     else this.viewer?.fitPoints(match.polygons.flat());

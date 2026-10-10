@@ -82,7 +82,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.match(el("share-size").textContent!, /Annotations only/);
   const inputs = [...el("share-items").querySelectorAll<HTMLInputElement>("input")];
   assert.deepEqual(inputs.map((input) => input.checked), [true, false]);
-  assert.equal(el("share-items").querySelector("script"), null);
+  assert.ok(!el("share-items").querySelector("script"), "no injected markup");
   assert.match(el("share-items").textContent!, /<script>entrance<\/script>/);
   assert.equal(el<HTMLInputElement>("share-image").checked, false);
   click("share-places");
@@ -141,7 +141,7 @@ test("import dialog merges into a matching map by default and warns before repla
   await ui.openImport(encodeShare(manifest));
   assert.deepEqual(rows(), [map.id, "new"]);
   assert.equal(el<HTMLInputElement>("receive-destinations").querySelector<HTMLInputElement>("input")!.checked, true);
-  assert.equal(el("receive-destinations").querySelector("script"), null);
+  assert.ok(!el("receive-destinations").querySelector("script"), "no injected markup");
   assert.match(el("receive-destinations").textContent!, /Survey <west>/);
   assert.equal(el("receive-mode-field").hidden, false);
   assert.match(el("receive-note").textContent!, /Keeps your 1 place and 1 route/);

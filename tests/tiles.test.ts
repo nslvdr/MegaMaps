@@ -138,7 +138,9 @@ test("tile cache limits concurrency and bytes, drops obsolete requests, closes o
   };
   try {
     cache.plan(Array.from({ length: 22 }, (_, x) => ({ level: 0, x, y: 0 })));
+    assert.equal(cache.complete, false, "coarser layers fill in while tiles load");
     await settle(0);
+    assert.equal(cache.complete, true);
     assert.equal(completed, 22);
     assert.ok(peak <= 2);
     assert.equal(cache.decodedBytes, 22 * 1048576);

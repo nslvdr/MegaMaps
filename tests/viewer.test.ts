@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Viewer } from "../src/viewer/viewer";
-import { worldToScreen, type Camera, type Point } from "../src/viewer/camera";
+import { screenToWorld, worldToScreen, type Camera, type Point } from "../src/viewer/camera";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { payloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
@@ -113,7 +113,9 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   });
   const overlay = document.querySelector<SVGSVGElement>("svg")!;
   const errors: string[] = [],
-    drops: boolean[] = [];
+    drops: boolean[] = [],
+    opened: string[] = [],
+    taps: Point[] = [];
   const viewer = new Viewer(
     canvas,
     map,
@@ -123,8 +125,8 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       navigation: state,
       overlay,
       onView() {},
-      onTap() {},
-      onMarker() {},
+      onTap: (point) => taps.push(point),
+      onMarker: (marker) => opened.push(marker.id),
       onDrop: (moved) => drops.push(moved),
     },
   );
@@ -182,6 +184,49 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     resize();
     viewer.fit(false);
     assert.deepEqual(state.view!.center, { x: 256, y: 256 });
+    // Modified keys belong to the browser (⌘+ zooms the page, ⌥← goes back).
+    const press = (key: string, modifiers: Partial<KeyboardEvent> = {}) => {
+      const event = new window.Event("keydown", { cancelable: true });
+      Object.defineProperties(event, Object.fromEntries(
+        Object.entries({ key, ...modifiers }).map(([name, value]) => [name, { value }]),
+      ));
+      canvas.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const fitted = structuredClone(state.view);
+    assert.equal(press("=", { metaKey: true }), false);
+    assert.equal(press("ArrowLeft", { altKey: true }), false);
+    assert.equal(press("-", { ctrlKey: true }), false);
+    assert.deepEqual(state.view, fitted);
+    const panned = () => (viewer as unknown as { camera: Camera }).camera.x;
+    let before = panned();
+    assert.equal(press("ArrowLeft"), true);
+    step(performance.now() + 100);
+    assert.ok(panned() - before > 0 && panned() - before < 60, "arrows glide rather than jump");
+    step(performance.now() + 1000);
+    assert.notDeepEqual(state.view, fitted);
+    assert.equal(panned() - before, 60);
+    before = panned();
+    assert.equal(press("ArrowRight", { shiftKey: true }), true);
+    step(performance.now() + 1000);
+    assert.equal(before - panned(), 195, "Shift pans half a screen");
+    // A held arrow's repeats add up to one pan.
+    before = panned();
+    press("ArrowLeft");
+    step(performance.now() + 50);
+    press("ArrowLeft", { repeat: true });
+    step(performance.now() + 1000);
+    assert.equal(panned() - before, 120);
+    // Quick presses add up: each one starts from where the last was heading.
+    viewer.fit(false);
+    const scale = () => (viewer as unknown as { camera: Camera }).camera.scale;
+    const start = scale();
+    press("+");
+    step(performance.now() + 100);
+    press("+");
+    step(performance.now() + 1000);
+    assert.ok(Math.abs(scale() / start - 2.25) < 1e-9, `zoomed ${scale() / start}×`);
+    viewer.fit(false);
     state.touchLocked = true;
     viewer.updateNavigation(state);
     const saved = structuredClone(state.view);
@@ -216,6 +261,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       camera: Camera;
       grab(screen: Point): boolean;
       drop(screen: Point): void;
+      tap(screen: Point): boolean;
     };
     const screen = (p: Point) => worldToScreen(internals.camera, p);
     assert.equal(internals.grab(screen(place.point)), false, "not while browsing");
@@ -246,7 +292,31 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       [Math.round(place.point.x), Math.round(place.point.y)],
       [128, 64],
     );
+    // From the keyboard, Enter or Space taps the middle of the screen.
+    const middle = screenToWorld(internals.camera, { x: 195, y: 422 });
+    assert.equal(press("Enter"), true);
+    assert.equal(press(" ", { repeat: true }), true, "a held key puts down one point");
+    assert.deepEqual(taps, [middle]);
     viewer.setTool("browse");
+    assert.equal(press("Enter"), false, "browsing leaves Enter to search");
+    assert.deepEqual(taps, [middle]);
+    // Jumping to a place glides there instead of cutting.
+    const away = structuredClone(state.view);
+    viewer.jumpTo({ x: 400, y: 120 });
+    assert.deepEqual(state.view, away, "no cut");
+    step(performance.now() + 300);
+    assert.notDeepEqual(state.view, away);
+    // Where pins crowd together, a tap opens the closest one, not the oldest.
+    step(performance.now() + 600);
+    const pin = screen(place.point);
+    state.markers.push({
+      id: "near", label: "Near", kind: "note", note: "", created: 0,
+      point: screenToWorld(internals.camera, { x: pin.x + 16, y: pin.y }),
+    });
+    viewer.updateNavigation(state);
+    assert.equal(internals.tap({ x: pin.x + 12, y: pin.y }), true);
+    assert.equal(internals.tap({ x: pin.x + 2, y: pin.y }), true);
+    assert.deepEqual(opened, ["near", place.id]);
   } finally {
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.

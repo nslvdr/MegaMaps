@@ -18,6 +18,7 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
+import { initLibraryKeys } from "./ui/library-keys";
 import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
@@ -27,15 +28,15 @@ import { isShareFile } from "./sharing/format";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
-    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>Import</span></button></div>
+    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
+    <div class="library-actions"><button class="library-action import-trigger" id="import-open" aria-keyshortcuts="Meta+O Control+O">${icons.plus}<span>Import</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p></div></section>
     <footer class="library-footer"><div class="app-updated"><span>Last app update</span><time id="app-updated-at">Checking…</time></div><div class="connection-status" role="status" aria-live="polite"><span id="internet-status">Checking connection…</span><span id="app-availability">Checking live app…</span><span id="offline-availability">Checking offline app…</span></div></footer>
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
   <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
-  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
+  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
@@ -54,6 +55,43 @@ const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
 const mapMenu = initMapMenu();
+initLibraryKeys(grid, {
+  rename(id) {
+    const map = maps.find((map) => map.id === id);
+    if (map) openRenameMap(map);
+  },
+  remove(id) {
+    const map = maps.find((map) => map.id === id);
+    if (map) confirmDelete(map);
+  },
+});
+// Renaming or deleting rebuilds the cards, which would drop keyboard focus to
+// the top of the page. It returns to the same map, or after a delete to the
+// one that took its place. Mouse and touch use is left alone.
+let libraryFocus: { id: string; part: string; index: number; element: Element } | undefined;
+grid.addEventListener("focusin", (event) => {
+  const target = event.target as Element, card = target.closest<HTMLElement>(".map-card");
+  libraryFocus = card && target.matches(":focus-visible")
+    ? {
+        id: card.dataset.map!,
+        part: target.closest(".map-more") ? ".map-more" : ".map-open",
+        index: [...grid.querySelectorAll(".map-card")].indexOf(card),
+        element: target,
+      }
+    : undefined;
+});
+function restoreLibraryFocus() {
+  if (home.hidden || !libraryFocus || libraryFocus.element.isConnected) return;
+  // Focus left in a just-closed dialog is about to fall to the page too.
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest("dialog:not([open])")) return;
+  const cards = grid.querySelectorAll<HTMLElement>(".map-card");
+  const card = grid.querySelector(`[data-map="${libraryFocus.id}"]`) ??
+    cards[Math.min(libraryFocus.index, cards.length - 1)];
+  (card?.querySelector<HTMLElement>(libraryFocus.part) ?? element("import-open")).focus({ preventScroll: true });
+}
+// A dialog hands focus back to its opener, which a rebuild may have replaced.
+document.addEventListener("close", restoreLibraryFocus, true);
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
@@ -73,8 +111,10 @@ let viewer: Viewer | undefined,
   maps: MapRecord[] = [];
 let importing: AbortController | undefined,
   deleting: MapRecord | undefined,
-  thumbnailURLs: string[] = [],
   renderVersion = 0;
+// Library previews by map id. A map's tiles never change, so returning home
+// reuses them instead of reading storage and flashing placeholders again.
+const thumbnails = new Map<string, string>();
 const channel =
   typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel("map-viewer-library")
@@ -121,10 +161,8 @@ const sharing = initSharing(app, {
     element("progress-title").textContent = "Importing shared map";
     element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
     element("cancel-import").querySelector("span")!.textContent = "Cancel import";
-    element("import-name").textContent = share.manifest.map.name;
-    element("progress-fill").style.width = "0%";
-    element("progress-percent").textContent = "0%";
-    element("progress-message").textContent = "Checking shared map…";
+    element("import-name").textContent = displayName(share.manifest.map.name);
+    showProgress(0, "Checking shared map…");
     showDialog(progressDialog);
     try {
       const result = await mutate(async () => {
@@ -136,11 +174,8 @@ const sharing = initSharing(app, {
           return { map, ...counts };
         }
         if (!destination.image) throw new Error("Choose the original map image to create a copy.");
-        return importNewCopy(share, destination.image, (progress) => {
-          element("progress-fill").style.width = `${progress.fraction * 100}%`;
-          element("progress-percent").textContent = `${Math.round(progress.fraction * 100)}%`;
-          element("progress-message").textContent = progress.message;
-        }, controller.signal);
+        return importNewCopy(share, destination.image, (progress) =>
+          showProgress(progress.fraction * 100, progress.message), controller.signal);
       });
       channel?.postMessage({ type: "annotations", mapId: result.map.id });
       return result;
@@ -185,23 +220,56 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
     );
   return work();
 }
+const appTitle = document.title;
+/** The open map names the tab and the app switcher entry. */
+function showTitle() {
+  document.title = currentMap ? `${displayName(currentMap.name)} · ${appTitle}` : appTitle;
+}
+let leavingMap = false;
+// Going home returns to the same place in the list, on the map just closed.
+let libraryScroll = 0;
+// Back acts like Escape: it closes a panel or tool first, then the map.
+window.addEventListener("popstate", (event) => {
+  const wanted = (event.state as { map?: string } | null)?.map;
+  if (leavingMap) leavingMap = false;
+  else if (currentMap && !wanted) {
+    if (document.querySelector("dialog[open]") || controls?.escape())
+      history.pushState({ map: currentMap.id }, "");
+    else closeViewer();
+  } else if (!currentMap && wanted) {
+    const map = maps.find((map) => map.id === wanted);
+    if (map) void openMap(map);
+  }
+});
 function closeViewer() {
   openVersion++;
+  const closed = currentMap?.id;
   if (controls) pendingViewSave = controls.dispose();
   controls = undefined;
   viewer?.dispose();
   viewer = undefined;
   currentMap = undefined;
+  showTitle();
   void setLastMap(null).catch((error) =>
     showMessage("Could not save home view", String(error)),
   );
+  // Drop the map's history entry so Back from home leaves the app as usual.
+  if (history.state?.map) {
+    leavingMap = true;
+    history.back();
+  }
   viewerSection.hidden = true;
   home.hidden = false;
   void refreshFooter();
   document.body.classList.remove("viewing");
-  void refresh().catch((error) =>
-    showMessage("Storage unavailable", String(error)),
-  );
+  void refresh()
+    .then(() => {
+      if (!home.hidden) {
+        window.scrollTo(0, libraryScroll);
+        grid.querySelector<HTMLElement>(`[data-map="${closed}"] .map-open`)?.focus({ preventScroll: true });
+      }
+    })
+    .catch((error) => showMessage("Storage unavailable", String(error)));
 }
 async function openMap(map: MapRecord) {
   const version = ++openVersion;
@@ -209,9 +277,19 @@ async function openMap(map: MapRecord) {
   controls = undefined;
   viewer?.dispose();
   viewer = undefined;
+  if (!home.hidden) libraryScroll = window.scrollY;
+  const fromLibrary = home.contains(document.activeElement);
   currentMap = map;
-  home.hidden = true;
+  showTitle();
+  // An open map gets its own history entry, so the system Back returns home.
+  if (history.state?.map) history.replaceState({ map: map.id }, "");
+  else history.pushState({ map: map.id }, "");
   viewerSection.hidden = false;
+  // The keyboard carries on from the map, so arrows pan and +/− zoom straight
+  // away. Moving focus before the library hides its button keeps the focus
+  // ring to keyboard use.
+  if (fromLibrary) element("map-canvas").focus({ preventScroll: true });
+  home.hidden = true;
   document.body.classList.add("viewing");
   element("viewer-error").hidden = true;
   try {
@@ -241,6 +319,11 @@ async function openMap(map: MapRecord) {
     }
   }
 }
+function confirmDelete(map: MapRecord) {
+  deleting = map;
+  element("delete-name").textContent = displayName(map.name);
+  showDialog(deleteDialog);
+}
 async function refresh() {
   const version = ++renderVersion;
   const records = await listMaps();
@@ -257,6 +340,7 @@ async function refresh() {
     const updated = maps.find((map) => map.id === currentMap!.id);
     if (updated) {
       Object.assign(currentMap, updated);
+      showTitle();
       controls?.refreshMetadata();
       void loadOcr(updated.id)
         .then((index) => {
@@ -271,8 +355,13 @@ async function refresh() {
         .catch(() => {});
     }
   }
-  for (const url of thumbnailURLs) URL.revokeObjectURL(url);
-  thumbnailURLs = [];
+  for (const [id, url] of thumbnails)
+    if (!maps.some((map) => map.id === id)) {
+      URL.revokeObjectURL(url);
+      thumbnails.delete(id);
+    }
+  // Behind an open map the grid is unseen; going home renders it afresh.
+  if (home.hidden) return;
   mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
@@ -280,19 +369,36 @@ async function refresh() {
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
+    card.dataset.map = map.id;
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
     card.querySelector(".dimensions")!.textContent =
       `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
-    card.querySelector(".map-size")!.textContent =
-      formatBytes(map.bytes);
-    card.querySelector(".map-open")!.addEventListener("click", () => {
-      void openMap(map);
-    });
+    const size = card.querySelector(".map-size")!;
+    size.textContent = formatBytes(map.bytes);
+    // What's saved on each map helps pick the right one. Leaving a map may
+    // still be writing its last edits.
+    void pendingViewSave
+      .catch(() => {})
+      .then(() => loadNavigation(map.id))
+      .then(({ markers, routes }) => {
+        if (version !== renderVersion) return;
+        const saved = [
+          markers.length && plural(markers.length, "place"),
+          routes.length && plural(routes.length, "route"),
+        ].filter(Boolean);
+        size.textContent = [formatBytes(map.bytes), ...saved].join(" · ");
+      })
+      .catch(() => {});
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
     const name = displayName(map.name);
     more.title = "Map options";
     more.setAttribute("aria-label", `Options for ${name}`);
+    const openButton = card.querySelector<HTMLButtonElement>(".map-open")!;
+    openButton.setAttribute("aria-keyshortcuts", "F2 Delete");
+    openButton.addEventListener("click", () => {
+      void openMap(map);
+    });
     more.addEventListener("click", () =>
       mapMenu.toggle(more, name, [
         { label: "Share", icon: icons.share, action: () => { void shareMap(map); } },
@@ -311,35 +417,53 @@ async function refresh() {
           label: "Delete",
           icon: icons.trash,
           danger: true,
-          action: () => {
-            deleting = map;
-            element("delete-name").textContent = name;
-            showDialog(deleteDialog);
-          },
+          action: () => confirmDelete(map),
         },
       ]),
     );
     grid.append(card);
+    const showThumbnail = (url: string) => {
+      const img = new Image();
+      img.src = url;
+      img.alt = "";
+      img.loading = "lazy";
+      // A dragged thumbnail would carry its image as a file, and dropped back
+      // on the library it would import as a new map.
+      img.draggable = false;
+      card.querySelector(".thumbnail")!.prepend(img);
+    };
+    const cached = thumbnails.get(map.id);
+    if (cached) {
+      showThumbnail(cached);
+      continue;
+    }
     void payloadStore(map.backend)
       .get(map.id, tileKey(map.levels.length - 1, 0, 0))
       .then((blob) => {
-        if (version !== renderVersion) return;
-        const url = URL.createObjectURL(blob);
-        thumbnailURLs.push(url);
-        const img = new Image();
-        img.src = url;
-        img.alt = "";
-        img.loading = "lazy";
-        card.querySelector(".thumbnail")!.prepend(img);
+        // An overlapping refresh may have loaded it first.
+        let url = thumbnails.get(map.id);
+        if (!url) {
+          url = URL.createObjectURL(blob);
+          thumbnails.set(map.id, url);
+        }
+        if (version === renderVersion) showThumbnail(url);
       })
       .catch(() => {
         card.querySelector(".thumbnail-placeholder")!.textContent =
           "Preview unavailable";
       });
   }
+  restoreLibraryFocus();
 }
 const importDialog = element<HTMLDialogElement>("import-dialog");
 element("import-open").addEventListener("click", () => showDialog(importDialog));
+// ⌘O or Ctrl+O imports from the library, as in desktop apps.
+document.addEventListener("keydown", (event) => {
+  if (event.key.toLowerCase() !== "o" || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+  if (home.hidden || document.querySelector("dialog[open]")) return;
+  event.preventDefault();
+  showDialog(importDialog);
+});
 element("import-cancel").addEventListener("click", () => importDialog.close());
 // Each row only narrows the picker; the file's header decides how it is imported.
 for (const [id, accept] of [
@@ -351,12 +475,52 @@ for (const [id, accept] of [
     fileInput.accept = accept;
     fileInput.click();
   });
-fileInput.addEventListener("change", async () => {
+fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   fileInput.value = "";
-  if (!file || importing) return;
+  if (file) void importFile(file);
+});
+async function importFile(file: File) {
+  if (importing) return;
   if (await isShareFile(file).catch(() => false)) void sharing.openImport(file);
   else importImage(file);
+}
+// Desktop: a map or .megamap file dropped on the library imports like Import.
+// Anywhere else, a dropped file must not replace the app with the raw image.
+const carriesFiles = (event: DragEvent) =>
+  !!event.dataTransfer?.types.includes("Files");
+const canDrop = () =>
+  !home.hidden && !importing && !document.querySelector("dialog[open]");
+for (const type of ["dragover", "drop"] as const)
+  window.addEventListener(type, (event) => {
+    if (carriesFiles(event)) event.preventDefault();
+  });
+home.addEventListener("dragover", (event) => {
+  if (!carriesFiles(event)) return;
+  const accepted = canDrop();
+  event.dataTransfer!.dropEffect = accepted ? "copy" : "none";
+  home.classList.toggle("dropping", accepted);
+});
+home.addEventListener("dragleave", (event) => {
+  if (!home.contains(event.relatedTarget as Node | null))
+    home.classList.remove("dropping");
+});
+home.addEventListener("drop", (event) => {
+  home.classList.remove("dropping");
+  const file = event.dataTransfer?.files[0];
+  if (file && canDrop()) void importFile(file);
+});
+// Pasting a copied image or screenshot imports it too.
+document.addEventListener("paste", (event) => {
+  let file = event.clipboardData?.files[0];
+  if (!file || !canDrop()) return;
+  event.preventDefault();
+  // Screenshots arrive as "image.png"; a dated name tells them apart.
+  if (/^image\.\w+$/i.test(file.name)) {
+    const date = new Date().toLocaleDateString(undefined, { dateStyle: "medium" });
+    file = new File([file], `Pasted map ${date}${file.name.slice(5)}`, { type: file.type });
+  }
+  void importFile(file);
 });
 function importImage(file: File) {
   if (importing) return;
@@ -367,19 +531,12 @@ function importImage(file: File) {
     "Keep Mega Maps open while your map is prepared.";
   element("cancel-import").querySelector("span")!.textContent = "Cancel import";
   element("import-name").textContent = file.name;
-  element("progress-fill").style.width = "0%";
-  element("progress-percent").textContent = "0%";
-  element("progress-message").textContent = "Reading image metadata…";
+  showProgress(0, "Reading image metadata…");
   showDialog(progressDialog);
   void mutate(async () => {
     const map = await importMap(
       file,
-      (progress) => {
-        element("progress-fill").style.width = `${progress.fraction * 80}%`;
-        element("progress-percent").textContent =
-          `${Math.round(progress.fraction * 80)}%`;
-        element("progress-message").textContent = progress.message;
-      },
+      (progress) => showProgress(progress.fraction * 80, progress.message),
       controller.signal,
     );
     element("progress-title").textContent = "Detecting map text";
@@ -387,12 +544,8 @@ function importImage(file: File) {
       "Your map is saved. Keep the app open to finish search detection, or stop and do it later.";
     element("cancel-import").querySelector("span")!.textContent = "Stop detection";
     try {
-      await runOcr(map, controller, (progress) => {
-        const percent = 80 + progress.fraction * 20;
-        element("progress-fill").style.width = `${percent}%`;
-        element("progress-percent").textContent = `${Math.round(percent)}%`;
-        element("progress-message").textContent = progress.message;
-      });
+      await runOcr(map, controller, (progress) =>
+        showProgress(80 + progress.fraction * 20, progress.message));
     } catch (error) {
       if (!controller.signal.aborted)
         showMessage(
@@ -417,6 +570,16 @@ function importImage(file: File) {
       importing = undefined;
     });
 }
+// The tab title carries the percentage too, for imports left in the background.
+function showProgress(percent: number, message: string) {
+  const rounded = Math.round(percent);
+  element("progress-fill").style.width = `${percent}%`;
+  element("progress-percent").textContent = `${rounded}%`;
+  element("progress-track").setAttribute("aria-valuenow", String(rounded));
+  element("progress-message").textContent = message;
+  document.title = `${rounded}% · ${appTitle}`;
+}
+progressDialog.addEventListener("close", showTitle);
 element("cancel-import").addEventListener("click", () => {
   importing?.abort();
 });
@@ -453,7 +616,9 @@ element("delete-confirm").addEventListener("click", () => {
 });
 element("back").addEventListener("click", closeViewer);
 document.addEventListener("keydown", (event) => {
+  // Keys a list already used (typing to jump to a row) are not shortcuts too.
   if (
+    event.defaultPrevented ||
     !viewer ||
     document.querySelector("dialog[open]") ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(
@@ -462,7 +627,22 @@ document.addEventListener("keydown", (event) => {
   )
     return;
   if (event.key === "Escape" && !controls?.escape()) closeViewer();
+  // ⌘Z, Ctrl+Z or Backspace takes back the last route point.
+  const undo = event.key === "Backspace" ||
+    (event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey);
+  if (undo && controls?.undo()) {
+    event.preventDefault();
+    return;
+  }
+  // Leave browser shortcuts such as Find (⌘F) and reset zoom (⌘0) alone.
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
+  if (event.key === "/" && controls?.openSearch()) event.preventDefault();
+  if (event.key === "[" || event.key === "]") controls?.rotateStep(event.key === "]" ? 1 : -1);
+  // Enter on a button presses it; only from the map does it step through matches.
+  const free = event.target === document.body || (event.target as HTMLElement).id === "map-canvas";
+  if (event.key === "Enter" && free && controls?.stepSearch(event.shiftKey))
+    event.preventDefault();
 });
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;

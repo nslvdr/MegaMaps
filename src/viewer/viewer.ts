@@ -6,6 +6,8 @@ import {
   zoomAt,
   chooseLevel,
   visibleTiles,
+  onScreen,
+  viewBounds,
   type Camera,
   type Point,
   cameraAt,
@@ -68,6 +70,8 @@ export class Viewer {
   private dpr = 1;
   private frame = 0;
   private animation = 0;
+  // Where the running animation ends, so quick key presses add up.
+  private destination?: Camera;
   private base?: ImageBitmap;
   private disposed = false;
   private cache: TileCache;
@@ -131,8 +135,19 @@ export class Viewer {
       "keydown",
       (event) => {
         if (this.navigation.touchLocked) return;
-        const camera = this.camera,
-          movement = 60;
+        // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        // While adding or moving, Enter or Space taps the middle of the screen:
+        // the keyboard pans there with the arrows, then puts the point down.
+        if ((event.key === "Enter" || event.key === " ") && this.tool !== "browse") {
+          event.preventDefault();
+          if (!event.repeat) this.tap({ x: this.width / 2, y: this.height / 2 });
+          return;
+        }
+        // Shift crosses half a screen per press, for long trips across the map.
+        // Each press starts from where the last one was heading.
+        const camera = this.destination ?? this.camera,
+          movement = event.shiftKey ? Math.min(this.width, this.height) / 2 : 60;
         const deltas: Record<string, [number, number]> = {
           ArrowLeft: [movement, 0],
           ArrowRight: [-movement, 0],
@@ -140,10 +155,11 @@ export class Viewer {
           ArrowDown: [0, -movement],
         };
         const delta = deltas[event.key];
+        // Arrows glide like +/−; a held key chains its steps into one smooth pan.
         if (delta) {
           event.preventDefault();
           this.interactions.stop();
-          this.setCamera({
+          this.animate({
             ...camera,
             x: camera.x + delta[0],
             y: camera.y + delta[1],
@@ -209,8 +225,12 @@ export class Viewer {
       2,
       Math.sqrt(4_000_000 / (this.width * this.height)),
     );
-    this.canvas.width = Math.round(this.width * this.dpr);
-    this.canvas.height = Math.round(this.height * this.dpr);
+    const width = Math.round(this.width * this.dpr),
+      height = Math.round(this.height * this.dpr);
+    // Assigning a size clears the canvas, even when it is unchanged.
+    const cleared = this.canvas.width !== width || this.canvas.height !== height;
+    if (this.canvas.width !== width) this.canvas.width = width;
+    if (this.canvas.height !== height) this.canvas.height = height;
     if (wasFit) this.fit(false);
     else
       this.setCamera(
@@ -221,6 +241,15 @@ export class Viewer {
           this.camera.rotation ?? 0,
         ),
       );
+    // Repaint before the browser shows the cleared canvas: the dark filter
+    // turns it light grey until the next frame, which a busy thread delays.
+    if (cleared) this.drawNow();
+  }
+  private drawNow() {
+    if (this.disposed) return;
+    cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.draw(performance.now());
   }
   private async loadBase() {
     try {
@@ -284,6 +313,10 @@ export class Viewer {
   setSearch(matches: MapSearchMatch[], active: boolean, selected = 0) {
     this.searchOverlay?.set(matches, active, selected);
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
+    this.invalidate();
+  }
+  previewPlace(place?: Pick<MapMarker, "point" | "kind">) {
+    this.overlay?.setPreview(place);
     this.invalidate();
   }
   // Floating controls can move while the map itself is idle.
@@ -351,10 +384,11 @@ export class Viewer {
       }),
     );
   }
+  // Glides rather than cuts, so it's clear where on the map the place is.
   jumpTo(point: Point) {
     if (this.navigation.touchLocked) return;
     this.interactions.reset();
-    this.setCamera(
+    this.animate(
       cameraAt(
         point,
         this.viewport(),
@@ -400,24 +434,16 @@ export class Viewer {
   private tap(screen: Point) {
     const point = screenToWorld(this.camera, screen);
     if (!insideImage(point, this.map)) return this.tool !== "browse";
-    const near = (target: Point, radius: number) => {
-      const p = worldToScreen(this.camera, target);
-      return Math.hypot(p.x - screen.x, p.y - screen.y) < radius;
-    };
-    const markers = this.navigation.layers.places ? this.navigation.markers : [];
+    const marker = this.nearestPlace(screen);
     if (this.tool === "route") {
       // Snap route points onto saved places the user taps.
-      const snap = markers
-        .map((m) => m.point)
-        .find((target) => near(target, 24));
-      this.options?.onTap(snap ? { ...snap } : point);
+      this.options?.onTap(marker ? { ...marker.point } : point);
       return true;
     }
     if (this.tool !== "browse") {
       this.options?.onTap(point);
       return true;
     }
-    const marker = markers.find((marker) => near(marker.point, 24));
     if (marker) {
       this.options?.onMarker(marker);
       return true;
@@ -427,6 +453,17 @@ export class Viewer {
   private near(target: Point, screen: Point) {
     const p = worldToScreen(this.camera, target);
     return Math.hypot(p.x - screen.x, p.y - screen.y);
+  }
+  // A visible place within reach; where pins crowd, the closest one wins.
+  private nearestPlace(screen: Point) {
+    if (!this.navigation.layers.places) return undefined;
+    let nearest: MapMarker | undefined,
+      best = 24;
+    for (const marker of this.navigation.markers) {
+      const distance = this.near(marker.point, screen);
+      if (distance < best) [nearest, best] = [marker, distance];
+    }
+    return nearest;
   }
   // Only while editing: the drawn route's points, or the place being moved.
   private grab(screen: Point) {
@@ -471,10 +508,8 @@ export class Viewer {
     const dragging = this.dragging;
     if (!dragging) return;
     this.dragging = undefined;
-    if (this.tool === "route" && this.navigation.layers.places) {
-      const place = this.navigation.markers.find(
-        (m) => this.near(m.point, screen) < 24,
-      );
+    if (this.tool === "route") {
+      const place = this.nearestPlace(screen);
       if (place) Object.assign(dragging.point, place.point);
     }
     this.options?.onDrop?.(true);
@@ -490,6 +525,7 @@ export class Viewer {
   private stopAnimation() {
     cancelAnimationFrame(this.animation);
     this.animation = 0;
+    this.destination = undefined;
   }
   private animate(target: Camera) {
     this.stopAnimation();
@@ -498,6 +534,7 @@ export class Viewer {
       this.setCamera(target);
       return;
     }
+    this.destination = target;
     const start = { ...this.camera },
       startTime = performance.now();
     const tick = (now: number) => {
@@ -528,7 +565,10 @@ export class Viewer {
             },
       );
       if (t < 1) this.animation = requestAnimationFrame(tick);
-      else this.setCamera(target);
+      else {
+        this.destination = undefined;
+        this.setCamera(target);
+      }
     };
     this.animation = requestAnimationFrame(tick);
   }
@@ -552,8 +592,6 @@ export class Viewer {
     ctx.scale(this.camera.scale, this.camera.scale);
     ctx.fillStyle = black;
     ctx.fillRect(0, 0, this.map.width, this.map.height);
-    if (this.base)
-      ctx.drawImage(this.base, 0, 0, this.map.width, this.map.height);
     let level = chooseLevel(this.map.levels, this.camera.scale, this.dpr);
     let tiles = visibleTiles(
       this.map.levels[level]!,
@@ -568,16 +606,28 @@ export class Viewer {
         this.viewport(),
       );
     this.cache.plan(tiles.map((t) => ({ ...t, level })));
+    // The overview stays beneath everything: it hides hairline seams where
+    // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
+    // ones load.
+    if (this.base)
+      ctx.drawImage(this.base, 0, 0, this.map.width, this.map.height);
+    const covered = this.cache.complete;
     const entries = this.cache.tiles
-      .filter((t) => t.level >= level)
+      .filter((t) => (covered ? t.level === level : t.level >= level))
       .sort((a, b) => b.level - a.level);
+    // Cached tiles from earlier views stay decoded but are not drawn off screen.
+    const viewport = this.viewport();
+    const bounds = viewBounds(this.camera, viewport);
     for (const tile of entries) {
       const scale = this.map.levels[tile.level]!.scale;
-      ctx.imageSmoothingEnabled = this.camera.scale * scale * this.dpr < 1;
       const x = tile.x * TILE_SIZE * scale,
         y = tile.y * TILE_SIZE * scale;
       const width = Math.min(tile.bitmap.width * scale, this.map.width - x),
         height = Math.min(tile.bitmap.height * scale, this.map.height - y);
+      if (x > bounds.right || y > bounds.bottom || x + width < bounds.left || y + height < bounds.top ||
+          !onScreen(this.camera, viewport, { x, y, width, height }))
+        continue;
+      ctx.imageSmoothingEnabled = this.camera.scale * scale * this.dpr < 1;
       // Clip rounded pyramid edges; level dimensions are ceil(original / scale).
       ctx.drawImage(
         tile.bitmap,
@@ -591,7 +641,6 @@ export class Viewer {
         height,
       );
     }
-    const viewport = this.viewport();
     const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
     this.searchOverlay?.reserve(this.camera, labels);
     this.overlay?.reserve(this.camera, labels);

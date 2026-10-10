@@ -37,6 +37,11 @@ export class TileCache {
   get tiles() {
     return [...this.entries.values()];
   }
+  /** Every planned tile is decoded, so nothing drawn beneath them shows. */
+  get complete() {
+    for (const key of this.wanted) if (!this.entries.has(key)) return false;
+    return true;
+  }
   plan(tiles: TileRequest[]) {
     this.wanted = new Set(tiles.map((t) => tileKey(t.level, t.x, t.y)));
     for (const key of this.wanted) {

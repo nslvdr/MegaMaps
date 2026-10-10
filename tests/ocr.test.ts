@@ -209,12 +209,12 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   assert.equal(label.querySelector(".map-callout-icon")!.getAttribute("aria-hidden"), "true");
   overlay.set(matches, true, 1);
   overlay.draw({ x: 50, y: 80, scale: 0.02 }, viewport);
-  assert.equal(svg.querySelector(".search-highlight"), first, "selection changes reuse the geometry");
+  assert.ok(svg.querySelector(".search-highlight") === first, "selection changes reuse the geometry");
   assert.equal(first.hasAttribute("data-selected"), false);
   assert.equal(svg.querySelectorAll(".search-highlight .map-callout:not([hidden])").length, 2, "all visible matches keep callouts when navigating");
   assert.equal(svg.querySelectorAll(".search-highlight[data-selected]").length, 1);
   assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "<North>");
-  assert.equal(svg.querySelector(".search-selected-label North"), null, "OCR text is never markup");
+  assert.ok(!svg.querySelector(".search-selected-label North"), "OCR text is never markup");
   overlay.set(matches, true, 0);
   overlay.draw({ x: 0, y: 0, scale: 1 }, viewport);
   assert.equal(labelPosition()[1], 67, "near the top edge, the callout moves below the text");
@@ -235,6 +235,15 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   assert.equal(svg.querySelector(".search-selected-label")!.hasAttribute("hidden"), true,
     "offscreen matches do not leave a floating label over an unrelated location");
+  const hole = svg.querySelector("mask polygon")!, onScreen = hole.getAttribute("points");
+  assert.equal(hole.hasAttribute("hidden"), true, "an offscreen match does not cut into the shade");
+  assert.equal(svg.querySelector(".search-highlight")!.hasAttribute("hidden"), true);
+  overlay.draw({ x: -2000, y: -1000, scale: 1 }, viewport);
+  assert.equal(hole.getAttribute("points"), onScreen, "offscreen matches are left alone while panning");
+  overlay.draw({ x: 10, y: 80, scale: 1 }, viewport);
+  assert.equal(hole.hasAttribute("hidden"), false, "a match back on screen cuts its hole again");
+  assert.notEqual(hole.getAttribute("points"), onScreen);
+  assert.equal(svg.querySelector(".search-highlight")!.hasAttribute("hidden"), false);
   overlay.set([], true);
   assert.equal(
     svg.hasAttribute("hidden"),

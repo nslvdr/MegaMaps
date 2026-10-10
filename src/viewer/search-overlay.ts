@@ -26,6 +26,7 @@ export class SearchOverlay {
   private placeHoles: (SVGCircleElement | undefined)[] = [];
   private highlights: SVGGElement[] = [];
   private callouts: MapCallout[] = [];
+  private shown: boolean[] = [];
   private active = false;
   private selected = 0;
   constructor(private svg: SVGSVGElement) {
@@ -38,8 +39,15 @@ export class SearchOverlay {
     this.selected = selected;
     this.svg.toggleAttribute("hidden", !active);
     // Result navigation changes emphasis without rebuilding every polygon or label.
-    if (matches === this.matches) return;
+    if (matches !== this.matches) this.build(matches);
+    for (const [index, highlight] of this.highlights.entries()) {
+      highlight.toggleAttribute("data-selected", index === selected);
+      this.callouts[index]!.element.classList.toggle("search-selected-label", index === selected);
+    }
+  }
+  private build(matches: MapSearchMatch[]) {
     this.matches = matches;
+    this.shown = [];
     for (const hole of this.holes.flat()) hole.remove();
     for (const hole of this.placeHoles) hole?.remove();
     const mask = this.svg.querySelector("mask")!;
@@ -99,13 +107,19 @@ export class SearchOverlay {
       order.unshift(...order.splice(this.selected, 1));
     for (const index of order) {
       const target = project(this.matches[index]!, camera);
-      const highlight = this.highlights[index]!;
-      highlight.toggleAttribute("hidden", !target);
-      const callout = this.callouts[index]!;
-      const selected = index === this.selected;
-      highlight.toggleAttribute("data-selected", selected);
-      callout.element.classList.toggle("search-selected-label", selected);
-      if (!target) continue;
+      // Off-screen matches are hidden once and then left alone; panning over
+      // a common word would otherwise update hundreds of unseen cut-outs.
+      const shown = !!target && target.bounds.right >= -8 && target.bounds.bottom >= -8 &&
+        target.bounds.left <= viewport.width + 8 && target.bounds.top <= viewport.height + 8;
+      const highlight = this.highlights[index]!, callout = this.callouts[index]!;
+      if (shown !== this.shown[index]) {
+        this.shown[index] = shown;
+        highlight.toggleAttribute("hidden", !shown);
+        for (const hole of this.holes[index]!) hole.toggleAttribute("hidden", !shown);
+        this.placeHoles[index]?.toggleAttribute("hidden", !shown);
+        if (!shown) callout.element.setAttribute("hidden", "");
+      }
+      if (!shown) continue;
       for (const [polygonIndex, polygon] of target.polygons.entries())
         this.holes[index]![polygonIndex]!.setAttribute("points", polygon.map(p => `${p.x},${p.y}`).join(" "));
       const hole = this.placeHoles[index];

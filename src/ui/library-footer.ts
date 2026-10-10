@@ -65,17 +65,16 @@ export function initLibraryFooter(home: HTMLElement) {
     offline.title = shell.message;
   }
 
-  window.addEventListener("online", () => void refresh());
-  window.addEventListener("offline", () => void refresh());
-  window.addEventListener("pageshow", () => void refresh());
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void refresh();
-  });
-  navigator.serviceWorker?.addEventListener("controllerchange", () => void refresh());
-  // Check once a minute only while the main menu is visible.
-  window.setInterval(() => {
+  // Checks fetch the live site and ask the service worker, so they run only
+  // while the main menu shows them; going home refreshes the footer anyway.
+  const refreshShown = () => {
     if (!document.hidden && !home.hidden) void refresh();
-  }, 60_000);
+  };
+  for (const type of ["online", "offline", "pageshow"])
+    window.addEventListener(type, refreshShown);
+  document.addEventListener("visibilitychange", refreshShown);
+  navigator.serviceWorker?.addEventListener("controllerchange", refreshShown);
+  window.setInterval(refreshShown, 60_000);
   void refresh();
   return refresh;
 }

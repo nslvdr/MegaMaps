@@ -45,6 +45,8 @@ export function attachInteractions(
     hadPinch = false,
     // Double-tap-and-drag zoom: one-handed, anchored where the finger landed.
     quickZoom: { anchor: Point; y: number; scale: number } | undefined,
+    // Two fingers tapped together zoom out, the reverse of a double tap.
+    pairTap: { time: number; center: Point } | undefined,
     pressTimer: ReturnType<typeof setTimeout> | undefined;
   const cancelPress = () => {
     clearTimeout(pressTimer);
@@ -75,6 +77,11 @@ export function attachInteractions(
         : clampScale(camera.scale * 2.5);
     host.animate(zoomAt(camera, target, p.x, p.y));
   }
+  function zoomOut(p: Point) {
+    stop();
+    const camera = host.getCamera();
+    host.animate(zoomAt(camera, clampScale(camera.scale / 2.5), p.x, p.y));
+  }
   canvas.addEventListener(
     "pointerdown",
     (event) => {
@@ -96,6 +103,7 @@ export function attachInteractions(
         !points.size && !!host.editing?.() && !!host.grab?.(p);
       points.set(event.pointerId, { ...p, start: p, moved: false, grabbed });
       quickZoom = undefined;
+      if (points.size === 1) pairTap = undefined;
       if (points.size === 1 && !grabbed) {
         hadPinch = false;
         const id = event.pointerId;
@@ -121,6 +129,11 @@ export function attachInteractions(
       if (points.size > 1) {
         hadPinch = true;
         lastTap.time = 0;
+        const [a, b] = [...points.values()];
+        pairTap =
+          points.size === 2 && event.pointerType !== "mouse" && !a!.moved
+            ? { time: performance.now(), center: midpoint(a!, b!) }
+            : undefined;
       }
       velocity = { x: 0, y: 0 };
       lastMove = performance.now();
@@ -140,6 +153,7 @@ export function attachInteractions(
       const moved = old.moved || distance(old.start, p) > slop;
       if (moved) {
         lastTap.time = 0;
+        pairTap = undefined;
         cancelPress();
       }
       if (old.held) return;
@@ -213,6 +227,7 @@ export function attachInteractions(
     if (event.type === "pointercancel" || event.type === "lostpointercapture") {
       if (pointer.grabbed && pointer.moved) host.cancelDrag?.();
       lastTap.time = 0;
+      pairTap = undefined;
       velocity = { x: 0, y: 0 };
       return;
     }
@@ -228,6 +243,11 @@ export function attachInteractions(
     }
     if (!points.size && !pointer.moved && !hadPinch && host.tap?.(pointer)) {
       lastTap.time = 0;
+      return;
+    }
+    if (!points.size && pairTap && !pointer.moved) {
+      if (performance.now() - pairTap.time < 300) zoomOut(pairTap.center);
+      pairTap = undefined;
       return;
     }
     if (!pointer.moved && !hadPinch && event.pointerType !== "mouse") {
@@ -303,7 +323,9 @@ export function attachInteractions(
     "dblclick",
     (event) => {
       event.preventDefault();
-      doubleZoom(point(event));
+      // Shift reverses it, as a two-finger tap does on touch.
+      if (!event.shiftKey) doubleZoom(point(event));
+      else if (!host.locked?.() && !host.editing?.()) zoomOut(point(event));
     },
     { signal },
   );
@@ -316,6 +338,7 @@ export function attachInteractions(
       stop();
       points.clear();
       quickZoom = undefined;
+      pairTap = undefined;
       lastTap.time = 0;
     },
     dispose() {
