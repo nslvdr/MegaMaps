@@ -36,7 +36,7 @@ app.innerHTML = `
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
   <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
-  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
+  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
   <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
@@ -162,9 +162,7 @@ const sharing = initSharing(app, {
     element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
     element("cancel-import").querySelector("span")!.textContent = "Cancel import";
     element("import-name").textContent = displayName(share.manifest.map.name);
-    element("progress-fill").style.width = "0%";
-    element("progress-percent").textContent = "0%";
-    element("progress-message").textContent = "Checking shared map…";
+    showProgress(0, "Checking shared map…");
     showDialog(progressDialog);
     try {
       const result = await mutate(async () => {
@@ -176,11 +174,8 @@ const sharing = initSharing(app, {
           return { map, ...counts };
         }
         if (!destination.image) throw new Error("Choose the original map image to create a copy.");
-        return importNewCopy(share, destination.image, (progress) => {
-          element("progress-fill").style.width = `${progress.fraction * 100}%`;
-          element("progress-percent").textContent = `${Math.round(progress.fraction * 100)}%`;
-          element("progress-message").textContent = progress.message;
-        }, controller.signal);
+        return importNewCopy(share, destination.image, (progress) =>
+          showProgress(progress.fraction * 100, progress.message), controller.signal);
       });
       channel?.postMessage({ type: "annotations", mapId: result.map.id });
       return result;
@@ -533,19 +528,12 @@ function importImage(file: File) {
     "Keep Mega Maps open while your map is prepared.";
   element("cancel-import").querySelector("span")!.textContent = "Cancel import";
   element("import-name").textContent = file.name;
-  element("progress-fill").style.width = "0%";
-  element("progress-percent").textContent = "0%";
-  element("progress-message").textContent = "Reading image metadata…";
+  showProgress(0, "Reading image metadata…");
   showDialog(progressDialog);
   void mutate(async () => {
     const map = await importMap(
       file,
-      (progress) => {
-        element("progress-fill").style.width = `${progress.fraction * 80}%`;
-        element("progress-percent").textContent =
-          `${Math.round(progress.fraction * 80)}%`;
-        element("progress-message").textContent = progress.message;
-      },
+      (progress) => showProgress(progress.fraction * 80, progress.message),
       controller.signal,
     );
     element("progress-title").textContent = "Detecting map text";
@@ -553,12 +541,8 @@ function importImage(file: File) {
       "Your map is saved. Keep the app open to finish search detection, or stop and do it later.";
     element("cancel-import").querySelector("span")!.textContent = "Stop detection";
     try {
-      await runOcr(map, controller, (progress) => {
-        const percent = 80 + progress.fraction * 20;
-        element("progress-fill").style.width = `${percent}%`;
-        element("progress-percent").textContent = `${Math.round(percent)}%`;
-        element("progress-message").textContent = progress.message;
-      });
+      await runOcr(map, controller, (progress) =>
+        showProgress(80 + progress.fraction * 20, progress.message));
     } catch (error) {
       if (!controller.signal.aborted)
         showMessage(
@@ -583,6 +567,16 @@ function importImage(file: File) {
       importing = undefined;
     });
 }
+// The tab title carries the percentage too, for imports left in the background.
+function showProgress(percent: number, message: string) {
+  const rounded = Math.round(percent);
+  element("progress-fill").style.width = `${percent}%`;
+  element("progress-percent").textContent = `${rounded}%`;
+  element("progress-track").setAttribute("aria-valuenow", String(rounded));
+  element("progress-message").textContent = message;
+  document.title = `${rounded}% · ${appTitle}`;
+}
+progressDialog.addEventListener("close", showTitle);
 element("cancel-import").addEventListener("click", () => {
   importing?.abort();
 });
