@@ -70,6 +70,8 @@ export class Viewer {
   private dpr = 1;
   private frame = 0;
   private animation = 0;
+  // Where the running animation ends, so quick key presses add up.
+  private destination?: Camera;
   private base?: ImageBitmap;
   private disposed = false;
   private cache: TileCache;
@@ -136,7 +138,8 @@ export class Viewer {
         // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         // Shift crosses half a screen per press, for long trips across the map.
-        const camera = this.camera,
+        // Each press starts from where the last one was heading.
+        const camera = this.destination ?? this.camera,
           movement = event.shiftKey ? Math.min(this.width, this.height) / 2 : 60;
         const deltas: Record<string, [number, number]> = {
           ArrowLeft: [movement, 0],
@@ -514,6 +517,7 @@ export class Viewer {
   private stopAnimation() {
     cancelAnimationFrame(this.animation);
     this.animation = 0;
+    this.destination = undefined;
   }
   private animate(target: Camera) {
     this.stopAnimation();
@@ -522,6 +526,7 @@ export class Viewer {
       this.setCamera(target);
       return;
     }
+    this.destination = target;
     const start = { ...this.camera },
       startTime = performance.now();
     const tick = (now: number) => {
@@ -552,7 +557,10 @@ export class Viewer {
             },
       );
       if (t < 1) this.animation = requestAnimationFrame(tick);
-      else this.setCamera(target);
+      else {
+        this.destination = undefined;
+        this.setCamera(target);
+      }
     };
     this.animation = requestAnimationFrame(tick);
   }

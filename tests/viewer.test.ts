@@ -205,6 +205,15 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     before = panned();
     assert.equal(press("ArrowRight", { shiftKey: true }), true);
     assert.equal(before - panned(), 195, "Shift pans half a screen");
+    // Quick presses add up: each one starts from where the last was heading.
+    viewer.fit(false);
+    const scale = () => (viewer as unknown as { camera: Camera }).camera.scale;
+    const start = scale();
+    press("+");
+    step(performance.now() + 100);
+    press("+");
+    step(performance.now() + 1000);
+    assert.ok(Math.abs(scale() / start - 2.25) < 1e-9, `zoomed ${scale() / start}×`);
     viewer.fit(false);
     state.touchLocked = true;
     viewer.updateNavigation(state);
