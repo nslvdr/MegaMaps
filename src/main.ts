@@ -42,7 +42,7 @@ app.innerHTML = `
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
-  <dialog id="advanced-map-dialog"><h2>Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>Stop detection</button></div><button class="secondary" id="advanced-map-close">Close</button></dialog>
+  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title"><h2 id="advanced-map-title">Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>Stop detection</span></button></div><button class="secondary" id="advanced-map-close">${icons.close}<span>Close</span></button></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -750,7 +750,7 @@ async function renderOcrSettings() {
     ? ocrJob!.message
     : (ocrErrors.get(map.id) ??
       (index
-        ? `${index.lines.length} detected labels · Last scan ${new Date(index.completedAt).toLocaleString()}`
+        ? `${plural(index.lines.length, "detected label")}\nLast scanned ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(index.completedAt)}`
         : "Text detection has not run yet."));
   element<HTMLButtonElement>("rerun-ocr").disabled = !!ocrJob || !!importing;
   element("stop-ocr").hidden = !running;
