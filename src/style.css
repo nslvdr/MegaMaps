@@ -388,9 +388,10 @@ h2 {
   display: flex;
   flex-direction: column;
 }
+/* The column sits at the right edge, but its lines start together so the
+   status dots line up instead of following each label's length. */
 .connection-status {
-  align-items: flex-end;
-  text-align: right;
+  align-items: flex-start;
 }
 .connection-status span::before {
   content: "";
