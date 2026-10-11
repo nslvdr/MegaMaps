@@ -1930,9 +1930,26 @@ input[type="range"] {
   background: var(--fill-strong);
   outline: none;
 }
+/* A plain row like the others, not the bordered, centered .danger pill. */
 .popover-item.danger {
+  justify-content: flex-start;
   margin-top: 7px;
+  border: 0;
+  padding: 0 16px 0 12px;
+  background: none;
   color: var(--danger);
+}
+.popover-item.danger:active:not(:disabled),
+.popover-item.danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+@media (hover: hover) {
+  .popover-item:hover:not(:disabled) {
+    background: var(--fill-strong);
+  }
+  .popover-item.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+  }
 }
 .popover-item.danger svg {
   color: currentColor;
