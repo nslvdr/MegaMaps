@@ -33,8 +33,8 @@ type Sheet = (typeof sheets)[number];
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const darkMessages: Record<DarkMode["kind"], string> = {
-  inverted: "Colors inverted, background pure black",
-  deepened: "Background deepened to pure black",
+  inverted: "Colors inverted on pure black",
+  deepened: "Background deepened to black",
   "already-dark": "Map is already dark",
 };
 
