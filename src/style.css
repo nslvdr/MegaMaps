@@ -1253,7 +1253,7 @@ button.glass:active:not(:disabled) {
   gap: var(--space-8);
   padding: 0 var(--space-12);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: #121212;
   transition: border-color 0.15s;
 }
