@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { encodeShare, fingerprint, isShareFile, MAX_MANIFEST_BYTES, readShare, validateManifest, verifyImage, type ShareManifest } from "../src/sharing/format";
-import { mergeAnnotations, preserveUnseenImports } from "../src/sharing/annotations";
+import { mergeAnnotations, preserveUnseenImports, replaceAnnotations } from "../src/sharing/annotations";
 import { exportFile, importAnnotations, importNewCopy, matchingMaps, prepareExport } from "../src/sharing/storage";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { database, listMaps, saveMap } from "../src/storage/database";
@@ -127,6 +127,29 @@ test("exports carry only the chosen places' photos; imports store photos of adde
 
   await deleteStoredMap(destination);
   assert.equal(await loadPhoto(destination.id, first), undefined, "deleting a map deletes its photos");
+});
+
+test("map north travels in shares, fills in an untuned map and never undoes local tuning", async () => {
+  const original = image(512, 256, "north");
+  const source = record("north-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", original);
+  const { manifest } = await fixture();
+  const state = { ...defaultNavigation(source.id), markers: manifest.markers, northOffset: -35 };
+  const shared = (await readShare(exportFile(await prepareExport(source, state),
+    { markers: ["place-a"], routes: [], includeImage: false }))).manifest;
+  assert.equal(shared.northOffset, -35);
+  assert.throws(() => validateManifest({ ...shared, northOffset: 200 }), /invalid/);
+  assert.throws(() => validateManifest({ ...shared, northOffset: 1.5 }), /invalid/);
+
+  const untuned = defaultNavigation("north-destination");
+  assert.equal(mergeAnnotations(untuned, shared).state.northOffset, -35);
+  const tuned = { ...untuned, northOffset: 10 };
+  assert.equal(mergeAnnotations(tuned, shared).state.northOffset, 10);
+  assert.equal(replaceAnnotations(tuned, shared).state.northOffset, -35);
+  // Files from before north was shared leave it alone.
+  const { northOffset: _, ...older } = shared;
+  assert.equal(replaceAnnotations(tuned, older).state.northOffset, 10);
 });
 
 test("pruning removes old photos no place uses and keeps fresh ones for unsaved forms", async () => {

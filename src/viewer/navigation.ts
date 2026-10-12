@@ -45,6 +45,12 @@ export const layerNames = [
 ] as const satisfies readonly (keyof Layers)[];
 /** free: twist with two fingers · compass: turns with the phone · locked: stays put */
 export type RotationMode = "free" | "compass" | "locked";
+/** Map north is a whole number of degrees, a little over -180 up to 180. */
+export const NORTH_MIN = -179, NORTH_MAX = 180;
+export const wrapNorth = (degrees: number) => {
+  const wrapped = ((Math.round(degrees) + 180) % 360 + 360) % 360 - 180;
+  return wrapped === -180 ? 180 : wrapped;
+};
 export interface NavigationState {
   mapId: string;
   view?: SavedView;

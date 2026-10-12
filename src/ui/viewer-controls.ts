@@ -16,6 +16,8 @@ import {
   layerNames,
   markerKinds,
   routeColor,
+  wrapNorth,
+  NORTH_MIN,
   type NavigationState,
   type Tool,
   type MapMarker,
@@ -47,12 +49,9 @@ const rotationModes: Record<RotationMode, { icon: string; label: string; help: s
 /** Auto mode's compass: off, starting, turning the map, or not reaching it. */
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
-const NORTH_STEP = 5;
-/** Whole degrees from -180 up to 180. */
-const wrapDegrees = (degrees: number) => {
-  const wrapped = ((Math.round(degrees) + 180) % 360 + 360) % 360 - 180;
-  return wrapped === -180 ? 180 : wrapped;
-};
+/** Height of one north wheel row, as in `.north-track span`. */
+const NORTH_ROW_PX = 32;
+const northKeys: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 };
 const darkMessages: Record<DarkMode["kind"], string> = {
   inverted: "Colors inverted on pure black",
   deepened: "Background deepened to black",
@@ -294,6 +293,8 @@ export class ViewerControls {
       );
     }
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
+    // A hidden wheel cannot scroll, so it finds its degree once it shows.
+    if (name === "rotation") this.renderRotation();
     this.renderTool();
     if (!name && returnFocus && previous) this.el(`open-${previous}`).focus();
   }
@@ -852,14 +853,18 @@ export class ViewerControls {
       if (this.state.rotationMode === "compass" && (this.compass === "missing" || this.compass === "blocked"))
         void this.startCompass(true);
     });
-    // Typing turns the map as it goes; the field tidies its number on leaving.
-    this.on(this.input("north-offset"), "input", () => {
-      const degrees = parseFloat(this.input("north-offset").value);
-      if (Number.isFinite(degrees)) this.setNorth(degrees, false);
+    // Scrolling the wheel turns the map as each degree passes the middle.
+    const wheel = this.el("north-offset");
+    this.on(wheel, "scroll", () => {
+      const degrees = Math.round(wheel.scrollTop / NORTH_ROW_PX) + NORTH_MIN;
+      if (degrees !== this.state.northOffset) this.setNorth(degrees);
     });
-    this.on(this.input("north-offset"), "change", () => this.renderRotation());
-    this.click("north-less", () => this.setNorth(this.state.northOffset - NORTH_STEP));
-    this.click("north-more", () => this.setNorth(this.state.northOffset + NORTH_STEP));
+    this.on(wheel, "keydown", (event) => {
+      const step = northKeys[(event as KeyboardEvent).key];
+      if (!step) return;
+      event.preventDefault();
+      this.setNorth(this.state.northOffset + step);
+    });
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
@@ -1098,11 +1103,11 @@ export class ViewerControls {
     if (mode === "compass") void this.startCompass(true);
     else this.stopCompass();
   }
-  private setNorth(degrees: number, tidy = true) {
-    this.state.northOffset = wrapDegrees(degrees);
+  private setNorth(degrees: number) {
+    this.state.northOffset = wrapNorth(degrees);
     this.persistence.changed();
     this.orient();
-    if (tidy) this.renderRotation();
+    this.renderRotation();
   }
   /** Asks for the compass when `ask` (from a tap), then follows it. */
   private async startCompass(ask: boolean) {
@@ -1170,10 +1175,14 @@ export class ViewerControls {
     this.el("rotation-help").textContent =
       (mode === "compass" && compassHelp[this.compass]) || help;
     this.el("north-field").hidden = mode !== "compass";
-    const north = this.input("north-offset");
-    // Keep a number being typed as it is; it is already applied.
-    if (document.activeElement !== north || parseFloat(north.value) !== this.state.northOffset)
-      north.value = String(this.state.northOffset);
+    const wheel = this.el("north-offset"), north = this.state.northOffset;
+    wheel.setAttribute("aria-valuenow", String(north));
+    wheel.setAttribute("aria-valuetext", `${north}° clockwise`);
+    const row = north - NORTH_MIN;
+    wheel.querySelector(".selected")?.classList.remove("selected");
+    wheel.children[row]?.classList.add("selected");
+    // Only a wheel showing another degree moves; a scrolling one already matches.
+    if (Math.round(wheel.scrollTop / NORTH_ROW_PX) !== row) wheel.scrollTop = row * NORTH_ROW_PX;
   }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted

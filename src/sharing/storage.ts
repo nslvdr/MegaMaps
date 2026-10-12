@@ -69,6 +69,7 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
     markers: state.markers.map(stored),
     photos,
     routes: routes.map(stored),
+    northOffset: state.northOffset,
     image, original,
   };
 }
@@ -86,6 +87,7 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     markers: chosen,
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
+    ...(prepared.northOffset ? { northOffset: prepared.northOffset } : {}),
     ...(selection.includeImage ? { image: prepared.image } : {}) };
   return new File([encodeShare(manifest, selection.includeImage ? prepared.original : undefined, prepared.photos)],
     shareFilename(prepared.map.name), { type: "application/octet-stream" });
