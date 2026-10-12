@@ -1075,6 +1075,11 @@ button.glass:active:not(:disabled) {
   white-space: nowrap;
   pointer-events: none;
 }
+/* A miss shouldn't glow like a hit. */
+.search-count.empty {
+  background: var(--fill-strong);
+  color: var(--muted);
+}
 .map-options {
   display: flex;
   flex-direction: column;

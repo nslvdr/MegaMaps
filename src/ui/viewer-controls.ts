@@ -1164,6 +1164,7 @@ export class ViewerControls {
     const badge = this.el("search-count");
     badge.textContent = String(count);
     badge.hidden = !active;
+    badge.classList.toggle("empty", !count);
     badge.setAttribute("aria-label", `${count} ${count === 1 ? "result" : "results"}`);
     badge.title = this.el("search-status").textContent ?? "";
     this.viewer?.refreshLabels?.();
