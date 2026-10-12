@@ -461,8 +461,10 @@ export class Viewer {
       this.options?.onTap(point);
       return true;
     }
-    if (marker) {
-      this.options?.onMarker(marker);
+    // A place's label chip reads as a button, so it opens the place too.
+    const labelled = marker ?? this.navigation.markers.find((m) => m.id === this.overlay?.labelAt(screen));
+    if (labelled) {
+      this.options?.onMarker(labelled);
       return true;
     }
     return false;

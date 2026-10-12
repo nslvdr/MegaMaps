@@ -307,6 +307,14 @@ export class NavigationOverlay {
       callout.draw(p, viewport, bounds, labels);
     }
   }
+  /** The place whose label chip covers this screen point, if any. */
+  labelAt(screen: Point) {
+    for (const { callout, markerId } of this.callouts) {
+      const bounds = markerId && callout.bounds;
+      if (bounds && screen.x >= bounds.left && screen.x <= bounds.right &&
+        screen.y >= bounds.top && screen.y <= bounds.bottom) return markerId;
+    }
+  }
   dispose() {
     clearTimeout(this.foundTimer);
     this.svg.replaceChildren();

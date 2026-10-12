@@ -66,6 +66,13 @@ test("saved places and routes have typed callouts that follow their anchors and 
     }
   }
   assert.ok(!svg.querySelector("landmark"), "saved names remain literal text");
+  for (const [index, marker] of state.markers.entries()) {
+    const box = boxes[state.routes.length + index]!;
+    assert.equal(overlay.labelAt({ x: box.right - 2, y: box.bottom - 2 }), marker.id,
+      "a place's label chip opens that place");
+  }
+  assert.equal(overlay.labelAt({ x: boxes[0]!.left + 2, y: boxes[0]!.top + 2 }), undefined,
+    "route labels are not places");
   overlay.setLayers({ places: false, routes: false, labels: false });
   assert.equal(svg.classList.contains("hide-labels"), true);
   assert.equal(svg.classList.contains("hide-places"), true);

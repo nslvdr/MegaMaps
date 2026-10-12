@@ -55,6 +55,11 @@ export class MapCallout {
     this.element.setAttribute("hidden", "");
   }
 
+  /** Where the chip sits on screen, while it is shown. */
+  get bounds() {
+    return this.element.hasAttribute("hidden") ? undefined : this.placement?.bounds;
+  }
+
   setText(text: string) {
     this.fullText = text;
   }
