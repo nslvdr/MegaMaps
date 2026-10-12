@@ -570,6 +570,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
         .dispatchEvent(new window.Event("click"));
     };
     editPoints();
+    assert.deepEqual(framed.at(-1), state.routes[0]!.points, "editing frames the route");
     click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
     key(root, "Escape");

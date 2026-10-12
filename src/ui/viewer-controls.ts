@@ -353,6 +353,8 @@ export class ViewerControls {
     this.activeRoute = route.id;
     this.changed();
     this.mode("route");
+    // Like Move, editing opens on the work: the whole route, in frame.
+    if (route.points.length) this.viewer?.fitPoints(route.points);
   }
   // A route is only kept with at least two points; Done always leaves it finished.
   private finishRoute() {
