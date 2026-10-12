@@ -334,20 +334,16 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     viewer.jumpTo(place.point, 1);
     step(performance.now() + 300);
     assert.equal(scale(), closer, "selecting a place never zooms out from a closer view");
-    // Reading panes change the canvas before ResizeObserver runs. Even rotated
-    // map corners must center in the remaining portrait/landscape map area.
+    // Reading panes cover the bottom of a full-size map. Even rotated map
+    // corners must center in the portrait/landscape area left above them.
     const positioning = viewer as unknown as { setCamera(camera: Camera): void };
-    viewport = { width: 600, height: 600 };
-    resize();
-    viewer.fit(false);
-    const fittedScale = scale();
-    viewport = { width: 600, height: 300 };
-    viewer.jumpTo(place.point, 1);
-    step(performance.now() + 300);
-    assert.equal(scale(), fittedScale, "opening details preserves zoom even when resizing a fitted map");
-    for (const area of [{ width: 390, height: 422 }, { width: 844, height: 195 },
-      { width: 390, height: 140 }]) {
+    for (const area of [{ width: 390, height: 844, edge: 422 },
+      { width: 844, height: 390, edge: 195 }, { width: 390, height: 844, edge: 140 }]) {
       viewport = area;
+      resize();
+      viewer.fit(false);
+      const fittedScale = scale();
+      viewer.cover(area.edge);
       for (const rotation of [0, Math.PI / 4, Math.PI / 2]) {
         positioning.setCamera({ ...internals.camera, rotation });
         for (const point of [{ x: 0, y: 0 }, { x: 512, y: 512 }]) {
@@ -356,23 +352,28 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
           step(performance.now() + 300);
           const centered = screen(point);
           assert.ok(Math.abs(centered.x - area.width / 2) < 1e-7);
-          assert.ok(Math.abs(centered.y - area.height / 2) < 1e-7);
+          assert.ok(Math.abs(centered.y - area.edge / 2) < 1e-7);
           assert.equal(viewer.diagnostics().rotation, rotation);
           assert.ok(scale() >= fittedScale, "opening or expanding details never zooms out");
         }
       }
     }
-    for (const height of [422, 418, 413, 407, 400]) {
-      viewport = { width: 390, height };
+    viewport = { width: 390, height: 844 };
+    resize();
+    for (const edge of [422, 418, 413, 407, 400]) {
+      viewer.cover(edge);
       viewer.jumpTo({ x: 512, y: 512 }, 1, false);
       const centered = screen({ x: 512, y: 512 });
       assert.ok(Math.abs(centered.x - 195) < 1e-7);
-      assert.ok(Math.abs(centered.y - height / 2) < 1e-7,
+      assert.ok(Math.abs(centered.y - edge / 2) < 1e-7,
         "the place follows each small pane movement immediately");
-      resize();
       step(performance.now() + 300);
-      assert.ok(Math.abs(screen({ x: 512, y: 512 }).y - height / 2) < 1e-7);
+      assert.ok(Math.abs(screen({ x: 512, y: 512 }).y - edge / 2) < 1e-7);
     }
+    // Closing the pane eases a map edge back from mid-screen.
+    viewer.cover();
+    step(performance.now() + 300);
+    assert.ok(Math.abs(screen({ x: 512, y: 512 }).y - 422) < 1e-7);
     viewport = { width: 390, height: 844 };
     resize();
     viewer.jumpTo(place.point, 1);

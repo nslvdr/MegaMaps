@@ -1528,15 +1528,13 @@ button.glass:active:not(:disabled) {
   --dialog-from: 32px;
   margin-bottom: max(var(--space-12) + var(--keyboard-inset, 0px), env(safe-area-inset-bottom));
 }
-/* Reading a place reserves the lower half; the map centers in the upper half. */
+/* Reading a place covers the lower half; the map stays full size behind it and
+   the place centers in the upper half. */
 .viewer {
   --place-pane-min-height: 50dvh;
   --place-pane-max-height: max(50dvh, min(85dvh, calc(100dvh - 140px - var(--space-12) - env(safe-area-inset-top))));
   --place-pane-scroll: 0px;
   --place-pane-height: clamp(var(--place-pane-min-height), calc(var(--place-pane-min-height) + var(--place-pane-scroll)), var(--place-pane-max-height));
-}
-.viewer:has(.place-card[data-mode="view"][open]) .map-stage {
-  bottom: calc(var(--place-pane-height) + var(--space-12));
 }
 .place-card[data-mode="view"] {
   top: auto;
