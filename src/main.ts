@@ -8,7 +8,7 @@ import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { findAppUpdate, installAppUpdate } from "./app-update";
 import { icons } from "./ui/icons";
-import { displayName, formatBytes, plural } from "./ui/format";
+import { displayName, formatBytes, lastUsed, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
@@ -390,10 +390,11 @@ async function refresh() {
     card.dataset.map = map.id;
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
-    // What's on a map is what tells two maps apart; size and pixels follow.
-    // On narrow screens it breaks between the two parts, not inside one.
+    // What's on a map is what tells two maps apart; when it was last used
+    // (which is also the list's order) and its size follow. On narrow
+    // screens it breaks between the two parts, not inside one.
     card.querySelector(".map-meta")!.append(
-      ...[`${map.width.toLocaleString()} × ${map.height.toLocaleString()} px · `, formatBytes(map.bytes)]
+      ...[`${lastUsed(map)} · `, formatBytes(map.bytes)]
         .map((part) => Object.assign(document.createElement("span"), { textContent: part })),
     );
     const saved = card.querySelector(".map-saved")!;
