@@ -461,10 +461,18 @@ export class Viewer {
       this.options?.onTap(point);
       return true;
     }
-    // A place's label chip reads as a button, so it opens the place too.
-    const labelled = marker ?? this.navigation.markers.find((m) => m.id === this.overlay?.labelAt(screen));
+    // Label chips read as buttons: a place's opens the place, like its pin;
+    // a route's frames the route, like its row in Saved.
+    const label = marker ? undefined : this.overlay?.labelAt(screen);
+    const labelled = marker ?? this.navigation.markers.find((m) => m.id === label?.markerId);
     if (labelled) {
       this.options?.onMarker(labelled);
+      return true;
+    }
+    const route = this.navigation.routes.find((r) => r.id === label?.routeId);
+    if (route) {
+      this.fitPoints(route.points);
+      this.pulse(route.id);
       return true;
     }
     return false;

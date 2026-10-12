@@ -46,7 +46,7 @@ const FOUND_MS = 2200;
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
-  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string }[] = [];
+  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string; routeId?: string }[] = [];
   private searchMarkers = new Set<string>();
   private anchors: CalloutBounds[] = [];
   private editing?: string;
@@ -116,13 +116,13 @@ export class NavigationOverlay {
     };
     const label = (
       parent: SVGGElement, text: string, point: Point,
-      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string,
+      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string, routeId?: string,
     ) => {
       const callout = new MapCallout(icon, color);
       callout.element.classList.add("overlay-label");
       callout.setText(text);
       parent.append(callout.element);
-      this.callouts.push({ callout, point, padding, layer, priority, markerId });
+      this.callouts.push({ callout, point, padding, layer, priority, markerId, routeId });
     };
     const pin = (parent: SVGGElement, point: Point) => {
       const element = node("g");
@@ -168,7 +168,7 @@ export class NavigationOverlay {
         body.append(
           node("circle", { r: "8", fill: color, stroke: CASING, "stroke-width": "3" }),
         );
-        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0);
+        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0, undefined, route.id);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
@@ -307,12 +307,12 @@ export class NavigationOverlay {
       callout.draw(p, viewport, bounds, labels);
     }
   }
-  /** The place whose label chip covers this screen point, if any. */
-  labelAt(screen: Point) {
-    for (const { callout, markerId } of this.callouts) {
-      const bounds = markerId && callout.bounds;
+  /** The place or route whose label chip covers this screen point, if any. */
+  labelAt(screen: Point): { markerId?: string; routeId?: string } | undefined {
+    for (const { callout, markerId, routeId } of this.callouts) {
+      const bounds = callout.bounds;
       if (bounds && screen.x >= bounds.left && screen.x <= bounds.right &&
-        screen.y >= bounds.top && screen.y <= bounds.bottom) return markerId;
+        screen.y >= bounds.top && screen.y <= bounds.bottom) return { markerId, routeId };
     }
   }
   dispose() {
