@@ -124,6 +124,17 @@ export class Viewer {
         return true;
       },
     });
+    // A mouse learns what a click would do before clicking: pins and labels
+    // open, the map is a target while adding, and editable points drag.
+    canvas.addEventListener(
+      "pointermove",
+      (event) => {
+        if (event.pointerType !== "mouse" || event.buttons) return;
+        const rect = canvas.getBoundingClientRect();
+        canvas.style.cursor = this.cursorAt({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      },
+      { signal: this.controller.signal },
+    );
     document.addEventListener(
       "visibilitychange",
       () => {
@@ -304,6 +315,7 @@ export class Viewer {
     this.dragging = undefined;
     this.tool = tool;
     this.target = targetId;
+    this.canvas.style.cursor = "";
     this.overlay?.setEditing(
       tool === "route" ? targetId : undefined,
       tool === "move" ? targetId : undefined,
@@ -489,6 +501,12 @@ export class Viewer {
     }
     return false;
   }
+  private cursorAt(screen: Point) {
+    if (this.navigation.touchLocked || !insideImage(screenToWorld(this.camera, screen), this.map)) return "";
+    if (this.tool === "browse")
+      return this.nearestPlace(screen) || this.overlay?.labelAt(screen) ? "pointer" : "";
+    return this.grabbable(screen) ? "grab" : "crosshair";
+  }
   private near(target: Point, screen: Point) {
     const p = worldToScreen(this.camera, target);
     return Math.hypot(p.x - screen.x, p.y - screen.y);
@@ -505,7 +523,7 @@ export class Viewer {
     return nearest;
   }
   // Only while editing: the drawn route's points, or the place being moved.
-  private grab(screen: Point) {
+  private grabbable(screen: Point) {
     const { routes, markers } = this.navigation;
     let found: { point: Point; replace(point: Point): void } | undefined;
     if (this.tool === "route") {
@@ -525,6 +543,10 @@ export class Viewer {
       if (marker && this.near(marker.point, screen) < 36)
         found = { point: marker.point, replace: (p) => (marker.point = p) };
     }
+    return found;
+  }
+  private grab(screen: Point) {
+    const found = this.grabbable(screen);
     if (!found) return false;
     this.options?.onDragStart?.();
     // Its own copy, so a route point snapped onto a place moves alone.
