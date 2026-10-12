@@ -72,7 +72,7 @@ export const viewerMarkup = `
         ${layerToggle("places", "Places", icons.pin)}
         ${layerToggle("labels", "Names", icons.text)}
       </div>
-      <button id="spotlight" class="panel-action spotlight-action">${icons.sparkle}<span>Highlight</span></button>
+      <button id="spotlight" class="panel-action spotlight-action" title="Dim the map for a moment and pulse every route and place, even hidden ones">${icons.sparkle}<span>Highlight saved</span></button>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>
       <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>
