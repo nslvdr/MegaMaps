@@ -10,9 +10,11 @@ export const dialogHeader = (
 ) => `<div class="dialog-header"><span id="${titleId}-icon" class="dialog-title-icon" aria-hidden="true">${icon}</span><h2 id="${titleId}">${title}</h2><button type="button" id="${closeId}" class="dialog-close" aria-label="${closeLabel}" title="${closeLabel}">${icons.close}</button></div>`;
 
 // Open on the heading so native dialog focus never preselects an action or text field.
-export function showDialog(dialog: HTMLDialogElement) {
+// A non-modal dialog leaves the page behind it usable.
+export function showDialog(dialog: HTMLDialogElement, modal = true) {
   const heading = dialog.querySelector<HTMLElement>("h2")!;
   heading.tabIndex = -1;
   heading.setAttribute("autofocus", "");
-  dialog.showModal();
+  if (modal) dialog.showModal();
+  else dialog.show();
 }

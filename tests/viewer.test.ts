@@ -116,6 +116,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     drops: boolean[] = [],
     opened: string[] = [],
     taps: Point[] = [];
+  let emptyTaps = 0;
   const viewer = new Viewer(
     canvas,
     map,
@@ -127,6 +128,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       onView() {},
       onTap: (point) => taps.push(point),
       onMarker: (marker) => opened.push(marker.id),
+      onEmptyTap: () => emptyTaps++,
       onDrop: (moved) => drops.push(moved),
     },
   );
@@ -389,6 +391,10 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.equal(internals.tap({ x: pin.x + 12, y: pin.y }), true);
     assert.equal(internals.tap({ x: pin.x + 2, y: pin.y }), true);
     assert.deepEqual(opened, ["near", place.id]);
+    assert.equal(emptyTaps, 0);
+    assert.equal(internals.tap({ x: pin.x + 120, y: pin.y + 120 }), false,
+      "an empty tap stays free to start a double-tap zoom");
+    assert.equal(emptyTaps, 1, "and tells the controls nothing was hit");
   } finally {
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.

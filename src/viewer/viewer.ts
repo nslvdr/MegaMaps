@@ -45,6 +45,8 @@ export interface ViewerOptions {
   onView(): void;
   onTap(point: Point): void;
   onMarker(marker: MapMarker): void;
+  /** A browsing tap that hit no place, label or route. */
+  onEmptyTap?(): void;
   /** Long press on the map while browsing, in image coordinates. */
   onLongPress?(point: Point): void;
   /** A route point or the moving place was picked up (before it changes). */
@@ -343,6 +345,11 @@ export class Viewer {
     this.overlay?.setFound(id);
     this.invalidate();
   }
+  /** The place whose details are open stands out from the others. */
+  select(id?: string) {
+    this.overlay?.setSelected(id);
+    this.invalidate();
+  }
   previewPlace(place?: Pick<MapMarker, "point" | "kind">) {
     this.overlay?.setPreview(place);
     this.invalidate();
@@ -482,7 +489,11 @@ export class Viewer {
   }
   private tap(screen: Point) {
     const point = screenToWorld(this.camera, screen);
-    if (!insideImage(point, this.map)) return this.tool !== "browse";
+    if (!insideImage(point, this.map)) {
+      if (this.tool !== "browse") return true;
+      this.options?.onEmptyTap?.();
+      return false;
+    }
     const marker = this.nearestPlace(screen);
     if (this.tool === "route") {
       // Snap route points onto saved places the user taps.
@@ -507,6 +518,8 @@ export class Viewer {
       this.pulse(route.id);
       return true;
     }
+    // Not consumed, so a double tap still zooms.
+    this.options?.onEmptyTap?.();
     return false;
   }
   private cursorAt(screen: Point) {

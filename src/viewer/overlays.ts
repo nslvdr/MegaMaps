@@ -55,6 +55,7 @@ export class NavigationOverlay {
   private editing?: string;
   private moving?: string;
   private found?: string;
+  private selected?: string;
   private foundTimer?: ReturnType<typeof setTimeout>;
   private preview?: Pick<MapMarker, "point" | "kind">;
   private state?: NavigationState;
@@ -75,6 +76,11 @@ export class NavigationOverlay {
       this.found = undefined;
       for (const element of this.svg.querySelectorAll(".found")) element.classList.remove("found");
     }, FOUND_MS);
+  }
+  setSelected(id?: string) {
+    if (id === this.selected) return;
+    this.selected = id;
+    if (this.state) this.rebuild(this.state);
   }
   /** An unsaved place, lifted like a moving pin while its details are chosen. */
   setPreview(place?: Pick<MapMarker, "point" | "kind">) {
@@ -191,9 +197,10 @@ export class NavigationOverlay {
       const { element, body } = pin(places, marker.point);
       if (marker.id === this.moving) element.classList.add("moving");
       else if (marker.id === this.found) element.classList.add("found");
+      if (marker.id === this.selected) element.classList.add("selected");
       placeBody(body, marker.kind);
-      const moving = marker.id === this.moving;
-      label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, moving ? 18 : 12, "places", moving ? 2 : 0, marker.id);
+      const raised = marker.id === this.moving || marker.id === this.selected;
+      label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, raised ? 18 : 12, "places", raised ? 2 : 0, marker.id);
     }
     // Shown even with the places layer hidden: it is what the user is adding.
     if (this.preview) {
@@ -222,7 +229,7 @@ export class NavigationOverlay {
     };
     if (this.visible("places"))
       for (const marker of this.state?.markers ?? [])
-        reservePoint(marker.point, marker.id === this.moving ? 18 : 12);
+        reservePoint(marker.point, marker.id === this.moving || marker.id === this.selected ? 18 : 12);
     if (this.visible("routes"))
       for (const route of this.state?.routes ?? [])
         for (const point of route.points)
