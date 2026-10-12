@@ -18,7 +18,7 @@ import {
   type PlannedRoute,
 } from "../viewer/navigation";
 import { icons } from "./icons";
-import { plural } from "./format";
+import { nextName, plural } from "./format";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
@@ -295,13 +295,16 @@ export class ViewerControls {
     ))
       input.checked = input.value === kind;
   }
+  private markerName(kind: MapMarker["kind"]) {
+    return nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
+  }
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? this.newMarkerKind;
     this.autoMarkerName = marker
       ? ""
-      : `${markerKinds[kind].label} ${this.state.markers.length + 1}`;
+      : this.markerName(kind);
     this.el("marker-dialog-title").textContent = title;
     this.input("marker-label").value = marker?.label ?? this.autoMarkerName;
     this.setMarkerKind(kind);
@@ -614,7 +617,7 @@ export class ViewerControls {
     this.click("add-route", () => {
       const route: PlannedRoute = {
         id: crypto.randomUUID(),
-        name: `Route ${this.state.routes.length + 1}`,
+        name: nextName("Route", this.state.routes.map((r) => r.name)),
         points: [],
         created: Date.now(),
         draft: true,
@@ -664,7 +667,7 @@ export class ViewerControls {
         // Keep auto names in sync with the chosen kind until the user types.
         const label = this.input("marker-label");
         if (this.autoMarkerName && label.value === this.autoMarkerName) {
-          this.autoMarkerName = `${markerKinds[this.markerKind()].label} ${this.state.markers.length + 1}`;
+          this.autoMarkerName = this.markerName(this.markerKind());
           label.value = this.autoMarkerName;
         }
         if (!this.editingMarker && this.markerPoint)

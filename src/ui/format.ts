@@ -33,3 +33,14 @@ export function lastUsed(map: { created: number; opened?: number }, now = Date.n
       });
   return `${map.opened ? "Opened" : "Added"} ${when}`;
 }
+
+/** "Entrance 3": one past the highest number already given to this kind, so
+ *  names count per kind and a deletion never makes a duplicate. */
+export function nextName(base: string, names: Iterable<string>) {
+  let highest = 0;
+  for (const name of names) {
+    const number = name.startsWith(`${base} `) ? Number(name.slice(base.length + 1)) : NaN;
+    if (Number.isInteger(number) && number > highest) highest = number;
+  }
+  return `${base} ${highest + 1}`;
+}
