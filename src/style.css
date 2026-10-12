@@ -1804,10 +1804,6 @@ input[type="range"] {
   gap: 4px;
   margin-bottom: 6px;
 }
-.sheet[data-panel="saved"] .sheet-header h2 {
-  font-size: 19px;
-}
-.sheet[data-panel="saved"] .sheet-close,
 .sheet-share {
   display: grid;
   place-items: center;
@@ -1816,9 +1812,6 @@ input[type="range"] {
   flex-shrink: 0;
   padding: 0;
   background: none;
-}
-.sheet[data-panel="saved"] .sheet-close::after {
-  content: none;
 }
 .sheet-share {
   color: var(--neon-saved);
