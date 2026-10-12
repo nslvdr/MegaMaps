@@ -258,7 +258,7 @@ window.addEventListener("popstate", (event) => {
   const wanted = (event.state as { map?: string } | null)?.map;
   if (leavingMap) leavingMap = false;
   else if (currentMap && !wanted) {
-    if (document.querySelector("dialog[open]") || controls?.escape())
+    if (document.querySelector("dialog:modal") || controls?.escape())
       history.pushState({ map: currentMap.id }, "");
     else closeViewer();
   } else if (!currentMap && wanted) {
@@ -692,7 +692,7 @@ document.addEventListener("keydown", (event) => {
   if (
     event.defaultPrevented ||
     !viewer ||
-    document.querySelector("dialog[open]") ||
+    document.querySelector("dialog:modal") ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(
       (event.target as HTMLElement).tagName,
     )

@@ -26,9 +26,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   });
   // Linkedom supplies DOM/events but not native modal-dialog behavior.
   for (const dialog of document.querySelectorAll("dialog")) {
-    Object.defineProperty(dialog, "showModal", {
-      value: () => dialog.setAttribute("open", ""),
-    });
+    for (const method of ["show", "showModal"])
+      Object.defineProperty(dialog, method, {
+        value: () => dialog.setAttribute("open", ""),
+      });
     Object.defineProperty(dialog, "close", {
       value: () => {
         if (!dialog.hasAttribute("open")) return;
@@ -1033,6 +1034,7 @@ test("place details read long descriptions safely and expand while scrolling", a
   const card = document.getElementById("marker-dialog")!;
   for (const dialog of document.querySelectorAll("dialog")) {
     Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
       showModal: { value: () => dialog.setAttribute("open", "") },
       close: { value: () => {
         if (!dialog.hasAttribute("open")) return;
@@ -1122,6 +1124,78 @@ test("place details read long descriptions safely and expand while scrolling", a
   }
 });
 
+test("reading a place leaves the map usable and closes when tapping away", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const card = document.getElementById("marker-dialog")!;
+  const opened: boolean[] = [];
+  for (const dialog of document.querySelectorAll("dialog")) {
+    const open = (modal: boolean) => () => {
+      if (dialog === card) opened.push(modal);
+      dialog.setAttribute("open", "");
+    };
+    Object.defineProperties(dialog, {
+      show: { value: open(false) },
+      showModal: { value: open(true) },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const map: MapRecord = {
+    id: "place-dismiss", name: "cave.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  const marker = {
+    id: "dismiss-place", point: { x: 500, y: 600 }, label: "Entrance",
+    description: "", kind: "entrance" as const, created: 0,
+  };
+  state.markers = [marker];
+  const selected: (string | undefined)[] = [];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {},
+    select(id) { selected.push(id); },
+  });
+  const press = (target: Element) =>
+    target.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+  try {
+    controls.options().onMarker(marker);
+    assert.deepEqual(opened, [false], "the map behind stays usable to pan and zoom");
+    assert.equal(selected.at(-1), marker.id, "the place being read is highlighted");
+    press(document.getElementById("map-canvas")!);
+    press(document.getElementById("marker-dialog-title")!);
+    assert.equal(card.hasAttribute("open"), true, "pressing the map may start a pan; the card stays");
+    controls.options().onEmptyTap!();
+    assert.equal(card.hasAttribute("open"), false, "tapping the map closes it");
+    assert.equal(selected.at(-1), undefined);
+    controls.options().onMarker(marker);
+    press(document.getElementById("open-saved")!);
+    assert.equal(card.hasAttribute("open"), false, "pressing other controls closes it");
+    controls.options().onMarker(marker);
+    assert.equal(controls.escape(), true);
+    assert.equal(card.hasAttribute("open"), false, "Escape closes it");
+    controls.options().onMarker(marker);
+    document.getElementById("marker-edit")!.dispatchEvent(new window.Event("click"));
+    assert.deepEqual(opened.slice(-2), [false, true], "editing is modal");
+    assert.equal(selected.at(-1), marker.id, "switching to editing keeps the place");
+    controls.options().onEmptyTap!();
+    assert.equal(card.hasAttribute("open"), true, "taps behind the editor don't close it");
+    document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
+    assert.deepEqual(opened.slice(-1), [false], "cancelling returns to the readable, non-modal details");
+    assert.equal(document.getElementById("marker-dialog-title")!.textContent, "Entrance");
+  } finally {
+    await controls.dispose();
+  }
+});
+
 test("place photos lead the details as a carousel and are removed from the edit form", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
@@ -1130,6 +1204,7 @@ test("place photos lead the details as a carousel and are removed from the edit 
   Object.defineProperty(globalThis, "window", { value: window, configurable: true });
   for (const dialog of document.querySelectorAll("dialog")) {
     Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
       showModal: { value: () => dialog.setAttribute("open", "") },
       close: { value: () => {
         if (!dialog.hasAttribute("open")) return;

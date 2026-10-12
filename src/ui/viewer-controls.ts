@@ -49,7 +49,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
@@ -73,6 +73,9 @@ export class ViewerControls {
   private editingMarker?: string;
   /** Keeps the detail view available while its place is being edited. */
   private viewingMarker?: string;
+  /** Editing holds focus in the place card; reading leaves the map usable. */
+  private cardModal = false;
+  private reopeningCard = false;
   private markerPoint?: Point;
   private autoMarkerName = "";
   /** Printed map text under the place being added, which names it better than a number. */
@@ -154,7 +157,7 @@ export class ViewerControls {
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
       labelObstacles: () => {
         const stage = this.el("map-stage").getBoundingClientRect();
-        return ["back", "display-chips", "dock", "search-count", "sheet", "tool-bar"].flatMap(id => {
+        return ["back", "display-chips", "dock", "search-count", "sheet", "tool-bar", "marker-dialog"].flatMap(id => {
           const element = this.el(id);
           if (element.hidden) return [];
           const rect = element.getBoundingClientRect();
@@ -169,6 +172,7 @@ export class ViewerControls {
       },
       onTap: (point) => this.onTap(point),
       onMarker: (marker) => this.showMarker(marker),
+      onEmptyTap: () => this.closePlaceDetails(),
       // Long-press drops a place without going through Add.
       onLongPress: (point) => {
         if (this.tool !== "browse") return;
@@ -234,6 +238,8 @@ export class ViewerControls {
       this.renderSearch();
     }
     this.openSheet = name;
+    // A panel replaces the place being read.
+    if (name) this.closePlaceDetails();
     // Row menus start closed each time a panel opens.
     if (name !== previous) this.closeRowMenu();
     this.el("sheet").hidden = !name || name === "search";
@@ -262,7 +268,7 @@ export class ViewerControls {
   }
   /** Opens Search ready to type through its field or the slash shortcut. */
   openSearch() {
-    if (this.tool !== "browse" || this.root.querySelector("dialog[open]")) return false;
+    if (this.tool !== "browse" || this.modalOpen()) return false;
     this.sheet("search");
     this.input("map-search").focus();
     return true;
@@ -332,9 +338,12 @@ export class ViewerControls {
     this.formPhotos = [...(marker?.photos ?? [])];
     this.renderFormPhotos();
     // A new place shows where it will go while it is named.
-    if (!marker) this.viewer?.previewPlace?.({ point, kind });
-    if (!card.hasAttribute("open")) showDialog(card);
-    else this.el("marker-dialog-title").focus({ preventScroll: true });
+    if (!marker) {
+      this.viewingMarker = undefined;
+      this.viewer?.select?.();
+      this.viewer?.previewPlace?.({ point, kind });
+    }
+    this.presentCard(true);
     this.viewer?.cover?.();
     if (marker) this.viewer?.jumpTo(point, 1);
     // The card covers the bottom of the map; keep the place it's about in sight,
@@ -572,20 +581,46 @@ export class ViewerControls {
     }));
     photos.hidden = !count;
     photos.scrollLeft = 0;
-    // With nothing to read, the card shrinks to its header.
-    this.el("marker-details").hidden = !marker.description && !count;
-    this.el("marker-details").scrollTop = 0;
-    if (!card.hasAttribute("open")) showDialog(card);
-    else this.el("marker-dialog-title").focus({ preventScroll: true });
     const details = this.el("marker-details");
+    // With nothing to read, the card shrinks to its header.
+    details.hidden = !marker.description && !count;
+    details.scrollTop = 0;
+    // Measured at its natural height, up to half the screen.
+    details.dataset.expandable = "false";
+    this.presentCard(false);
     const overflowing = details.querySelector<HTMLElement>(".place-detail-content")!.scrollHeight > details.clientHeight;
     details.dataset.expandable = String(overflowing);
     details.tabIndex = overflowing ? 0 : -1;
     // The map stays full size behind the pane; the place centers above it.
     this.viewer?.cover?.(card.offsetTop);
     this.viewer?.jumpTo(marker.point, 1);
+    this.viewer?.select?.(marker.id);
     this.viewer?.pulse?.(marker.id);
     this.viewer?.refreshLabels?.();
+  }
+  private presentCard(modal: boolean) {
+    const card = this.dialog("marker-dialog");
+    if (card.hasAttribute("open") && this.cardModal === modal) {
+      this.el("marker-dialog-title").focus({ preventScroll: true });
+      return;
+    }
+    // An open dialog can't change modality; reopen it without the close cleanup.
+    if (card.hasAttribute("open")) {
+      this.reopeningCard = true;
+      card.close();
+    }
+    this.cardModal = modal;
+    showDialog(card, modal);
+  }
+  /** Closes the place being read; true if there was one. */
+  private closePlaceDetails() {
+    const card = this.dialog("marker-dialog");
+    if (!card.hasAttribute("open") || this.cardModal) return false;
+    card.close();
+    return true;
+  }
+  private modalOpen() {
+    return !!this.root.querySelector('dialog[open]:not(.place-card[data-mode="view"])');
   }
   /** The initial native scroll distance unfolds the pane before the notes scroll. */
   private markerExpansionRange() {
@@ -713,6 +748,13 @@ export class ViewerControls {
         this.changed();
       });
     }
+    // Reading a place, a press anywhere off the card and the map closes it; the
+    // map closes it on a tap, so it can still pan and zoom.
+    this.on(document, "pointerdown", (event) => {
+      const target = event.target as Element | null;
+      if (target?.closest?.("dialog") || target === this.el("map-canvas")) return;
+      this.closePlaceDetails();
+    });
     // Tapping anywhere outside an open row menu closes it.
     this.on(document, "pointerdown", (event) => {
       if (!this.rowMenu) return;
@@ -841,8 +883,13 @@ export class ViewerControls {
       });
     this.click("photo-viewer-close", () => this.dialog("photo-viewer").close());
     this.on(this.dialog("marker-dialog"), "close", () => {
+      if (this.reopeningCard) {
+        this.reopeningCard = false;
+        return;
+      }
       this.dialog("photo-viewer").close();
       this.viewingMarker = undefined;
+      this.viewer?.select?.();
       this.formVersion++;
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
       this.photoURLs.clear();
@@ -926,7 +973,8 @@ export class ViewerControls {
   }
   /** Backs out one level (sheet → tool → browse); false when already browsing. */
   escape() {
-    if (this.root.querySelector("dialog[open]")) return false;
+    if (this.modalOpen()) return false;
+    if (this.closePlaceDetails()) return true;
     if (this.rowMenu) {
       this.closeRowMenu(true);
     } else if (this.openSheet) this.sheet(undefined, true);

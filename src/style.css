@@ -1528,8 +1528,8 @@ button.glass:active:not(:disabled) {
   --dialog-from: 32px;
   margin-bottom: max(var(--space-12) + var(--keyboard-inset, 0px), env(safe-area-inset-bottom));
 }
-/* Reading a place covers the lower half; the map stays full size behind it and
-   the place centers in the upper half. */
+/* Reading a place covers up to the lower half, sized to what there is to read;
+   the map stays full size and usable behind it, the place centered above. */
 .viewer {
   --place-pane-min-height: 50dvh;
   --place-pane-max-height: max(50dvh, min(85dvh, calc(100dvh - 140px - var(--space-12) - env(safe-area-inset-top))));
@@ -1537,12 +1537,16 @@ button.glass:active:not(:disabled) {
   --place-pane-height: clamp(var(--place-pane-min-height), calc(var(--place-pane-min-height) + var(--place-pane-scroll)), var(--place-pane-max-height));
 }
 .place-card[data-mode="view"] {
+  /* Not modal, so not in the top layer: lift it over the map's controls. */
+  position: fixed;
+  z-index: 20;
   top: auto;
   bottom: var(--space-12);
-  height: var(--place-pane-height);
-  min-height: var(--place-pane-min-height);
-  max-height: var(--place-pane-max-height);
+  height: auto;
+  max-height: var(--place-pane-min-height);
   margin-block: 0;
+  /* Already floating above the home indicator: only clear what's left of it. */
+  padding-bottom: max(var(--space-20), env(safe-area-inset-bottom) - var(--space-12));
   overflow: hidden;
   user-select: text;
   -webkit-user-select: text;
@@ -1551,20 +1555,22 @@ button.glass:active:not(:disabled) {
   display: flex;
   flex-direction: column;
 }
-/* A place with nothing to read is just its header. */
-.place-card[data-mode="view"]:has(> .place-details[hidden]) {
-  height: auto;
-  min-height: 0;
+/* Longer details open at half height and unfold while scrolling. */
+.place-card[data-mode="view"]:has(> .place-details[data-expandable="true"]) {
+  height: var(--place-pane-height);
+  min-height: var(--place-pane-min-height);
+  max-height: var(--place-pane-max-height);
 }
-.place-card[data-mode="view"]:has(> .place-details[hidden]) > .dialog-header {
-  margin-bottom: 0;
-}
+/* The details bring their own gap, so a place with nothing to read is just
+   its header. */
 .place-card[data-mode="view"] > .dialog-header {
   flex-shrink: 0;
+  margin-bottom: 0;
 }
 .place-details {
   flex: 1;
   min-height: 0;
+  margin-top: var(--space-16);
   overflow-y: auto;
   overscroll-behavior: contain;
   /* Pane growth deliberately changes the viewport during native scrolling. */
@@ -1699,9 +1705,6 @@ dialog.place-card::backdrop {
   .place-card[open]::backdrop {
     opacity: 0;
   }
-}
-.place-card[data-mode="view"]::backdrop {
-  background: rgb(0 0 0 / 0.2);
 }
 .kind-picker {
   display: grid;
@@ -2379,6 +2382,16 @@ label.panel-row {
 .moving .pin-body {
   filter: drop-shadow(0 0 8px rgb(255 255 255 / 0.7));
   animation: lifted 1.2s ease-in-out infinite;
+}
+/* The place being read stands out from the others. */
+.selected .pin-body {
+  transform: scale(1.5);
+  transition: transform 0.2s var(--ease-out);
+}
+@starting-style {
+  .selected .pin-body {
+    transform: none;
+  }
 }
 @keyframes lifted {
   0%,
