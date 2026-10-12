@@ -555,7 +555,6 @@ export class ViewerControls {
     this.viewingMarker = marker.id;
     card.dataset.mode = "view";
     this.el("marker-form").hidden = true;
-    this.el("marker-details").hidden = false;
     this.el("marker-edit").hidden = false;
     this.el("marker-dialog-title").textContent = marker.label;
     this.el("marker-dialog-title-icon").innerHTML = placeIcon(marker.kind);
@@ -573,6 +572,8 @@ export class ViewerControls {
     }));
     photos.hidden = !count;
     photos.scrollLeft = 0;
+    // With nothing to read, the card shrinks to its header.
+    this.el("marker-details").hidden = !marker.description && !count;
     this.el("marker-details").scrollTop = 0;
     if (!card.hasAttribute("open")) showDialog(card);
     else this.el("marker-dialog-title").focus({ preventScroll: true });

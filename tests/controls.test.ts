@@ -363,6 +363,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-dialog-title").textContent, "<Entrance>");
     assert.doesNotMatch(el("marker-details").textContent!, /Entrance/, "the pin shows the type; the details don't spell it out");
     assert.equal(el("marker-detail-description").textContent, "Left opening");
+    assert.equal(el("marker-details").hidden, false);
     assert.equal(el("marker-details").querySelector("Entrance"), null, "place information remains literal text");
     assert.equal(el("marker-edit").nextElementSibling, el("marker-cancel"), "Edit sits beside Close");
     click("marker-edit");
@@ -389,6 +390,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.markers.length, 1);
     assert.equal(el("marker-form").hidden, true, "saving returns to readable information");
     assert.equal(el("marker-detail-description").textContent, "Updated description");
+    click("marker-edit");
+    input("marker-description", "");
+    submit("marker-form");
+    assert.equal(el("marker-details").hidden, true, "a place with nothing to read shows only its header");
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     // Saved list renders names as text, never markup.

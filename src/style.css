@@ -1551,6 +1551,14 @@ button.glass:active:not(:disabled) {
   display: flex;
   flex-direction: column;
 }
+/* A place with nothing to read is just its header. */
+.place-card[data-mode="view"]:has(> .place-details[hidden]) {
+  height: auto;
+  min-height: 0;
+}
+.place-card[data-mode="view"]:has(> .place-details[hidden]) > .dialog-header {
+  margin-bottom: 0;
+}
 .place-card[data-mode="view"] > .dialog-header {
   flex-shrink: 0;
 }
