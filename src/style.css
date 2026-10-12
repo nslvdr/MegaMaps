@@ -514,6 +514,22 @@ dialog[open]::backdrop {
 #delete-dialog {
   --accent: var(--danger);
 }
+.delete-map {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.delete-map img {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  object-fit: cover;
+}
 dialog h2 {
   font-size: 20px;
   line-height: 1.3;
