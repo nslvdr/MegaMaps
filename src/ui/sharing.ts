@@ -1,6 +1,6 @@
 import { dialogHeader, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
-import { markerKinds, routeColor, type NavigationState } from "../viewer/navigation";
+import { routeColor, type NavigationState } from "../viewer/navigation";
 import { tileKey } from "../types";
 import { payloadStore } from "../storage/payloads";
 import { readShare, type SharedMap } from "../sharing/format";
@@ -319,7 +319,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       const parsed = await readShare(input);
       if (version !== receiveVersion) return;
       const share = parsed.manifest;
-      el("receive-summary").textContent = `${displayName(share.map.name)}\n${plural(share.markers.length, "place")} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
+      const photos = share.photos?.length ? ` · ${plural(share.photos.length, "photo")}` : "";
+      el("receive-summary").textContent = `${displayName(share.map.name)}\n${plural(share.markers.length, "place")}${photos} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
       const available = (await options.maps()).filter((map) => map.status === "ready" && map.width === share.map.width && map.height === share.map.height);
       const exact = await matchingMaps(share, available, controller.signal);
       const states = await Promise.all(exact.map((id) => loadNavigation(id)));
@@ -371,9 +372,12 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
             const text = root.ownerDocument.createElement("span");
             text.className = "share-choice-text";
             text.textContent = "label" in item ? item.label : item.name;
-            const detail = root.ownerDocument.createElement("small");
-            detail.textContent = "label" in item ? (markerKinds[item.kind] ?? markerKinds.landmark).label : plural(item.points.length, "point");
-            text.append(detail);
+            // A place's pin says what it is; routes add their length.
+            if (!("label" in item)) {
+              const detail = root.ownerDocument.createElement("small");
+              detail.textContent = plural(item.points.length, "point");
+              text.append(detail);
+            }
             const input = root.ownerDocument.createElement("input");
             input.type = "checkbox";
             input.value = item.id;

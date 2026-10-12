@@ -9,14 +9,9 @@ import { defaultNavigation } from "../src/viewer/navigation";
 test("OCR migration preserves version 2 maps, camera, places, routes and settings", async () => {
   const state = defaultNavigation("old-map");
   state.view = { center: { x: 100, y: 200 }, scale: 0.5, rotation: 1 };
-  state.markers.push({
-    id: "place",
-    label: "Gate",
-    point: { x: 100, y: 200 },
-    kind: "landmark",
-    note: "",
-    created: 1,
-  });
+  // Version 2 places kept their text in `note`; it becomes the description.
+  const place = { id: "place", label: "Gate", point: { x: 100, y: 200 }, kind: "landmark" as const, created: 1 };
+  const stored = { ...state, markers: [{ ...place, note: "Rusty gate" }] };
   state.routes.push({
     id: "route",
     name: "Exit",
@@ -49,7 +44,7 @@ test("OCR migration preserves version 2 maps, camera, places, routes and setting
         name: "Old map",
         status: "ready",
       });
-      tx.objectStore("navigation").put(state);
+      tx.objectStore("navigation").put(stored);
       tx.objectStore("settings").put("old-map", "last-map");
       tx.oncomplete = () => {
         db.close();
@@ -58,11 +53,11 @@ test("OCR migration preserves version 2 maps, camera, places, routes and setting
       tx.onabort = () => reject(tx.error);
     };
   });
-  assert.equal((await database()).version, 3);
+  assert.equal((await database()).version, 4);
   assert.equal((await listMaps())[0]?.name, "Old map");
   const restored = await loadNavigation("old-map");
   assert.deepEqual(restored.view, state.view);
-  assert.deepEqual(restored.markers, state.markers);
+  assert.deepEqual(restored.markers, [{ ...place, description: "Rusty gate" }]);
   assert.deepEqual(restored.routes, state.routes);
   assert.equal(await lastMap(), "old-map");
   assert.equal(await loadOcr("old-map"), undefined);

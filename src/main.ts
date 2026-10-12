@@ -12,6 +12,7 @@ import { displayName, formatBytes, lastUsed, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
+import { prunePhotos } from "./storage/photos";
 import { darkMode, measureTone } from "./viewer/appearance";
 import { initLibraryFooter } from "./ui/library-footer";
 import { initKeyboardInset } from "./ui/keyboard-inset";
@@ -192,7 +193,7 @@ const sharing = initSharing(app, {
       const result = await mutate(async () => {
         if (destination.mapId) {
           controller.signal.throwIfAborted();
-          const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal);
+          const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal, share.photos);
           const map = (await listMaps()).find((map) => map.id === destination.mapId);
           if (!map) throw new Error("This map is no longer available.");
           return { map, ...counts };
@@ -325,6 +326,7 @@ async function openMap(map: MapRecord) {
     if (version !== openVersion) return;
     const state = await loadNavigation(map.id);
     if (version !== openVersion) return;
+    void prunePhotos(map.id).catch(() => {});
     controls = new ViewerControls(viewerSection, map, state, (item) => { void shareMap(map, item); });
     viewer = new Viewer(
       element<HTMLCanvasElement>("map-canvas"),

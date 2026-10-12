@@ -7,6 +7,7 @@ import { viewerMarkup } from "../src/ui/viewer-markup";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { saveMap } from "../src/storage/database";
 import { loadNavigation } from "../src/storage/navigation";
+import { savePhoto } from "../src/storage/photos";
 import type { Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
 import type { MapSearchMatch } from "../src/viewer/map-search";
@@ -315,18 +316,21 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "no keyboard just to accept the prefilled name",
     );
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
-    // Notes stay behind "Add note" until asked for.
-    assert.equal(el("marker-note-field").hidden, true);
-    assert.equal(el("marker-add-note").hidden, false);
     assert.equal(
       el("marker-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
-      11,
+      9,
       "kinds show the map's pins",
     );
     assert.deepEqual(
       Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
-      ["landmark", "entrance", "shaft", "stairs", "squeeze", "dead-end", "unstable", "flooded", "machinery", "graffiti", "new-room"],
+      ["landmark", "entrance", "stairs", "squeeze", "dead-end", "unstable", "flooded", "graffiti", "new-room"],
       "landmarks and bookmarks share one option",
+    );
+    assert.equal(el("marker-dialog").querySelector(".kind-picker")!.textContent!.trim(), "", "pins carry no captions");
+    assert.equal(
+      root.querySelector('input[name="marker-kind"][value="dead-end"]')!.getAttribute("aria-label"),
+      "Dead end",
+      "each pin is still named for screen readers",
     );
     const entrance = root.querySelector<HTMLInputElement>(
       'input[name="marker-kind"][value="entrance"]',
@@ -340,10 +344,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
     input("marker-label", "<Entrance>");
-    click("marker-add-note");
-    assert.equal(el("marker-note-field").hidden, false);
-    assert.equal(el("marker-add-note").hidden, true);
-    input("marker-note", "Left opening");
+    input("marker-description", "Left opening");
     submit("marker-form");
     assert.equal(state.markers[0]?.label, "<Entrance>");
     assert.equal(state.markers[0]?.kind, "entrance");
@@ -360,39 +361,34 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(requestedZooms.at(-1), 1, "opening a place requests native detail zoom");
     assert.equal(el("marker-form").hidden, true, "a place opens as information, not an editing form");
     assert.equal(el("marker-dialog-title").textContent, "<Entrance>");
-    assert.equal(el("marker-detail-kind").textContent, "Entrance");
-    assert.equal(el("marker-detail-note").textContent, "Left opening");
+    assert.doesNotMatch(el("marker-details").textContent!, /Entrance/, "the pin shows the type; the details don't spell it out");
+    assert.equal(el("marker-detail-description").textContent, "Left opening");
     assert.equal(el("marker-details").querySelector("Entrance"), null, "place information remains literal text");
     assert.equal(el("marker-edit").nextElementSibling, el("marker-cancel"), "Edit sits beside Close");
     click("marker-edit");
     assert.equal(el("marker-form").hidden, false);
     assert.equal(el("marker-details").hidden, true);
-    input("marker-note", "Unsaved changes");
+    input("marker-description", "Unsaved changes");
     const cancelEdit = new window.Event("cancel", { cancelable: true });
     el("marker-dialog").dispatchEvent(cancelEdit);
     assert.equal(cancelEdit.defaultPrevented, true, "Escape returns to reading rather than closing the pane");
     assert.equal(el("marker-form").hidden, true);
-    assert.equal(el("marker-detail-note").textContent, "Left opening", "canceling leaves the original note intact");
-    assert.equal(state.markers[0]?.note, "Left opening");
+    assert.equal(el("marker-detail-description").textContent, "Left opening", "canceling leaves the original description intact");
+    assert.equal(state.markers[0]?.description, "Left opening");
     click("marker-edit");
     assert.equal(entrance.checked, true);
-    assert.equal(
-      el("marker-note-field").hidden,
-      false,
-      "an existing note shows",
-    );
     assert.equal(el("marker-delete").hidden, false);
-    input("marker-note", "Updated note");
-    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
+    input("marker-description", "Updated description");
+    // ⌘/Ctrl+Enter saves from the description, where Enter starts a new line.
     (el("marker-form") as HTMLFormElement).requestSubmit = () => submit("marker-form");
     const save = new window.Event("keydown", { cancelable: true });
     Object.defineProperties(save, { key: { value: "Enter" }, metaKey: { value: true } });
-    el("marker-note").dispatchEvent(save);
+    el("marker-description").dispatchEvent(save);
     assert.equal(save.defaultPrevented, true);
-    assert.equal(state.markers[0]?.note, "Updated note");
+    assert.equal(state.markers[0]?.description, "Updated description");
     assert.equal(state.markers.length, 1);
     assert.equal(el("marker-form").hidden, true, "saving returns to readable information");
-    assert.equal(el("marker-detail-note").textContent, "Updated note");
+    assert.equal(el("marker-detail-description").textContent, "Updated description");
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     // Saved list renders names as text, never markup.
@@ -899,7 +895,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const originalMarkers = [...state.markers];
     const landmarks = Array.from({ length: 30 }, (_, i) => ({
       id: `search-place-${i}`, kind: "landmark" as const,
-      label: i ? `Église ${i}` : "<Église>", note: "North entrance",
+      label: i ? `Église ${i}` : "<Église>", description: "North entrance",
       point: { x: 400 + i * 100, y: 500 }, created: i,
     }));
     state.markers.push(...landmarks);
@@ -1022,7 +1018,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   assert.equal(stage.classList.contains("spotlight"), false);
 });
 
-test("place details read long notes safely and expand while scrolling", async () => {
+test("place details read long descriptions safely and expand while scrolling", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -1048,7 +1044,7 @@ test("place details read long notes safely and expand while scrolling", async ()
   const note = "<img src=x onerror=alert(1)>\n" + "A detailed observation.\n".repeat(150);
   const marker = {
     id: "reading-place", point: { x: 500, y: 600 }, label: "<Entrance>",
-    note, kind: "entrance" as const, created: 0,
+    description: note, kind: "entrance" as const, created: 0,
   };
   state.markers = [marker];
   const original = structuredClone(marker);
@@ -1059,7 +1055,7 @@ test("place details read long notes safely and expand while scrolling", async ()
     jumpTo(point, _minimumScale, animated) { centered.push({ point, animated }); },
   });
   const details = document.getElementById("marker-details")!,
-    noteElement = document.getElementById("marker-detail-note")!,
+    noteElement = document.getElementById("marker-detail-description")!,
     editor = document.getElementById("marker-form")!;
   let contentHeight = 2000;
   Object.defineProperty(details.querySelector(".place-detail-content")!, "scrollHeight", {
@@ -1103,14 +1099,86 @@ test("place details read long notes safely and expand while scrolling", async ()
       assert.equal(event.defaultPrevented, false, "native input and touch momentum are not intercepted");
     }
     contentHeight = 80;
-    marker.note = "";
+    marker.description = "";
     controls.options().onMarker(marker);
     assert.equal(details.dataset.expandable, "false", "short notes need no extra scroll distance");
     assert.equal(details.getAttribute("tabindex"), "-1", "short notes do not add an unnecessary tab stop");
-    assert.equal(noteElement.textContent, "No notes yet.");
+    assert.equal(noteElement.hidden, true, "a place without a description shows none");
     document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
     assert.equal(card.hasAttribute("open"), false);
     assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "");
+  } finally {
+    await controls.dispose();
+  }
+});
+
+test("place photos lead the details as a carousel and are removed from the edit form", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "place-photos", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const first = await savePhoto(map.id, new Blob(["first"], { type: "image/jpeg" }));
+  const second = await savePhoto(map.id, new Blob(["second"], { type: "image/jpeg" }));
+  const state = defaultNavigation(map.id);
+  state.markers = [{
+    id: "pillar", point: { x: 500, y: 600 }, label: "Pillar", description: "Cracked",
+    photos: [second, first], kind: "unstable", created: 0,
+  }];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({ setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {} });
+  const el = (id: string) => document.getElementById(id)!;
+  const loaded = () => new Promise((resolve) => setTimeout(resolve, 10));
+  try {
+    controls.options().onMarker(state.markers[0]!);
+    const carousel = el("marker-detail-photos");
+    assert.equal(carousel.hidden, false);
+    assert.equal(carousel.parentElement!.firstElementChild, carousel, "photos come first in the details");
+    assert.deepEqual([...carousel.querySelectorAll("img")].map((image) => image.alt), ["Photo 1 of 2", "Photo 2 of 2"]);
+    await loaded();
+    assert.ok([...carousel.querySelectorAll("img")].every((image) => image.getAttribute("src")?.startsWith("blob:")));
+
+    carousel.querySelectorAll("button")[1]!.dispatchEvent(new window.Event("click"));
+    assert.equal(el("photo-viewer").hasAttribute("open"), true, "tapping a photo shows it full screen");
+    assert.deepEqual(
+      [...el("photo-viewer").querySelectorAll<HTMLImageElement>(".photo-viewer-track img")].map((image) => image.alt),
+      ["Photo 1 of 2", "Photo 2 of 2"],
+      "the place's other photos are a swipe away",
+    );
+    el("photo-viewer-close").dispatchEvent(new window.Event("click"));
+    assert.equal(el("photo-viewer").hasAttribute("open"), false);
+    assert.equal(el("marker-dialog").hasAttribute("open"), true, "closing the photo returns to the place");
+
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-photos-field").hidden, false);
+    assert.equal(el("marker-photo-list").children.length, 2);
+    el("marker-photo-list").querySelector<HTMLElement>(".photo-remove")!.dispatchEvent(new window.Event("click"));
+    el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+    assert.deepEqual(state.markers[0]!.photos, [first], "only the removed photo is gone");
+    assert.equal(el("marker-form").hidden, true);
+    assert.equal(carousel.querySelectorAll("img").length, 1);
+
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    el("marker-photo-list").querySelector<HTMLElement>(".photo-remove")!.dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-photos-field").hidden, true, "an empty photo field folds away");
+    el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+    assert.equal(state.markers[0]!.photos, undefined);
+    assert.equal(carousel.hidden, true);
   } finally {
     await controls.dispose();
   }

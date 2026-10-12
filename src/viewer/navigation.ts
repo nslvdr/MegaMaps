@@ -9,7 +9,9 @@ export interface MapMarker {
   id: string;
   point: Point;
   label: string;
-  note: string;
+  description: string;
+  /** Photo IDs, shown in this order; the blobs live in the photos store. */
+  photos?: string[];
   kind: keyof typeof markerKinds;
   created: number;
 }
@@ -79,9 +81,14 @@ export function defaultNavigation(mapId: string): NavigationState {
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
 // A draft with no points only survives when the page went away mid-draw; drop it.
-// Kinds that were folded into Landmark; old saves and shared files still use them.
-export const legacyMarkerKinds = ["bookmark", "junction", "note"] as const;
-type StoredMarker = Omit<MapMarker, "kind"> & { kind: MapMarker["kind"] | (typeof legacyMarkerKinds)[number] };
+// Kinds that were folded into Landmark (shaft and machinery on 2026-10-12); old saves and shared files still use them.
+export const legacyMarkerKinds = ["bookmark", "junction", "note", "shaft", "machinery"] as const;
+// Places saved before descriptions had a plain-text `note` instead.
+type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
+  kind: MapMarker["kind"] | (typeof legacyMarkerKinds)[number];
+  description?: string;
+  note?: string;
+};
 type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   mapId: string;
   markers?: StoredMarker[];
@@ -101,13 +108,17 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
     if (typeof stored.layers?.[name] === "boolean")
       layers[name] = stored.layers[name];
   const markers = [
-    ...(stored.markers ?? []).map((marker) => ({ ...marker, kind: normalizeMarkerKind(marker.kind) })),
+    ...(stored.markers ?? []).map(({ note, ...marker }): MapMarker => ({
+      ...marker,
+      description: marker.description ?? note ?? "",
+      kind: normalizeMarkerKind(marker.kind),
+    })),
     ...(stored.checkpoints ?? []).map(
       (checkpoint): MapMarker => ({
         id: checkpoint.id,
         point: checkpoint.point,
         label: checkpoint.label,
-        note: "",
+        description: "",
         kind: "landmark",
         created: checkpoint.confirmed,
       }),
@@ -128,13 +139,11 @@ export const routeColor = (state: NavigationState, id: string) =>
 export const markerKinds = {
   landmark: { label: "Landmark", color: "#ff9a5c" },
   entrance: { label: "Entrance", color: "#7dff8a" },
-  shaft: { label: "Shaft", color: "#b18cff" },
   stairs: { label: "Stairs", color: "#ffd23f" },
   squeeze: { label: "Squeeze", color: "#3ef0c8" },
   "dead-end": { label: "Dead end", color: "#9aa4b2" },
   unstable: { label: "Unstable", color: "#ff4d4d" },
   flooded: { label: "Flooded", color: "#5aa9ff" },
-  machinery: { label: "Machinery", color: "#d9a86c" },
   graffiti: { label: "Graffiti", color: "#ff5fa2" },
   "new-room": { label: "New room", color: "#e3e3e3" },
 } as const satisfies Record<string, { label: string; color: string }>;

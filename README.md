@@ -60,7 +60,7 @@ src/
   storage/
     database.ts             IndexedDB metadata + transaction commits
     payloads.ts             OPFS / IndexedDB payload abstraction, deletion
-    navigation.ts           Saved camera, notes/routes, settings, throttled writes
+    navigation.ts           Saved camera, places/routes, settings, throttled writes
     ocr.ts                  Atomic text indexes and deletion protection
     verify.ts / .worker.ts  Offline tile inventory + sequential decode checks
   processing/
@@ -86,7 +86,7 @@ src/
     regions.ts              Oriented text boxes and overlap suppression
     index.ts                Text normalization, phrase matching, duplicate removal
   ui/
-    viewer-markup.ts         Touch controls, tools panel, local note forms
+    viewer-markup.ts         Touch controls, tools panel, place details and forms
     viewer-controls.ts       Navigation commands, dialogs and persistence
   pwa.ts                    Production service-worker registration
 public/
@@ -130,7 +130,7 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 ### Cave and quarry tools
 
 - **Dark map (on by default):** the overview tile is analysed once. Light maps are inverted with hue preserved and contrast stretched so the paper becomes **pure black** (OLED pixels off, which saves battery) and the ink stays bright but not glaring. Dark-gray maps have their background deepened to black without inverting. Maps that are already black are left untouched. The margin around the map is also pure black. The map starts slightly dimmed (85%) so your routes and places stand out; they stay at full strength unless you dim further. **View › brightness** adjusts it (20–100%); the Dark map switch is in View too. Only the canvas is filtered; the original files and tiles are untouched. This is a software display adjustment, not hardware brightness control.
-- **Add (+):** opens a panel like Saved and View, with two big tiles: **Place** and **Route**. Picking one swaps the pill for a task card with the same header (icon, title, **×**): it says what to tap, routes add full-size **Undo** and **Done** buttons plus a pencil to rename, and **×** cancels. While placing, Saved and View wait until you're done. Tapping a spot for a place opens a card at the bottom with the eleven kinds (landmark, entrance, shaft, stairs, squeeze, dead end, unstable, flooded, machinery, graffiti, new room) shown as their map pins and a prefilled name such as "Landmark 3" (it follows the kind until you type your own), so **Save** works without the keyboard; a note is one **Add note** tap away (⌘Enter or Ctrl+Enter saves from it).
+- **Add (+):** opens a panel like Saved and View, with two big tiles: **Place** and **Route**. Picking one swaps the pill for a task card with the same header (icon, title, **×**): it says what to tap, routes add full-size **Undo** and **Done** buttons plus a pencil to rename, and **×** cancels. While placing, Saved and View wait until you're done. Tapping a spot for a place opens a card at the bottom with nine pin icons in rows of three, without captions (landmark, entrance, stairs, squeeze, dead end, unstable, flooded, graffiti, new room), and a prefilled name such as "Landmark 3" (it follows the kind until you type your own), so **Save** works without the keyboard. Every place has a description box (⌘Enter or Ctrl+Enter saves from it) and **Add photos** is one tap away. Photos are shrunk to 1600 px on their long edge and re-encoded as JPEG, which also drops their EXIF location. A saved place opens with its photos as a swipeable carousel above the description; an empty description isn't shown. Tapping a photo shows it full screen and uncropped, clear of the notch and home bar. Drag (or press the arrow keys) for the place's other photos; pinch, double-tap or scroll to zoom up to 5×, and drag to look around a zoomed photo. **×** or Esc goes back.
 - **Planned routes:** Add › Route starts drawing right away. Tap along passages; while drawing or editing, the points become handles you can **drag** to adjust (pinching still zooms). Points snap to nearby places when tapped or dropped, and **Undo** (or ⌘Z, Ctrl+Z, Backspace) steps back through your taps and drags. **Done** saves the route once it has 2 or more points. **×** cancels: a new route is discarded and a continued or edited one goes back to how it was; if that would throw away 2 or more points it asks first (× turns red; tap it again). Routes get distinct colors with start and end markers. In **Saved**, tap a route to frame it; its **⋯** menu continues it, edits its points, renames it or deletes it (tap Delete twice).
 - **View:** a **Map** card (dark map, brightness, and rotation while Lock is off), a **Show on map** card with a switch for routes, places and names, then a **Highlight** button. **Highlight** darkens the map for a few seconds while every saved item glows and pulses, including hidden layers.
 - **Saved:** one list with a Routes section and a Places section; each place shows the same pin as on the map. Tap a row to jump to it. Its **⋯** opens a small menu beside it: routes have Edit points (or Continue), Rename and Delete; places have Edit, **Move** (the pin lifts: drag it or tap where it goes, then Done; × puts it back) and Delete. Delete asks for a second tap. Arrow keys move through the rows and through an open menu; tap outside or press Escape to close the menu. There is no GPS or automatic underground tracking.
@@ -139,7 +139,7 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 
 **Phone orientation is separate from map rotation.** The app does not control the phone's screen orientation; use your phone's own rotation lock for that. **Lock** only controls map rotation.
 
-Notes, routes, camera and display settings are saved locally in a separate IndexedDB store. Camera writes are throttled and flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
+Places, routes, camera and display settings are saved locally in a separate IndexedDB store; place photos have their own store and go with their map when it is deleted. Photos no place uses any more are pruned a day after they were added. Camera writes are throttled and flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
 
 ## Sharing maps and annotations
 

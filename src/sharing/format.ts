@@ -10,17 +10,25 @@ const MAGIC = "MEGAMAP1";
 const HEADER_BYTES = 12;
 const MAX_ITEMS = 10_000;
 const MAX_POINTS = 100_000;
+const MAX_PHOTOS = 2_000;
+const MAX_PHOTO_BYTES = 16 * 1024 * 1024;
+const MAX_PHOTOS_PER_PLACE = 50;
+const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+export interface SharePhoto { id: string; type: string; bytes: number }
 export interface ShareManifest {
   format: "megamap";
-  version: 1;
+  version: 2;
   map: { name: string; width: number; height: number; fingerprint: string };
   image?: { name: string; type: string; bytes: number };
   markers: MapMarker[];
   routes: PlannedRoute[];
+  /** Place photos, stored in this order after the manifest and before the map image. */
+  photos?: SharePhoto[];
 }
 export interface SharedMap {
   manifest: ShareManifest;
   image?: File;
+  photos?: Map<string, Blob>;
 }
 
 /** Shared files are recognised by their header, whatever their name or picker. */
@@ -59,7 +67,8 @@ function invalid(): never {
 /** Treat shared files as untrusted; construct only the fields this version accepts. */
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
-  if (value.version !== 1) throw new Error("This sharing format is not supported. Update MegaMaps and try again.");
+  // Version 1 predates photos and named descriptions `note`.
+  if (value.version !== 1 && value.version !== 2) throw new Error("This sharing format is not supported. Update MegaMaps and try again.");
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -81,13 +90,38 @@ export function validateManifest(value: unknown): ShareManifest {
     ids.add(key);
     return { id: value.id, created: value.created };
   };
+  let photos: SharePhoto[] = [];
+  if (value.photos !== undefined) {
+    if (!Array.isArray(value.photos) || value.photos.length > MAX_PHOTOS) invalid();
+    photos = value.photos.map((input: unknown) => {
+      if (!object(input) || !name(input.id, 200) || ids.has(`photo:${input.id}`) ||
+          !PHOTO_TYPES.includes(String(input.type)) || !integer(input.bytes, 1, MAX_PHOTO_BYTES)) invalid();
+      ids.add(`photo:${input.id}`);
+      return { id: input.id, type: String(input.type), bytes: input.bytes };
+    });
+  }
+  const unused = new Set(photos.map((photo) => photo.id));
+  const version = value.version;
   const markers = value.markers.map((value: unknown): MapMarker => {
-    if (!object(value) || !name(value.label, 100) || !text(value.note, 2000) ||
+    if (!object(value)) invalid();
+    const description = version === 1 ? value.note : value.description;
+    if (!name(value.label, 100) || !text(description, 2000) ||
         typeof value.kind !== "string" ||
         (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind))) invalid();
-    return { ...identity(value, "marker"), label: value.label, note: value.note,
+    let own: string[] = [];
+    if (value.photos !== undefined) {
+      if (!Array.isArray(value.photos) || value.photos.length > MAX_PHOTOS_PER_PLACE) invalid();
+      // Each photo belongs to exactly one place and must be in the file.
+      own = value.photos.map((id: unknown) => {
+        if (typeof id !== "string" || !unused.delete(id)) invalid();
+        return id;
+      });
+    }
+    return { ...identity(value, "marker"), label: value.label, description,
+      ...(own.length ? { photos: own } : {}),
       kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]), point: point(value.point) };
   });
+  if (unused.size) invalid();
   let points = 0;
   const routes = value.routes.map((value: unknown): PlannedRoute => {
     if (!object(value) || !name(value.name, 100) || value.draft !== false ||
@@ -107,27 +141,34 @@ export function validateManifest(value: unknown): ShareManifest {
   }
   if (!image && markers.length + routes.length === 0)
     throw new Error("Select at least one place or route, or include the map image.");
-  return { format: "megamap", version: 1,
+  return { format: "megamap", version: 2,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
-    ...(image ? { image } : {}), markers, routes };
+    ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}) };
 }
+const photoBytes = (manifest: ShareManifest) =>
+  (manifest.photos ?? []).reduce((total, photo) => total + photo.bytes, 0);
 
-/** A small length-prefixed JSON manifest followed by the optional original bytes. */
-export function encodeShare(manifest: ShareManifest, image?: Blob) {
+/** A small length-prefixed JSON manifest followed by place photos and the optional original bytes. */
+export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new Map<string, Blob>()) {
   const valid = validateManifest(manifest);
   if ((valid.image?.bytes ?? 0) !== (image?.size ?? 0)) invalid();
+  const photoParts = (valid.photos ?? []).map((photo) => {
+    const blob = photos.get(photo.id);
+    if (blob?.size !== photo.bytes) invalid();
+    return blob;
+  });
   const json = new TextEncoder().encode(JSON.stringify(valid));
   if (json.byteLength > MAX_MANIFEST_BYTES)
     throw new Error("Too many annotations for one share. Select fewer items.");
   const header = new Uint8Array(HEADER_BYTES);
   header.set(new TextEncoder().encode(MAGIC));
   new DataView(header.buffer).setUint32(8, json.byteLength, true);
-  return new Blob(image ? [header, json, image] : [header, json], { type: SHARE_MIME });
+  return new Blob([header, json, ...photoParts, ...(image ? [image] : [])], { type: SHARE_MIME });
 }
 
 /** Parse metadata without loading or decoding a potentially large embedded map. */
 export async function readShare(file: Blob): Promise<SharedMap> {
-  if (file.size < HEADER_BYTES || file.size > HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_FILE_BYTES)
+  if (file.size < HEADER_BYTES || file.size > HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_PHOTOS * MAX_PHOTO_BYTES + MAX_FILE_BYTES)
     throw new Error("This MegaMaps file is truncated or too large.");
   const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer());
   if (new TextDecoder().decode(header.subarray(0, 8)) !== MAGIC)
@@ -141,11 +182,15 @@ export async function readShare(file: Blob): Promise<SharedMap> {
     throw new Error("The annotations in this MegaMaps file could not be read.");
   }
   const manifest = validateManifest(value);
-  if (file.size !== HEADER_BYTES + size + (manifest.image?.bytes ?? 0))
+  if (file.size !== HEADER_BYTES + size + photoBytes(manifest) + (manifest.image?.bytes ?? 0))
     throw new Error("This MegaMaps file is incomplete or contains unexpected data.");
-  const image = manifest.image && new File([file.slice(HEADER_BYTES + size)],
+  let offset = HEADER_BYTES + size;
+  const photos = new Map<string, Blob>();
+  for (const photo of manifest.photos ?? [])
+    photos.set(photo.id, file.slice(offset, offset += photo.bytes, photo.type));
+  const image = manifest.image && new File([file.slice(offset)],
     manifest.image.name, { type: manifest.image.type });
-  return { manifest, ...(image ? { image } : {}) };
+  return { manifest, ...(image ? { image } : {}), photos };
 }
 
 /** Verify the source image before placing annotations or creating a new map. */

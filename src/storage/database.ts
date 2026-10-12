@@ -3,7 +3,7 @@ let opening: Promise<IDBDatabase> | undefined;
 export function database() {
   return (opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     // Keep the original database name so existing Mega Maps libraries stay accessible.
-    const request = indexedDB.open("map-viewer", 3);
+    const request = indexedDB.open("map-viewer", 4);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("maps"))
@@ -16,6 +16,9 @@ export function database() {
         db.createObjectStore("settings");
       if (!db.objectStoreNames.contains("ocr"))
         db.createObjectStore("ocr", { keyPath: "mapId" });
+      // Place photos, keyed "<mapId>/<photoId>" so a map's photos share a range.
+      if (!db.objectStoreNames.contains("photos"))
+        db.createObjectStore("photos");
     };
     request.onsuccess = () => {
       request.result.onversionchange = () => {

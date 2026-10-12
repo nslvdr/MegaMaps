@@ -17,11 +17,11 @@ const layerToggle = (id: string, label: string, icon: string) =>
 const brightnessChoices = BRIGHTNESS_LEVELS.map(
   (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
-// Kinds are picked by their map pin, one big target each.
+// Places are told apart by their map pin alone; names stay for screen readers and hover.
 const kindPicks = Object.entries(markerKinds)
   .map(
     ([kind, { label }]) =>
-      `<label class="kind-pick"><input type="radio" name="marker-kind" value="${kind}">${placeIcon(kind as keyof typeof markerKinds)}<span>${label}</span></label>`,
+      `<label class="kind-pick" title="${label}"><input type="radio" name="marker-kind" value="${kind}" aria-label="${label}">${placeIcon(kind as keyof typeof markerKinds)}</label>`,
   )
   .join("");
 
@@ -93,11 +93,11 @@ export const viewerMarkup = `
   <div class="dialog-header"><span id="marker-dialog-title-icon" class="dialog-title-icon" aria-hidden="true">${icons.pin}</span><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-edit" class="dialog-edit" aria-label="Edit place" title="Edit place" hidden>${icons.edit}</button><button type="button" id="marker-cancel" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></div>
   <div id="marker-details" class="place-details" role="region" aria-label="Place details" hidden>
     <div class="place-detail-track"><div class="place-detail-content">
-      <p id="marker-detail-kind" class="place-detail-kind"></p>
-      <h3>Notes</h3>
-      <p id="marker-detail-note" class="place-detail-note"></p>
+      <div id="marker-detail-photos" class="place-photos" role="group" aria-label="Photos" hidden></div>
+      <p id="marker-detail-description" class="place-detail-description"></p>
     </div></div>
   </div>
-  <form id="marker-form"><div class="kind-picker" role="radiogroup" aria-label="Kind">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><button type="button" id="marker-add-note" class="add-note">${icons.plus}<span>Add note</span></button><label id="marker-note-field" class="place-note" hidden><span>Note</span><textarea id="marker-note" maxlength="2000" rows="2"></textarea></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>Move</span></button></div></form>
+  <form id="marker-form"><div class="kind-picker" role="radiogroup" aria-label="Icon">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><label class="place-description"><span>Description</span><textarea id="marker-description" maxlength="2000" rows="3"></textarea></label><div id="marker-photos-field" class="place-photos-field" hidden><span id="marker-photos-title">Photos</span><ul id="marker-photo-list" class="photo-thumbs" aria-labelledby="marker-photos-title"></ul></div><button type="button" id="marker-add-photos" class="place-add">${icons.photo}<span>Add photos</span></button><input type="file" id="marker-photo-input" accept="image/*" multiple hidden><div class="dialog-actions"><button type="submit" id="marker-save" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>Move</span></button></div></form>
 </dialog>
+<dialog id="photo-viewer" class="photo-viewer" aria-label="Photos"><div class="photo-viewer-stage"><div class="photo-viewer-track"></div></div><button type="button" id="photo-viewer-close" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></dialog>
 <dialog id="name-dialog" aria-labelledby="name-title"><form id="name-form">${dialogHeader("name-title", "", icons.edit, "name-cancel")}<label>Name<input id="name-input" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button></div></form></dialog>`;

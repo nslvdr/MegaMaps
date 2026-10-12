@@ -46,7 +46,7 @@ test("renaming persists only the name and preserves map payloads and navigation"
   const store = payloadStore(map.backend);
   await store.put(map.id, "0-0-0.png", new Blob(["tile"]));
   const navigation = defaultNavigation(map.id);
-  navigation.markers.push({ id: "place", label: "Entrance", kind: "entrance", point: { x: 10, y: 20 }, note: "", created: 1 });
+  navigation.markers.push({ id: "place", label: "Entrance", kind: "entrance", point: { x: 10, y: 20 }, description: "", created: 1 });
   await saveNavigation(navigation);
   await renameMap(map.id, "  Cave survey  ");
   assert.deepEqual((await listMaps()).find((record) => record.id === map.id), {

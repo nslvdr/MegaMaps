@@ -17,7 +17,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
     id: kind,
     kind: kind as keyof typeof markerKinds,
     label: `<${kind}>`,
-    note: "",
+    description: "",
     point: { x: 100 + index * 60, y: 120 - index * 10 },
     created: 0,
   }));
@@ -96,7 +96,7 @@ test("route outlines and pins follow the camera and drop out while off screen", 
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const svg = document.querySelector<SVGSVGElement>("svg")!;
   const state = defaultNavigation("paths");
-  state.markers = [{ id: "gate", kind: "entrance", label: "Gate", note: "", point: { x: 50, y: 50 }, created: 0 }];
+  state.markers = [{ id: "gate", kind: "entrance", label: "Gate", description: "", point: { x: 50, y: 50 }, created: 0 }];
   state.routes = [{ id: "walk", name: "Walk", created: 0, draft: false,
     points: [{ x: 10, y: 20 }, { x: 110, y: 70 }, { x: 210, y: 20 }] }];
   const overlay = new NavigationOverlay(svg);
@@ -127,7 +127,7 @@ test("search and saved labels share space, including routes starting on a saved 
   const savedSvg = document.querySelector<SVGSVGElement>("#saved")!;
   const searchSvg = document.querySelector<SVGSVGElement>("#search")!;
   const state = defaultNavigation("shared-callouts");
-  state.markers = [{ id: "entrance", kind: "entrance", label: "Entrance", note: "",
+  state.markers = [{ id: "entrance", kind: "entrance", label: "Entrance", description: "",
     point: { x: 200, y: 190 }, created: 0 }];
   state.routes = [{ id: "route", name: "Exit", draft: false, created: 0,
     points: [{ x: 200, y: 190 }, { x: 350, y: 220 }] }];
@@ -169,7 +169,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   const { document } = parseHTML('<html><body><svg id="saved"></svg><svg id="search"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const state = defaultNavigation("search-places");
-  const marker = { id: "church", kind: "landmark" as const, label: "Église", note: "", point: { x: 150, y: 200 }, created: 0 };
+  const marker = { id: "church", kind: "landmark" as const, label: "Église", description: "", point: { x: 150, y: 200 }, created: 0 };
   state.markers = [marker];
   const savedSvg = document.querySelector<SVGSVGElement>("#saved")!;
   const searchSvg = document.querySelector<SVGSVGElement>("#search")!;
