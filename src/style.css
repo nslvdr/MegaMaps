@@ -2195,6 +2195,13 @@ input[type="range"] {
   stroke-dasharray: 1 15;
   animation: route-flow 0.9s linear infinite;
 }
+/* Jumped to from Saved: two pulses once the glide has landed. */
+.found .pin-body {
+  animation: bling 0.7s ease-in-out 0.6s 2;
+}
+.route.found .route-line {
+  animation: route-pulse 0.7s ease-in-out 0.6s 2;
+}
 @keyframes bling {
   50% {
     transform: scale(1.7);

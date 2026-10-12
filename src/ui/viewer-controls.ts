@@ -44,7 +44,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse">>;
   private ocr?: OcrIndex;
   private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
@@ -887,6 +887,8 @@ export class ViewerControls {
     button.append(icon, text);
     button.addEventListener("click", () => {
       options.jump();
+      // Arriving, the item pulses so the eye finds it at once.
+      this.viewer?.pulse?.(options.key);
       this.sheet(undefined);
       // The keyboard carries on from the map: arrows pan, +/− zoom.
       this.el("map-canvas").focus({ preventScroll: true });

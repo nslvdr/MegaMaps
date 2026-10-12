@@ -59,6 +59,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   state.touchLocked = true;
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
+  const pulses: string[] = [];
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
@@ -84,6 +85,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     previewPlace(place) {
       previews.push(place && { point: place.point, kind: place.kind });
+    },
+    pulse(id) {
+      pulses.push(id);
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -453,6 +457,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "the same tap can still jump to the place",
     );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
+    assert.equal(pulses.at(-1), state.markers[0]!.id, "the place pulses once the map arrives");
     assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
     // An application role names the map and hands it the arrow keys from screen readers.
     assert.equal(el("map-canvas").getAttribute("role"), "application");

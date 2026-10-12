@@ -315,6 +315,10 @@ export class Viewer {
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
     this.invalidate();
   }
+  pulse(id: string) {
+    this.overlay?.setFound(id);
+    this.invalidate();
+  }
   previewPlace(place?: Pick<MapMarker, "point" | "kind">) {
     this.overlay?.setPreview(place);
     this.invalidate();
