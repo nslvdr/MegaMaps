@@ -781,7 +781,9 @@ export class ViewerControls {
       ],
       marker: ["New place", "Tap the map where it goes"],
       route: [
-        `${route?.name ?? "Route"} · ${plural(count, "point")}`,
+        count
+          ? `${route?.name ?? "Route"} · ${plural(count, "point")}`
+          : (route?.name ?? "Route"),
         count ? "Tap to add, drag points to adjust" : "Tap where the route starts",
       ],
     };

@@ -1210,6 +1210,11 @@ button.glass:active:not(:disabled) {
   font-weight: 650;
   margin-right: 6px;
 }
+/* Beside Undo and Done the hint is too long for one line; give it its own
+   line under the title instead of wrapping mid-sentence. */
+.tool-bar:has(.tool-actions:not([hidden])) .tool-hint span {
+  display: block;
+}
 .tool-actions {
   flex-shrink: 0;
   display: flex;
