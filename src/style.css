@@ -1359,6 +1359,46 @@ button.glass:active:not(:disabled) {
 .place-card h2 {
   margin-bottom: 10px;
 }
+/* An existing place can be moved right from its card. */
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-head h2 {
+  flex: 1;
+  min-width: 0;
+}
+.card-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 36px;
+  margin: -5px -4px 0 0;
+  padding: 0 14px 0 11px;
+  border-radius: 18px;
+  background: var(--fill-strong);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  position: relative;
+}
+.card-move::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.card-move svg {
+  width: 17px;
+  height: 17px;
+}
+@media (hover: hover) {
+  .card-move:hover {
+    background: #ffffff2b;
+  }
+}
 .kind-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

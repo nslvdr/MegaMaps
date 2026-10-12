@@ -73,6 +73,7 @@ export class ViewerControls {
   private toastTimer?: ReturnType<typeof setTimeout>;
   private toastUndo?: () => void;
   private spotlightTimer?: ReturnType<typeof setTimeout>;
+  private moveAfterSave = false;
   private cardDeleteArmed = false;
   private cardDeleteTimer?: ReturnType<typeof setTimeout>;
   private confirmTimer?: ReturnType<typeof setTimeout>;
@@ -306,6 +307,7 @@ export class ViewerControls {
     this.setMarkerKind(kind);
     this.el<HTMLTextAreaElement>("marker-note").value = marker?.note ?? "";
     this.el("marker-delete").hidden = !marker;
+    this.el("marker-move").hidden = !marker;
     this.armCardDelete(false);
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
@@ -694,8 +696,18 @@ export class ViewerControls {
         this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
       this.dialog("marker-dialog").close();
       if (!unchanged) this.changed();
+      if (this.moveAfterSave) {
+        this.moveMarker(marker);
+        return;
+      }
       this.mode("browse");
       this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
+    });
+    // Move from the card keeps what was typed, then lifts the pin.
+    this.click("marker-move", () => {
+      this.moveAfterSave = true;
+      this.el<HTMLFormElement>("marker-form").requestSubmit();
+      this.moveAfterSave = false;
     });
     this.click("name-cancel", () => this.dialog("name-dialog").close());
     this.on(this.el("name-form"), "submit", (event) => {

@@ -329,6 +329,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       el("marker-label"),
       "no keyboard just to accept the prefilled name",
     );
+    assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     // Notes stay behind "Add note" until asked for.
     assert.equal(el("marker-note-field").hidden, true);
     assert.equal(el("marker-add-note").hidden, false);
@@ -932,6 +933,19 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     input("marker-label", "Upper exit");
     submit("marker-form");
     assert.equal(el("toast").textContent, "Upper exit updated");
+    assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
+
+    // Move on the card keeps the typed edits, then lifts the pin.
+    controls.options().onMarker(state.markers[0]!);
+    assert.equal(el("marker-move").hidden, false, "an existing place can move from its card");
+    input("marker-label", "Upper exit");
+    click("marker-move");
+    assert.equal(tools.at(-1), "move");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    assert.equal(state.markers[0]?.label, "Upper exit");
+    assert.equal(el("tool-title").textContent, "Upper exit");
+    click("open-add");
+    assert.equal(tools.at(-1), "browse");
     assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
 
     // The card's Delete takes two taps, like the Saved menu's.
