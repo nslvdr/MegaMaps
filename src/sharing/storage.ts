@@ -1,7 +1,7 @@
 import type { ImportProgress, MapRecord } from "../types";
 import { database } from "../storage/database";
 import { payloadStore, deleteStoredMap } from "../storage/payloads";
-import { defaultNavigation, normalizeNavigation, type MapMarker, type NavigationState } from "../viewer/navigation";
+import { defaultNavigation, normalizeNavigation, type MapMarker, type NavigationState, type PlannedRoute } from "../viewer/navigation";
 import { importMap } from "../processing/import";
 import { readHeader } from "../processing/headers";
 import { loadPhotos, putPhotos } from "../storage/photos";
@@ -54,17 +54,21 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
   const hash = await mapFingerprint(map);
   const extension = header.format === "jpeg" ? "jpg" : header.format;
   const image = { name: `map.${extension}`, type: `image/${header.format}`, bytes: original.size };
-  const photos = await loadPhotos(map.id, state.markers.flatMap((marker) => marker.photos ?? []));
+  const routes = state.routes.filter((route) => !route.draft && route.points.length >= 2);
+  const photos = await loadPhotos(map.id, [...state.markers, ...routes].flatMap((item) => item.photos ?? []));
+  // A photo missing from storage is dropped instead of breaking the share.
+  const stored = <T extends MapMarker | PlannedRoute>(item: T) => {
+    const copy = structuredClone(item);
+    const kept = copy.photos?.filter((id) => photos.has(id)) ?? [];
+    if (kept.length) copy.photos = kept;
+    else delete copy.photos;
+    return copy;
+  };
   return {
     map: { name: map.name, width: map.width, height: map.height, fingerprint: hash },
-    // A photo missing from storage is dropped instead of breaking the share.
-    markers: state.markers.map((marker): MapMarker => {
-      const { photos: ids, ...rest } = structuredClone(marker);
-      const kept = ids?.filter((id) => photos.has(id)) ?? [];
-      return kept.length ? { ...rest, photos: kept } : rest;
-    }),
+    markers: state.markers.map(stored),
     photos,
-    routes: structuredClone(state.routes.filter((route) => !route.draft && route.points.length >= 2)),
+    routes: routes.map(stored),
     image, original,
   };
 }
@@ -73,13 +77,14 @@ export interface ShareSelection { markers: string[]; routes: string[]; includeIm
 export function exportFile(prepared: PreparedExport, selection: ShareSelection) {
   const markers = new Set(selection.markers), routes = new Set(selection.routes);
   const chosen = prepared.markers.filter((item) => markers.has(item.id));
-  const photos = chosen.flatMap((item) => item.photos ?? []).map((id) => {
+  const chosenRoutes = prepared.routes.filter((item) => routes.has(item.id));
+  const photos = [...chosen, ...chosenRoutes].flatMap((item) => item.photos ?? []).map((id) => {
     const blob = prepared.photos.get(id)!;
     return { id, type: blob.type || "image/jpeg", bytes: blob.size };
   });
-  const manifest: ShareManifest = { format: "megamap", version: 2, map: prepared.map,
+  const manifest: ShareManifest = { format: "megamap", version: 3, map: prepared.map,
     markers: chosen,
-    routes: prepared.routes.filter((item) => routes.has(item.id)),
+    routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
     ...(selection.includeImage ? { image: prepared.image } : {}) };
   return new File([encodeShare(manifest, selection.includeImage ? prepared.original : undefined, prepared.photos)],
@@ -118,8 +123,8 @@ export async function importAnnotations(
       const next = mode === "replace" ? replaceAnnotations(state, manifest) : { ...mergeAnnotations(state, manifest), removed: 0 };
       result = { added: next.added, skipped: next.skipped, removed: next.removed };
       navigation.put(next.state);
-      // Only places that were added bring their photos along.
-      const used = new Set(next.state.markers.flatMap((marker) => marker.photos ?? []));
+      // Only places and routes that were added bring their photos along.
+      const used = new Set([...next.state.markers, ...next.state.routes].flatMap((item) => item.photos ?? []));
       putPhotos(tx, mapId, new Map([...photos].filter(([id]) => used.has(id))));
     };
     tx.oncomplete = () => { finish(); resolve(result); };

@@ -24,7 +24,7 @@ function image(width = 512, height = 256, salt = "original") {
 }
 async function fixture() {
   const original = image();
-  const manifest: ShareManifest = { format: "megamap", version: 2,
+  const manifest: ShareManifest = { format: "megamap", version: 3,
     map: { name: "Survey <2026>", width: 512, height: 256, fingerprint: await fingerprint(original) },
     markers: [{ id: "place-a", label: "Entrance <west>", description: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
     routes: [{ id: "route-a", name: "Way out", points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], draft: false, created: 2 }] };
@@ -86,7 +86,7 @@ test("place photos travel with their place, and version 1 notes arrive as descri
   const { description, ...place } = manifest.markers[0]!;
   const legacy = await readShare(rawFile({ ...manifest, version: 1, markers: [{ ...place, note: description }] }));
   assert.equal(legacy.manifest.markers[0]!.description, description);
-  assert.equal(legacy.manifest.version, 2, "older shares re-export in the current format");
+  assert.equal(legacy.manifest.version, 3, "older shares re-export in the current format");
 
   const encoded = (value: unknown, tail: Blob) => readShare(rawFile(value, tail));
   const bytes = new Blob(["first jpeg", "second"]);
@@ -144,6 +144,56 @@ test("pruning removes old photos no place uses and keeps fresh ones for unsaved 
   assert.ok(await loadPhoto(map.id, kept));
 });
 
+test("route descriptions and ordered photos survive sharing, import and pruning", async () => {
+  const source = record("route-photo-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", image());
+  const first = await savePhoto(source.id, new Blob(["route first"], { type: "image/jpeg" }));
+  const second = await savePhoto(source.id, new Blob(["route second"], { type: "image/webp" }));
+  const other = await savePhoto(source.id, new Blob(["other route"], { type: "image/jpeg" }));
+  const state = defaultNavigation(source.id);
+  state.routes = [
+    { id: "walk", name: "Walk", description: "Low ceiling\nTurn left", photos: [second, "missing", first],
+      points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], created: 1, draft: false },
+    { id: "other", name: "Other", photos: [other],
+      points: [{ x: 20, y: 20 }, { x: 100, y: 100 }], created: 2, draft: false },
+  ];
+  const prepared = await prepareExport(source, state);
+  assert.deepEqual(prepared.routes[0]!.photos, [second, first], "missing route photos are omitted");
+  assert.deepEqual(state.routes[0]!.photos, [second, "missing", first], "export leaves local data intact");
+  const shared = await readShare(exportFile(prepared, { markers: [], routes: ["walk"], includeImage: false }));
+  assert.deepEqual(shared.manifest.routes, [prepared.routes[0]]);
+  assert.deepEqual(shared.manifest.photos?.map((photo) => photo.id), [second, first]);
+  assert.equal(shared.photos?.has(other), false, "unselected route photos stay out of the share");
+
+  const destination = { ...record("route-photo-destination"), fingerprint: shared.manifest.map.fingerprint };
+  await saveMap(destination);
+  await importAnnotations(destination.id, shared.manifest, "merge", undefined, shared.photos);
+  assert.deepEqual((await loadNavigation(destination.id)).routes, shared.manifest.routes);
+  await prunePhotos(destination.id, Date.now() + 2 * 24 * 60 * 60 * 1000);
+  assert.equal(await (await loadPhoto(destination.id, first))!.text(), "route first");
+  assert.equal(await (await loadPhoto(destination.id, second))!.text(), "route second");
+  const cleared = await loadNavigation(destination.id);
+  cleared.routes = [];
+  await saveNavigation(cleared);
+  await prunePhotos(destination.id, Date.now() + 2 * 24 * 60 * 60 * 1000);
+  assert.equal(await loadPhoto(destination.id, first), undefined, "deleted route photos become eligible for cleanup");
+
+  const invalid = (route: object) => validateManifest({ ...shared.manifest,
+    routes: [{ ...shared.manifest.routes[0], ...route }] });
+  assert.throws(() => invalid({ description: "x".repeat(2001) }), /invalid/);
+  assert.throws(() => invalid({ photos: [first, "absent"] }), /invalid/);
+  assert.throws(() => invalid({ photos: [second, first, first] }), /invalid/);
+  assert.throws(() => validateManifest({ ...shared.manifest,
+    markers: [{ id: "place", label: "Place", description: "", kind: "landmark", created: 1,
+      point: { x: 1, y: 1 }, photos: [first] }] }), /invalid/, "a photo cannot belong to both a route and a place");
+
+  const { manifest } = await fixture();
+  const legacy = await readShare(rawFile({ ...manifest, version: 2 }));
+  assert.deepEqual(legacy.manifest.routes, manifest.routes, "version 2 routes remain readable");
+  assert.equal(legacy.manifest.version, 3);
+});
+
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
   const bytes = new Uint8Array(3 * 1024 * 1024 + 17).fill(73);
   const blob = new Blob([bytes]);
@@ -172,7 +222,7 @@ test("import routing recognizes the shared header regardless of filename or MIME
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
   const { manifest, original } = await fixture();
   await assert.rejects(readShare(new Blob(["not a MegaMaps file"])), /exported by MegaMaps/);
-  await assert.rejects(readShare(rawFile({ ...manifest, version: 3 })), /not supported/);
+  await assert.rejects(readShare(rawFile({ ...manifest, version: 4 })), /not supported/);
   await assert.rejects(readShare(rawFile({ ...manifest, map: { ...manifest.map, width: 0 } })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], point: { x: 513, y: 2 } }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], kind: "__proto__" }] })), /invalid/);

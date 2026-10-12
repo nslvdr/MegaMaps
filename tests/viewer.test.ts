@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Viewer } from "../src/viewer/viewer";
-import { screenToWorld, worldToScreen, type Camera, type Point } from "../src/viewer/camera";
+import { cameraAt, screenToWorld, worldToScreen, type Camera, type Point } from "../src/viewer/camera";
 import { BRIGHTNESS_LEVELS, defaultNavigation } from "../src/viewer/navigation";
 import { payloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
@@ -115,6 +115,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   const errors: string[] = [],
     drops: boolean[] = [],
     opened: string[] = [],
+    openedRoutes: string[] = [],
     taps: Point[] = [];
   let emptyTaps = 0;
   const viewer = new Viewer(
@@ -128,6 +129,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       onView() {},
       onTap: (point) => taps.push(point),
       onMarker: (marker) => opened.push(marker.id),
+      onRoute: (route) => openedRoutes.push(route.id),
       onEmptyTap: () => emptyTaps++,
       onDrop: (moved) => drops.push(moved),
     },
@@ -276,6 +278,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       grab(screen: Point): boolean;
       drop(screen: Point): void;
       tap(screen: Point): boolean;
+      cursorAt(screen: Point): string;
     };
     const screen = (p: Point) => worldToScreen(internals.camera, p);
     assert.equal(internals.grab(screen(place.point)), false, "not while browsing");
@@ -395,6 +398,74 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.equal(internals.tap({ x: pin.x + 120, y: pin.y + 120 }), false,
       "an empty tap stays free to start a double-tap zoom");
     assert.equal(emptyTaps, 1, "and tells the controls nothing was hit");
+
+    // Route lines are selectable at a fixed screen distance, even when zoomed or rotated.
+    state.markers = [];
+    state.layers.labels = false;
+    state.routes = [
+      { id: "first-line", name: "First", created: 0, draft: false,
+        points: [{ x: 100, y: 256 }, { x: 412, y: 256 }] },
+      { id: "near-line", name: "Near", created: 0, draft: false,
+        points: [{ x: 100, y: 266 }, { x: 412, y: 266 }] },
+    ];
+    viewer.updateNavigation(state);
+    for (const rotation of [0, Math.PI / 4, Math.PI / 2]) {
+      for (const zoom of [0.8, 2]) {
+        positioning.setCamera(cameraAt({ x: 256, y: 256 }, viewport, zoom, rotation));
+        const mid = screen({ x: 256, y: 256 });
+        const near = { x: mid.x - Math.sin(rotation) * 12, y: mid.y + Math.cos(rotation) * 12 };
+        assert.equal(internals.cursorAt(near), "pointer");
+        assert.equal(internals.tap(near), true, "a tap near the line opens its details");
+        assert.equal(openedRoutes.at(-1), "near-line", "the closest route wins");
+        assert.equal(internals.tap(mid), true);
+        assert.equal(openedRoutes.at(-1), "first-line");
+        const far = { x: mid.x + Math.sin(rotation) * 20, y: mid.y - Math.cos(rotation) * 20 };
+        assert.equal(internals.tap(far), false, "taps beyond the line's reach stay free for zooming");
+      }
+    }
+    const mid = screen({ x: 256, y: 256 });
+    state.markers = [{ ...place, id: "on-route", point: { x: 256, y: 256 } }];
+    viewer.updateNavigation(state);
+    const routeCount = openedRoutes.length;
+    assert.equal(internals.tap(mid), true);
+    assert.equal(opened.at(-1), "on-route", "a place on the route still opens its own details");
+    assert.equal(openedRoutes.length, routeCount);
+    state.markers = [];
+    state.layers.routes = false;
+    viewer.updateNavigation(state);
+    assert.equal(internals.tap(mid), false, "hidden route lines cannot be selected");
+    assert.equal(internals.cursorAt(mid), "");
+    assert.equal(openedRoutes.length, routeCount);
+
+    // Name chips select the same route as its line.
+    state.layers.routes = state.layers.labels = true;
+    viewer.updateNavigation(state);
+    step(performance.now() + 300);
+    const chip = [...overlay.querySelectorAll<SVGGElement>(".map-callout")]
+      .find((callout) => callout.querySelector("text")!.textContent === "First")!;
+    const [x, y] = chip.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+    assert.equal(internals.tap({ x: x! + 2, y: y! + 2 }), true);
+    assert.equal(openedRoutes.at(-1), "first-line");
+
+    const selectedCount = openedRoutes.length;
+    viewer.setTool("route", "first-line");
+    assert.equal(internals.tap(mid), true);
+    assert.equal(openedRoutes.length, selectedCount, "point editing keeps taps on the drawing tool");
+    viewer.setTool("browse");
+
+    // A route centers in the map area above the moving details pane.
+    const shortRoute = [{ x: 200, y: 240 }, { x: 300, y: 270 }];
+    for (const edge of [422, 418, 407, 400]) {
+      viewer.cover(edge);
+      viewer.fitPoints(shortRoute, false);
+      const center = screen({ x: 250, y: 255 });
+      assert.ok(Math.abs(center.x - viewport.width / 2) < 1e-7);
+      assert.ok(Math.abs(center.y - edge / 2) < 1e-7);
+      assert.ok(shortRoute.every((point) => screen(point).y > 0 && screen(point).y < edge));
+      step(performance.now() + 300);
+      assert.ok(Math.abs(screen({ x: 250, y: 255 }).y - edge / 2) < 1e-7,
+        "scrolling the card does not leave a delayed camera animation");
+    }
   } finally {
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.

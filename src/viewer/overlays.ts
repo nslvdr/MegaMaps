@@ -145,12 +145,14 @@ export class NavigationOverlay {
     const routes = group("routes");
     for (const route of state.routes) {
       const color = routeColor(state, route.id),
-        active = route.id === this.editing;
+        active = route.id === this.editing,
+        selected = route.id === this.selected;
       const layer = node("g", {
         class: active ? "route editing" : route.id === this.found ? "route found" : "route",
       });
+      if (selected) layer.classList.add("selected");
       routes.append(layer);
-      path(layer, route.points, { stroke: CASING, "stroke-width": "9" });
+      path(layer, route.points, { stroke: CASING, "stroke-width": "9", class: "route-casing" });
       path(layer, route.points, {
         stroke: color,
         "stroke-width": "4.5",
@@ -177,7 +179,8 @@ export class NavigationOverlay {
         icon.setAttribute("fill", color);
         icon.setAttribute("stroke", CASING);
         icon.setAttribute("stroke-width", "3.6");
-        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0, undefined, route.id);
+        const raised = active || selected;
+        label(layer, route.name, start, icons.route, color, raised ? 10 : 8, "routes", raised ? 1 : 0, undefined, route.id);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
