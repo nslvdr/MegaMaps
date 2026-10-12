@@ -461,6 +461,7 @@ export class ViewerControls {
       if (this.openSheet === "search") this.input("map-search").blur();
     });
     this.on(this.input("map-search"), "input", () => this.queueSearch());
+    this.click("search-count", () => this.stepSearch());
     this.on(this.input("map-search"), "keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.isComposing) {
@@ -1189,18 +1190,24 @@ export class ViewerControls {
     }
     const active = !!normalizeText(this.searchQuery);
     const count = this.searchMatches.length;
+    const stepping = count > 1 && this.searchPosition >= 0;
     const message = active
-      ? count ? `${count} ${count === 1 ? "match" : "matches"}`
+      ? stepping ? `Match ${this.searchPosition + 1} of ${count}`
+        : count ? `${count} ${count === 1 ? "match" : "matches"}`
         : this.ocr ? "No matching text or saved places found." : "No matching saved places yet."
       : "Search map text and saved places. Drag and zoom to explore.";
     const progress = this.ocrMessage || (!this.ocr ? "Text detection is not ready. Open the map’s Advanced settings to retry." : "");
     this.el("search-status").textContent = progress ? `${message} · ${progress}` : message;
-    const badge = this.el("search-count");
-    badge.textContent = String(count);
+    // The count doubles as Next, so a touch screen can step through matches
+    // once Enter has put the keyboard away; it then shows where you are.
+    const badge = this.el<HTMLButtonElement>("search-count");
+    badge.textContent = stepping ? `${this.searchPosition + 1}/${count}` : String(count);
     badge.hidden = !active;
+    badge.disabled = !count;
     badge.classList.toggle("empty", !count);
-    badge.setAttribute("aria-label", `${count} ${count === 1 ? "result" : "results"}`);
-    badge.title = this.el("search-status").textContent ?? "";
+    badge.setAttribute("aria-label", stepping
+      ? `Match ${this.searchPosition + 1} of ${count}. Next match`
+      : `${count} ${count === 1 ? "result" : "results"}`);
     this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {
@@ -1217,6 +1224,7 @@ export class ViewerControls {
     // pan around the match while Enter keeps stepping.
     this.el("map-canvas").focus({ preventScroll: true });
     this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
+    this.renderSearch(true);
     if (match.marker) this.viewer?.jumpTo(match.marker.point);
     else this.viewer?.fitPoints(match.polygons.flat());
   }

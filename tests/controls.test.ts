@@ -722,7 +722,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, true, "search replaces the navbar");
     assert.equal(el("close-sheet").hidden, true);
     assert.equal(el("sheet-search").querySelectorAll("input").length, 1);
-    assert.equal(el("sheet-search").querySelectorAll("button").length, 0);
+    assert.equal(el("sheet-search").querySelectorAll("button").length, 1, "only the count, which is also Next");
     assert.equal(el("search-count").parentElement, el("map-search").parentElement);
     assert.equal(el("search-count").hidden, true);
     assert.equal(el("sheet-dismiss").hidden, true, "search leaves the canvas available for gestures");
@@ -802,10 +802,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), secondPolygon);
     assert.equal(highlights?.selected, 1, "the overlay emphasizes the navigated result");
-    assert.equal(el("search-count").textContent, "2");
+    assert.equal(el("search-count").textContent, "2/2", "the count shows where you are");
+    assert.match(el("search-status").textContent!, /^Match 2 of 2/);
     controls.updateOcr(multiple, "Detecting map text · 30%");
     assert.equal(highlights?.selected, 1, "OCR progress preserves the overlay selection");
-    assert.equal(el("search-count").textContent, "2", "progress keeps the current match");
+    assert.equal(el("search-count").textContent, "2/2", "progress keeps the current match");
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), polygon, "next wraps to the first match");
     const previous = new window.Event("keydown", { cancelable: true });
@@ -817,6 +818,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(framed.at(-1), polygon);
     assert.equal(controls.stepSearch(true), true);
     assert.deepEqual(framed.at(-1), secondPolygon);
+    // On a touch screen the count steps on once the keyboard is away.
+    click("search-count");
+    assert.deepEqual(framed.at(-1), polygon, "the count is a Next button");
+    assert.equal(el("search-count").textContent, "1/2");
+    assert.equal(el("search-count").getAttribute("aria-label"), "Match 1 of 2. Next match");
+    assert.equal(sheet.hidden, false);
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
@@ -828,6 +835,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.match(el("search-status").textContent!, /No matching/);
     assert.equal(el("search-count").textContent, "0");
     assert.equal(el("search-count").hidden, false);
+    assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
     input("map-search", "");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.active, false);
