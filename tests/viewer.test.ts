@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Viewer } from "../src/viewer/viewer";
 import { screenToWorld, worldToScreen, type Camera, type Point } from "../src/viewer/camera";
-import { defaultNavigation } from "../src/viewer/navigation";
+import { BRIGHTNESS_LEVELS, defaultNavigation } from "../src/viewer/navigation";
 import { payloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
 import { tileKey, type MapRecord } from "../src/types";
@@ -137,6 +137,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       "invert(1) hue-rotate(180deg) contrast(1.471) brightness(0.92) brightness(0.4)",
     );
     assert.equal(overlay.style.filter, "");
+    assert.equal(Number(overlay.style.opacity || "1"), 1, "annotations start fully opaque even on a dim map");
     step();
     // The margin is painted white so the inverting filter turns it pure black.
     assert.deepEqual(
@@ -235,13 +236,26 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     state.inverted = false;
     viewer.updateNavigation(state);
     assert.equal(canvas.style.filter, "brightness(0.4)");
-    assert.equal(overlay.style.opacity, "0.6");
-    // The default dim keeps routes and places at full strength.
+    assert.equal(Number(overlay.style.opacity || "1"), 1);
+    // Map brightness never changes annotation opacity, in either display mode.
+    for (const inverted of [true, false]) {
+      state.inverted = inverted;
+      for (const dimming of BRIGHTNESS_LEVELS) {
+        state.dimming = dimming;
+        viewer.updateNavigation(state);
+        const filter: string = canvas.style.filter;
+        assert.equal(Number(overlay.style.opacity || "1"), 1, `annotations stay opaque at ${dimming} brightness`);
+        assert.equal(overlay.style.filter, "");
+        if (inverted) assert.match(filter, /^invert\(1\)/);
+        else assert.equal(filter, dimming < 1 ? `brightness(${dimming})` : "");
+        if (dimming < 1) assert.ok(filter.endsWith(`brightness(${dimming})`));
+      }
+    }
     state.dimming = defaultNavigation(map.id).dimming;
     assert.ok(state.dimming < 1);
     viewer.updateNavigation(state);
     assert.equal(canvas.style.filter, `brightness(${state.dimming})`);
-    assert.equal(overlay.style.opacity, "1");
+    assert.equal(Number(overlay.style.opacity || "1"), 1);
 
     // Editing a route: its points drag; a point snapped onto a place moves
     // alone, and dropping one on a place snaps it there.

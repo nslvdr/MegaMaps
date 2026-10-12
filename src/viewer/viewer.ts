@@ -19,7 +19,6 @@ import { TileCache } from "./cache";
 import { attachInteractions } from "./interactions";
 import {
   defaultNavigation,
-  DEFAULT_DIMMING,
   captureView,
   restoreView,
   insideImage,
@@ -361,13 +360,8 @@ export class Viewer {
     ]
       .filter(Boolean)
       .join(" ");
+    // Appearance adjustments affect only the map; annotations stay fully opaque.
     this.canvas.style.filter = filter;
-    // Annotations stay at full strength at the default dim and only fade
-    // (never below 60%) when the map is dimmed further.
-    if (this.options)
-      this.options.overlay.style.opacity = String(
-        Math.min(1, Math.max(0.6, this.navigation.dimming / DEFAULT_DIMMING)),
-      );
     this.options?.onAppearance?.(this.dark);
   }
   zoomBy(factor: number) {
