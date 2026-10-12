@@ -86,7 +86,7 @@ export const viewerMarkup = `
 </section>
 <p id="viewer-error" class="viewer-error" role="alert" hidden></p>
 <dialog id="marker-dialog" class="place-card" aria-labelledby="marker-dialog-title">
-  <div class="dialog-header"><span id="marker-dialog-title-icon" class="dialog-title-icon" aria-hidden="true">${icons.pin}</span><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-edit" class="dialog-close" aria-label="Edit place" title="Edit place" hidden>${icons.edit}</button><button type="button" id="marker-cancel" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></div>
+  <div class="dialog-header"><span id="marker-dialog-title-icon" class="dialog-title-icon" aria-hidden="true">${icons.pin}</span><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-edit" class="dialog-edit" aria-label="Edit place" title="Edit place" hidden>${icons.edit}</button><button type="button" id="marker-cancel" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></div>
   <div id="marker-details" class="place-details" role="region" aria-label="Place details" hidden>
     <div class="place-detail-track"><div class="place-detail-content">
       <p id="marker-detail-kind" class="place-detail-kind"></p>
