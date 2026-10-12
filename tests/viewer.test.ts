@@ -367,7 +367,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     step(performance.now() + 600);
     const pin = screen(place.point);
     state.markers.push({
-      id: "near", label: "Near", kind: "note", note: "", created: 0,
+      id: "near", label: "Near", kind: "landmark", note: "", created: 0,
       point: screenToWorld(internals.camera, { x: pin.x + 16, y: pin.y }),
     });
     viewer.updateNavigation(state);

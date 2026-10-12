@@ -146,7 +146,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "saved-checkpoints",
       "open-more",
       "sheet-more",
-      "sheet-add",
       "fit",
       "tool-center",
       "placement-center",
@@ -178,7 +177,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(emptyAction("route-list").textContent, "Draw route");
     emptyAction("marker-list").dispatchEvent(new window.Event("click"));
     assert.equal(tools.at(-1), "marker");
-    click("open-add");
+    click("tool-cancel");
     assert.equal(tools.at(-1), "browse");
     const refreshesBeforeOpening = labelRefreshes;
     focus.mock.resetCalls();
@@ -205,30 +204,27 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.equal(el("open-saved").getAttribute("aria-expanded"), "true");
     assert.equal(dock.hidden, false);
-    // Add opens no panel: Place / Route rise above the pill, and Add's
-    // own button turns into × in the same spot to close them.
-    const addBar = el("add-bar");
-    assert.equal(addBar.hidden, true);
+    // Add opens a panel like Saved, and its button stays + while it is open.
     focus.mock.resetCalls();
     click("open-add");
     assert.equal(focus.mock.callCount(), 0, "opening Add does not preselect Place");
-    assert.equal(sheet.hidden, true);
+    assert.equal(sheet.hidden, false);
+    assert.equal(sheet.dataset.panel, "add");
+    assert.equal(el("sheet-title").textContent, "Add");
+    assert.equal(el("sheet-add").hidden, false);
+    assert.equal(el("sheet-saved").hidden, true);
     assert.equal(el("open-saved").getAttribute("aria-expanded"), "false");
-    assert.equal(dock.hidden, false, "the pill never leaves");
-    assert.equal(addBar.hidden, false);
     assert.equal(el("open-add").getAttribute("aria-expanded"), "true");
-    assert.equal(el("open-add").classList.contains("active"), true);
-    assert.equal(el("open-add").getAttribute("aria-label"), "Close");
-    assert.equal(document.getElementById("add-close"), null);
-    click("open-add");
-    assert.equal(addBar.hidden, true);
+    assert.equal(el("open-add").classList.contains("active"), false);
     assert.equal(el("open-add").getAttribute("aria-label"), "Add");
     click("open-add");
+    assert.equal(sheet.hidden, true, "Add toggles its panel");
+    click("open-add");
     key(root, "Escape");
-    assert.equal(addBar.hidden, true, "Escape backs out of the choice");
+    assert.equal(sheet.hidden, true, "Escape closes the panel");
     click("open-add");
     click("open-saved");
-    assert.equal(addBar.hidden, true, "a panel replaces the choice");
+    assert.equal(el("sheet-add").hidden, true, "a panel replaces the choice");
     click("close-sheet");
     click("open-display");
     assert.equal(el("sheet-title").textContent, "View");
@@ -295,13 +291,16 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-add");
     click("add-marker");
     assert.equal(sheet.hidden, true);
-    assert.equal(dock.hidden, false);
-    assert.equal(addBar.hidden, true, "the choice gives way to the hint");
+    // The task card takes the pill's place, with the panels' header and X.
+    assert.equal(dock.hidden, true);
     assert.equal(toolBar.hidden, false);
+    assert.equal(el("tool-title").textContent, "New place");
     assert.equal(el("tool-message").textContent, "Tap the map where it goes");
     assert.equal(el("tool-actions").hidden, true, "a place needs no buttons");
-    assert.equal(el("open-add").getAttribute("aria-label"), "Cancel");
-    assert.equal((el("open-saved") as HTMLButtonElement).disabled, true);
+    assert.equal(el("tool-rename").hidden, true, "only routes are renamed here");
+    assert.equal(el("tool-cancel").getAttribute("aria-label"), "Cancel");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Add", "Add never turns into X");
+    assert.equal((el("open-display") as HTMLButtonElement).disabled, true);
     assert.equal((el("map-search") as HTMLInputElement).disabled, true, "search waits until placing is over");
     assert.equal(root.dataset.tool, "marker");
     tap(500, 600);
@@ -320,13 +319,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-note-field").hidden, true);
     assert.equal(el("marker-add-note").hidden, false);
     assert.equal(
-      el("marker-dialog").querySelectorAll(".kind-pick svg circle").length,
-      4,
+      el("marker-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
+      11,
       "kinds show the map's pins",
     );
     assert.deepEqual(
       Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
-      ["landmark", "entrance", "junction", "note"],
+      ["landmark", "entrance", "shaft", "stairs", "squeeze", "dead-end", "unstable", "flooded", "machinery", "graffiti", "new-room"],
       "landmarks and bookmarks share one option",
     );
     const entrance = root.querySelector<HTMLInputElement>(
@@ -352,7 +351,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("marker-dialog").dispatchEvent(new window.Event("close"));
     assert.equal(previews.at(-1), undefined, "the saved pin replaces the preview");
     assert.equal(toolBar.hidden, true);
-    assert.equal(el("open-add").getAttribute("aria-label"), "Add");
+    assert.equal(dock.hidden, false);
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
     assert.equal((el("map-search") as HTMLInputElement).disabled, false);
     controls.options().onMarker(state.markers[0]!);
@@ -509,7 +508,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("tool-done") as HTMLButtonElement).disabled, false);
     tap(700, 800);
     assert.deepEqual(state.markers[0]?.point, { x: 700, y: 800 });
-    click("open-add");
+    click("tool-cancel");
     assert.deepEqual(
       state.markers[0]?.point,
       { x: 500, y: 600 },
@@ -536,15 +535,22 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(controls.undo(), false, "keyboard undo has nothing to take back");
     assert.equal(el("tool-message").textContent, "Tap where the route starts");
     tap(900, 1000);
-    assert.equal(el("tool-message").textContent, "Tap where it goes next", "one point asks for the next");
+    assert.equal(el("tool-message").textContent, "1 point · Tap where it goes next", "one point asks for the next");
     tap(1500, 1700);
     assert.equal(done.disabled, false);
-    assert.equal(el("tool-message").textContent, "Tap to add, drag points to adjust");
+    assert.equal(el("tool-message").textContent, "2 points · Tap to add, drag to adjust");
     click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
     assert.equal(done.disabled, true);
     tap(1400, 1600);
-    assert.match(el("tool-title").textContent!, /Route 1 · 2 points/);
+    assert.equal(el("tool-title").textContent, "Route 1");
+    // The pencil renames the route without leaving the drawing.
+    assert.equal(el("tool-rename").hidden, false);
+    click("tool-rename");
+    input("name-input", "Lower loop");
+    submit("name-form");
+    assert.equal(el("tool-title").textContent, "Lower loop");
+    assert.equal(root.dataset.tool, "route");
     // Dragging a point is one Undo step, like a tap.
     const options = controls.options();
     options.onDragStart?.();
@@ -587,25 +593,26 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-add");
     click("add-route");
     tap(100, 100);
-    click("open-add");
+    click("tool-cancel");
     assert.equal(state.routes.length, 1);
     assert.match(el("toast").textContent!, /discarded/);
     click("open-add");
     click("add-route");
     tap(100, 100);
     tap(200, 200);
-    click("open-add");
+    click("tool-cancel");
     assert.equal(state.routes.length, 2, "first × only asks");
-    assert.equal(el("open-add").getAttribute("aria-label"), "Discard?");
-    assert.match(el("toast").textContent!, /Tap × again to discard Route 2/);
-    click("open-add");
+    assert.equal(el("tool-cancel").getAttribute("aria-label"), "Discard?");
+    assert.equal(el("tool-cancel").classList.contains("armed"), true);
+    assert.equal(el("tool-message").textContent, "Tap × again to discard this route");
+    click("tool-cancel");
     assert.equal(state.routes.length, 1);
     assert.equal(tools.at(-1), "browse");
     // Cancelling an edit restores the route as it was.
     editPoints();
     tap(300, 300);
-    click("open-add");
-    click("open-add");
+    click("tool-cancel");
+    click("tool-cancel");
     assert.equal(state.routes[0]?.points.length, 2);
     assert.equal(state.routes[0]?.draft, false);
     assert.match(el("toast").textContent!, /unchanged/);
@@ -630,7 +637,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const typed = new window.Event("keydown", { bubbles: true, cancelable: true });
     Object.defineProperty(typed, "key", { value: "e" });
     routeJump.dispatchEvent(typed);
-    assert.deepEqual(names, ["Route 1", "<Entrance>"]);
+    assert.deepEqual(names, ["Lower loop", "<Entrance>"]);
     assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
     assert.equal(typed.defaultPrevented, true);
     // As in the library, F2 renames a row and Delete arms its menu's Delete.
@@ -983,7 +990,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     assert.equal(state.markers[0]?.label, "Upper exit");
     assert.equal(el("tool-title").textContent, "Upper exit");
-    click("open-add");
+    click("tool-cancel");
     assert.equal(tools.at(-1), "browse");
     assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
 

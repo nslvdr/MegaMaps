@@ -29,8 +29,9 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 
 // Map-first layout: almost nothing floats over the map.
 //   top corners   – Back on the left; View and rotation Lock on the right
-//   bottom pill   – Saved · Search · Add; Add switches to X (close or
-//                   cancel) while Place / Route, then the tap hint, float above
+//   bottom pill   – Saved · Search · Add; Saved and Add open panels like View.
+//                   Placing, drawing or moving swaps the pill for a task card
+//                   with the same header (icon, title, X) and full-size actions
 // Pinch and drag move the map, so there are no zoom or pan buttons. The canvas
 // takes its own keys, so it is an application: screen readers pass it arrows.
 export const viewerMarkup = `
@@ -44,20 +45,17 @@ export const viewerMarkup = `
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-label="Saved" title="Saved" aria-controls="sheet" aria-expanded="false">${icons.saved}</button>
   <div id="open-search" class="search-field" tabindex="-1" title="Search (/)" aria-keyshortcuts="/">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" aria-controls="search-overlay" aria-expanded="false" placeholder="Search map…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close (Esc)" hidden>${icons.close}</button></div>
-  <button id="open-add" aria-label="Add" title="Add" aria-controls="add-bar" aria-expanded="false">${icons.add}</button>
+  <button id="open-add" aria-label="Add" title="Add" data-sheet="add" aria-controls="sheet" aria-expanded="false">${icons.add}</button>
 </nav>
 <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
-<div id="add-bar" class="add-bar" role="group" aria-label="Add to map" hidden>
-  <button id="add-marker" class="add-choice places glass">${icons.pin}<span>Place</span></button>
-  <button id="add-route" class="add-choice routes glass">${icons.route}<span>Route</span></button>
-</div>
-<div id="tool-bar" class="tool-bar glass" role="status" hidden>
-  <p class="tool-hint"><strong id="tool-title"></strong><span id="tool-message"></span></p>
-  <div id="tool-actions" class="tool-actions">
-    <button id="route-undo" class="tool-undo" aria-label="Undo last point" title="Undo (${undoKey})" aria-keyshortcuts="Meta+Z Control+Z Backspace">${icons.undo}</button>
-    <button id="tool-done" class="tool-done">${icons.check}<span>Done</span></button>
+<section id="tool-bar" class="tool-bar" aria-labelledby="tool-title" hidden>
+  <div class="sheet-header"><span id="tool-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="tool-title"></h2><button type="button" id="tool-rename" class="dialog-edit" aria-label="Rename route" title="Rename route" hidden>${icons.edit}</button><button type="button" id="tool-cancel" class="dialog-close" aria-label="Cancel" title="Cancel">${icons.close}</button></div>
+  <p id="tool-message" class="tool-hint" role="status"></p>
+  <div id="tool-actions" class="dialog-actions tool-actions">
+    <button type="button" id="route-undo" class="quiet" title="Undo (${undoKey})" aria-keyshortcuts="Meta+Z Control+Z Backspace">${icons.undo}<span>Undo</span></button>
+    <button type="button" id="tool-done" class="primary">${icons.check}<span>Done</span></button>
   </div>
-</div>
+</section>
 <button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" tabindex="-1" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
   <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
@@ -81,6 +79,12 @@ export const viewerMarkup = `
       <ul id="route-list" class="navigation-list" aria-labelledby="saved-routes-title"></ul>
       <h3 id="saved-places-title" class="section-title places">${icons.pin}<span>Places</span><small id="saved-places-count"></small></h3>
       <ul id="marker-list" class="navigation-list" aria-labelledby="saved-places-title"></ul>
+    </div>
+    <div id="sheet-add" data-panel="add" data-title="Add" hidden>
+      <div class="add-choices">
+        <button id="add-marker" class="add-choice places">${icons.pin}<span>Place</span></button>
+        <button id="add-route" class="add-choice routes">${icons.route}<span>Route</span></button>
+      </div>
     </div>
   </div>
 </section>
