@@ -235,7 +235,7 @@ export class ViewerControls {
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
-    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.list;
+    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.saved;
     this.el("search-close").hidden = name !== "search";
     this.input("map-search").setAttribute("aria-expanded", String(name === "search"));
     for (const sheet of sheets) {
@@ -655,7 +655,7 @@ export class ViewerControls {
     this.on(window, "pagehide", () => {
       void this.flush();
     });
-    // Add's button turns into × : it closes the choice or cancels the tool.
+    // Add switches to X to close the choices or cancel the tool.
     this.click("open-add", () => {
       if (this.tool === "route") this.cancelRoute();
       else if (this.tool === "move") this.finishMove(false);
@@ -843,6 +843,7 @@ export class ViewerControls {
     const add = this.el("open-add");
     add.setAttribute("aria-expanded", String(this.choosing));
     add.classList.toggle("active", editing || this.choosing);
+    add.innerHTML = editing || this.choosing ? icons.close : icons.add;
     const addLabel = editing
       ? this.confirming === "cancel-route"
         ? "Discard?"
@@ -1088,6 +1089,7 @@ export class ViewerControls {
       this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
     );
     rotationLock.title = this.state.rotationLocked ? "Unlock rotation" : "Lock rotation";
+    rotationLock.innerHTML = this.state.rotationLocked ? icons.rotationLock : icons.rotateRight;
     this.input("dark-map").checked = this.state.inverted;
     for (const level of BRIGHTNESS_LEVELS)
       this.input(`brightness-${brightnessPercent(level)}`).checked = this.state.dimming === level;
@@ -1294,6 +1296,7 @@ export class ViewerControls {
     // A bare grey 0 is easy to miss; a miss says so in words.
     badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
       : count ? `${count} ${count === 1 ? "match" : "matches"}` : "No matches";
+    badge.insertAdjacentHTML("beforeend", icons.next);
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);

@@ -1,5 +1,6 @@
 import { worldToScreen, type Camera, type Point, type Size } from "./camera";
-import { icons } from "../ui/icons";
+import { icons, markerCalloutIcon } from "../ui/icons";
+import { PIN_CASING, placeIcon } from "../ui/place-icon";
 import { MapCallout } from "./map-callout";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
@@ -19,19 +20,21 @@ const node = <K extends keyof SVGElementTagNameMap>(
     element.setAttribute(key, value);
   return element;
 };
-// Small glyphs drawn inside 22px pins, in pin-local coordinates.
-export const glyphs: Record<MapMarker["kind"], { d: string; fill?: boolean }> = {
-  landmark: { d: "M-4,6V-6H5L2,-2L5,1H-4" },
-  entrance: { d: "M-7,5L-5,-2L-1,-6L4,-4L7,5Z M-3,5V1A3,3 0 0 1 3,1V5" },
-  junction: { d: "M0,6V1L-5,-4 M0,1L5,-4 M-5,-1V-4H-2 M2,-4H5V-1" },
-  note: { d: "M-6,-5H6V3H-1L-5,6V3H-6Z M-3,-1H3" },
+export const CASING = PIN_CASING;
+
+// Pin containers retain their animation and position while sharing library icons.
+const pinIcon = (body: SVGGElement, markup: string, size: number) => {
+  body.innerHTML = markup;
+  const icon = body.querySelector("svg")!;
+  icon.setAttribute("x", String(-size / 2));
+  icon.setAttribute("y", String(-size / 2));
+  icon.setAttribute("width", String(size));
+  icon.setAttribute("height", String(size));
+  icon.style.width = `${size}px`;
+  icon.style.height = `${size}px`;
+  icon.style.overflow = "visible";
+  return icon;
 };
-// Trusted app glyphs shared by saved-place and search callouts.
-export const markerCalloutIcon = (kind: MapMarker["kind"]) => {
-  const glyph = glyphs[kind] ?? glyphs.landmark;
-  return `<svg viewBox="-9 -9 18 18" aria-hidden="true"><path d="${glyph.d}" fill="${glyph.fill ? "currentColor" : "none"}" stroke="currentColor" stroke-width="${glyph.fill ? 0.8 : 2}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-};
-export const CASING = "#05070a";
 type Layer = keyof Layers;
 interface PathItem {
   element: SVGPathElement;
@@ -164,42 +167,23 @@ export class NavigationOverlay {
       if (start) {
         const { element, body } = pin(layer, start);
         element.classList.add("route-start");
-        body.append(
-          node("circle", { r: "8", fill: color, stroke: CASING, "stroke-width": "3" }),
-        );
+        const icon = pinIcon(body, icons.routeStart, 20);
+        icon.setAttribute("fill", color);
+        icon.setAttribute("stroke", CASING);
+        icon.setAttribute("stroke-width", "3.6");
         label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0, undefined, route.id);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
         const { body } = pin(layer, end);
-        body.append(
-          node("rect", {
-            x: "-7",
-            y: "-7",
-            width: "14",
-            height: "14",
-            rx: "3",
-            fill: CASING,
-            stroke: color,
-            "stroke-width": "3",
-          }),
-        );
+        const icon = pinIcon(body, icons.routeEnd, 20);
+        icon.setAttribute("fill", CASING);
+        icon.setAttribute("stroke", color);
+        icon.setAttribute("stroke-width", "3.6");
       }
     }
     const placeBody = (body: SVGGElement, kind: MapMarker["kind"]) => {
-      const { color } = markerKinds[kind] ?? markerKinds.landmark;
-      const glyph = glyphs[kind] ?? glyphs.landmark;
-      body.append(
-        node("circle", { r: "11", fill: color, stroke: CASING, "stroke-width": "2.5" }),
-        node("path", {
-          d: glyph.d,
-          fill: glyph.fill ? CASING : "none",
-          stroke: CASING,
-          "stroke-width": glyph.fill ? "0.8" : "2",
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round",
-        }),
-      );
+      pinIcon(body, placeIcon(kind), 24);
     };
     const places = group("places");
     for (const marker of state.markers) {

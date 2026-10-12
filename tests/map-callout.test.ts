@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { NavigationOverlay, glyphs } from "../src/viewer/overlays";
+import { NavigationOverlay } from "../src/viewer/overlays";
+import { markerCalloutIcon } from "../src/ui/icons";
 import { defaultNavigation, markerKinds, routeColor } from "../src/viewer/navigation";
 import { worldToScreen } from "../src/viewer/camera";
 import { CalloutLayout, boundsOverlap } from "../src/viewer/callout-layout";
@@ -38,7 +39,9 @@ test("saved places and routes have typed callouts that follow their anchors and 
   for (const [index, callout] of places.entries()) {
     const marker = state.markers[index]!;
     assert.equal(callout.querySelector("text")!.textContent, marker.label);
-    assert.equal(callout.querySelector(".map-callout-icon path")!.getAttribute("d"), glyphs[marker.kind].d);
+    const expectedIcon = document.createElement("div");
+    expectedIcon.innerHTML = markerCalloutIcon(marker.kind);
+    assert.equal(callout.querySelector(".map-callout-icon")!.innerHTML, expectedIcon.firstElementChild!.innerHTML);
     assert.equal(callout.style.getPropertyValue("--callout-color"), markerKinds[marker.kind].color);
     const position = callout.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
     const connector = callout.querySelector("line")!;
@@ -192,7 +195,9 @@ test("search shows text and saved-place callouts together and restores saved lab
   assert.equal(callouts.length, 2);
   assert.ok(callouts.every(label => !label.hasAttribute("hidden")), "all visible matches get callouts");
   assert.equal(callouts[0]!.style.getPropertyValue("--callout-color"), markerKinds.landmark.color);
-  assert.equal(callouts[0]!.querySelector(".map-callout-icon path")!.getAttribute("d"), glyphs.landmark.d);
+  const expectedIcon = document.createElement("div");
+  expectedIcon.innerHTML = markerCalloutIcon(marker.kind);
+  assert.equal(callouts[0]!.querySelector(".map-callout-icon")!.innerHTML, expectedIcon.firstElementChild!.innerHTML);
   const hole = searchSvg.querySelector("mask circle")!;
   const point = worldToScreen(camera, marker.point);
   assert.equal(Number(hole.getAttribute("cx")), point.x);

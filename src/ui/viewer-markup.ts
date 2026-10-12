@@ -29,12 +29,12 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 
 // Map-first layout: almost nothing floats over the map.
 //   top corners   – Back on the left; View and rotation Lock on the right
-//   bottom pill   – Saved · Search · Add; Add's + turns into × (close or
+//   bottom pill   – Saved · Search · Add; Add switches to X (close or
 //                   cancel) while Place / Route, then the tap hint, float above
 // Pinch and drag move the map, so there are no zoom or pan buttons. The canvas
 // takes its own keys, so it is an application: screen readers pass it arrows.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><div class="map-crosshair" aria-hidden="true">${icons.crosshair}</div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="Map view controls">
   <button id="rotation-lock" class="glass status-chip" aria-label="Unlock rotation" title="Unlock rotation" aria-pressed="true">${icons.rotationLock}</button>
@@ -42,9 +42,9 @@ export const viewerMarkup = `
 </div>
 <div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div>
 <nav class="dock glass" id="dock" aria-label="Map menu">
-  <button id="open-saved" data-sheet="saved" aria-label="Saved" title="Saved" aria-controls="sheet" aria-expanded="false">${icons.list}</button>
+  <button id="open-saved" data-sheet="saved" aria-label="Saved" title="Saved" aria-controls="sheet" aria-expanded="false">${icons.saved}</button>
   <div id="open-search" class="search-field" tabindex="-1" title="Search (/)" aria-keyshortcuts="/">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" aria-controls="search-overlay" aria-expanded="false" placeholder="Search map…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close (Esc)" hidden>${icons.close}</button></div>
-  <button id="open-add" aria-label="Add" title="Add" aria-controls="add-bar" aria-expanded="false">${icons.plus}</button>
+  <button id="open-add" aria-label="Add" title="Add" aria-controls="add-bar" aria-expanded="false">${icons.add}</button>
 </nav>
 <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
 <div id="add-bar" class="add-bar" role="group" aria-label="Add to map" hidden>

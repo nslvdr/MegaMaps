@@ -1,8 +1,7 @@
 import { worldToScreen, type Camera, type Size } from "./camera";
 import type { MapSearchMatch } from "./map-search";
 import { markerKinds } from "./navigation";
-import { markerCalloutIcon } from "./overlays";
-import { icons } from "../ui/icons";
+import { icons, markerCalloutIcon } from "../ui/icons";
 import { MapCallout } from "./map-callout";
 import { CalloutLayout } from "./callout-layout";
 

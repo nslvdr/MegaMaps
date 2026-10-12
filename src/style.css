@@ -35,6 +35,7 @@
   --radius-round: 50%;
   --button-h: 50px;
   --icon-button-size: 44px;
+  --header-button-size: 36px;
   /* One footprint for the library, dialogs, panels, and their controls. */
   --edge-l: max(var(--space-12), env(safe-area-inset-left));
   --edge-r: max(var(--space-12), env(safe-area-inset-right));
@@ -645,13 +646,21 @@ dialog p {
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--icon-button-size);
-  height: var(--icon-button-size);
-  padding: var(--space-8);
+  width: var(--header-button-size);
+  height: var(--header-button-size);
+  padding: var(--space-2);
   border-radius: var(--radius-round);
   background: color-mix(in srgb, var(--accent) 14%, var(--bg));
   color: var(--accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Smaller visible header buttons keep a 44px click area. */
+.dialog-close::after,
+.sheet-close::after,
+.sheet-share::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-4));
 }
 .dialog-close svg,
 .sheet-close svg,
@@ -972,19 +981,20 @@ dialog textarea {
   background: #000;
 }
 /* Placing from the keyboard: Enter puts the point under this mark. */
-.viewer:not([data-tool="browse"]) .map-stage:has(canvas:focus-visible)::after {
-  content: "";
+.map-crosshair {
+  display: none;
   position: absolute;
   left: 50%;
   top: 50%;
   width: 24px;
   height: 24px;
   translate: -50% -50%;
-  background:
-    linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat,
-    linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat;
+  color: var(--accent);
   filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
   pointer-events: none;
+}
+.viewer:not([data-tool="browse"]) .map-stage:has(canvas:focus-visible) .map-crosshair {
+  display: block;
 }
 .map-shade {
   position: absolute;
@@ -1313,8 +1323,12 @@ button.glass:active:not(:disabled) {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.search-count:not(:disabled)::after {
-  content: "→";
+.search-count svg {
+  width: 16px;
+  height: 16px;
+}
+.search-count:disabled svg {
+  display: none;
 }
 .search-count:active:not(:disabled) {
   background: color-mix(in srgb, var(--c) 24%, var(--bg));
@@ -1412,7 +1426,7 @@ button.glass:active:not(:disabled) {
 }
 
 /* ---------- Add, placing and drawing ---------- */
-/* The pill stays put. Add's + turns into × (close / cancel) and whatever Add
+/* The pill stays put. Add switches to X (close / cancel) and whatever Add
    needs floats just above the pill: first Place / Route, then the tap hint. */
 #open-add {
   background: var(--neon-add);
@@ -1421,7 +1435,6 @@ button.glass:active:not(:disabled) {
 #open-add svg {
   color: currentColor;
   filter: none;
-  transition: transform 0.2s ease;
 }
 #open-add:active:not(.active) {
   background: color-mix(in srgb, var(--neon-add) 75%, #fff);
@@ -1430,9 +1443,6 @@ button.glass:active:not(:disabled) {
   background: color-mix(in srgb, var(--c) 22%, #000);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent);
   color: var(--c);
-}
-#open-add.active svg {
-  transform: rotate(45deg);
 }
 .dock button:disabled {
   opacity: 0.35;
