@@ -12,7 +12,7 @@ import type { Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
 import type { MapSearchMatch } from "../src/viewer/map-search";
 
-test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotation lock, places and routes", async (t) => {
+test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotation, places and routes", async (t) => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -64,6 +64,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   state.touchLocked = true;
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
+  const orientations: (number | undefined)[] = [];
   const pulses: string[] = [];
   const reveals: Point[] = [];
   const requestedZooms: (number | undefined)[] = [];
@@ -88,6 +89,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     refreshLabels() {
       labelRefreshes++;
+    },
+    orient(rotation) {
+      orientations.push(rotation);
     },
     previewPlace(place) {
       previews.push(place && { point: place.point, kind: place.kind });
@@ -154,12 +158,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     ])
       assert.equal(document.getElementById(gone), null);
     assert.equal(
-      el("rotation-lock").parentElement,
+      el("open-rotation").parentElement,
       el("display-chips"),
-      "Lock lives beside View in the top corner",
+      "Rotation lives beside View in the top corner",
     );
     assert.equal(el("open-display").parentElement, el("display-chips"));
-    for (const id of ["rotation-lock", "open-display"]) {
+    for (const id of ["open-rotation", "open-display"]) {
       assert.equal(el(id).querySelector("span"), null, "corner buttons show icons only");
       assert.ok(el(id).getAttribute("aria-label"), "icon buttons have accessible names");
     }
@@ -270,19 +274,71 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     check("dark-map", true);
     assert.equal(state.inverted, true);
 
-    // The corner lock controls two-finger rotation.
-    assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "true");
-    click("rotation-lock");
-    assert.equal(state.rotationLocked, false);
-    assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "false");
-    assert.equal(
-      el("rotation-lock").getAttribute("aria-label"),
-      "Lock rotation",
-    );
-    assert.match(el("toast").textContent!, /Rotation unlocked/);
-    click("rotation-lock");
-    assert.equal(state.rotationLocked, true);
-    assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "true");
+    // The corner Rotation button opens a panel of modes, like View.
+    assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Locked");
+    click("open-rotation");
+    assert.equal(sheet.hidden, false);
+    assert.equal(el("sheet-title").textContent, "Rotation");
+    assert.equal(el("open-rotation").getAttribute("aria-expanded"), "true");
+    assert.equal((el("rotation-locked") as HTMLInputElement).checked, true);
+    assert.equal(el("north-field").hidden, true, "north only matters to Auto");
+    check("rotation-free", true);
+    assert.equal(state.rotationMode, "free");
+    assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Normal");
+    assert.match(el("rotation-help").textContent!, /two fingers/);
+
+    // Auto asks for the compass, and tapping it again retries a refusal.
+    let permission: PermissionState = "denied";
+    Object.defineProperty(globalThis, "DeviceOrientationEvent", {
+      value: { requestPermission: async () => permission },
+      configurable: true,
+    });
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    const heading = (degrees: number) => {
+      const event = new window.Event("deviceorientation");
+      Object.assign(event, { webkitCompassHeading: degrees });
+      window.dispatchEvent(event);
+    };
+    check("rotation-compass", true);
+    assert.equal(state.rotationMode, "compass");
+    await settle();
+    assert.match(el("rotation-help").textContent!, /access is off/);
+    heading(90);
+    assert.ok(orientations.every((rotation) => rotation === undefined), "a refused compass is not followed");
+    permission = "granted";
+    click("rotation-compass");
+    await settle();
+    assert.match(el("rotation-help").textContent!, /Looking for the compass/);
+    // Facing east, the map's north turns to the left of the screen.
+    heading(90);
+    assert.equal(orientations.at(-1), -Math.PI / 2);
+    assert.match(el("rotation-help").textContent!, /turns with your phone/);
+
+    // Its north can sit anywhere on the map, and changes turn it at once.
+    assert.equal(el("north-field").hidden, false);
+    assert.equal((el("north-offset") as HTMLInputElement).value, "0");
+    click("north-more");
+    assert.equal(state.northOffset, 5);
+    assert.equal((el("north-offset") as HTMLInputElement).value, "5");
+    assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
+    input("north-offset", "-200");
+    el("north-offset").dispatchEvent(new window.Event("input"));
+    assert.equal(state.northOffset, 160, "a full turn wraps around");
+    change("north-offset");
+    assert.equal((el("north-offset") as HTMLInputElement).value, "160");
+    await controls.flush();
+    const saved = await loadNavigation("controls");
+    assert.equal(saved.rotationMode, "compass");
+    assert.equal(saved.northOffset, 160);
+
+    // Locked stops following the phone.
+    check("rotation-locked", true);
+    assert.equal(orientations.at(-1), undefined);
+    const followed = orientations.length;
+    heading(180);
+    assert.equal(orientations.length, followed);
+    assert.equal(el("north-field").hidden, true);
+    click("close-sheet");
 
     // Highlight with nothing saved explains instead of animating.
     click("spotlight");
@@ -954,17 +1010,15 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     state.markers = originalMarkers;
 
     // Toasts stay up for as long as they take to read.
-    click("rotation-lock");
-    assert.equal(el("toast").textContent, "Rotation unlocked · twist with two fingers");
-    t.mock.timers.tick(3500);
+    const kept = { markers: state.markers, routes: state.routes };
+    Object.assign(state, { markers: [], routes: [] });
+    click("spotlight");
+    assert.equal(el("toast").textContent, "Nothing saved yet. Use Add to create routes and places.");
+    t.mock.timers.tick(4200);
     assert.equal(el("toast").hidden, false, "a longer toast stays up longer");
     t.mock.timers.tick(200);
     assert.equal(el("toast").hidden, true);
-    click("rotation-lock");
-    assert.equal(el("toast").textContent, "Rotation locked");
-    t.mock.timers.tick(2250);
-    assert.equal(el("toast").hidden, true, "a short one goes soon");
-    t.mock.timers.reset();
+    Object.assign(state, kept);
 
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
@@ -975,6 +1029,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     submit("marker-form");
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
     assert.equal(state.markers.at(-1)?.kind, "entrance");
+    assert.equal(el("toast").textContent, "Entrance 1 saved");
+    t.mock.timers.tick(2300);
+    assert.equal(el("toast").hidden, true, "a short one goes soon");
+    t.mock.timers.reset();
 
     // Editing keeps a place's spot in the list and says when nothing changed.
     const order = () => state.markers.map((marker) => marker.label);

@@ -43,10 +43,14 @@ export const layerNames = [
   "routes",
   "labels",
 ] as const satisfies readonly (keyof Layers)[];
+/** free: twist with two fingers · compass: turns with the phone · locked: stays put */
+export type RotationMode = "free" | "compass" | "locked";
 export interface NavigationState {
   mapId: string;
   view?: SavedView;
-  rotationLocked: boolean;
+  rotationMode: RotationMode;
+  /** Where north is on this map, in degrees clockwise from its top. */
+  northOffset: number;
   /** Smart "dark map" mode. Stored under its version 1 name for compatibility. */
   inverted: boolean;
   dimming: number;
@@ -68,7 +72,8 @@ export type Tool = "browse" | "marker" | "route" | "move";
 export function defaultNavigation(mapId: string): NavigationState {
   return {
     mapId,
-    rotationLocked: true,
+    rotationMode: "locked",
+    northOffset: 0,
     inverted: true, // Underground use: start dark and save OLED battery.
     dimming: DEFAULT_DIMMING,
     touchLocked: false,
@@ -81,6 +86,7 @@ export function defaultNavigation(mapId: string): NavigationState {
     },
   };
 }
+// Saves from before the compass mode only had a rotation lock.
 // Older saves predate layer visibility; fill any missing fields from defaults.
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
@@ -98,6 +104,7 @@ type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   markers?: StoredMarker[];
   position?: unknown;
   checkpoints?: LegacyCheckpoint[];
+  rotationLocked?: boolean;
 };
 /** Keep saved points and shared files compatible with the merged landmark type. */
 export const normalizeMarkerKind = (kind: StoredMarker["kind"]): MapMarker["kind"] =>
@@ -107,6 +114,8 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const current: StoredNavigation = { ...stored };
   delete current.position;
   delete current.checkpoints;
+  delete current.rotationLocked;
+  if (!stored.rotationMode && stored.rotationLocked === false) current.rotationMode = "free";
   const layers = { ...defaults.layers };
   for (const name of layerNames)
     if (typeof stored.layers?.[name] === "boolean")
