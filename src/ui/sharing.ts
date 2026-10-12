@@ -81,6 +81,10 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       const inputs = kindInputs(kind), picked = inputs.filter((input) => input.checked).length;
       el(id).textContent = !inputs.length ? "None saved" : picked === inputs.length ? `All ${picked}` : picked ? `${picked} of ${inputs.length}` : "None";
     }
+    // One place or route on its own is named, confirming what Share picked.
+    const chosen = [...kindInputs("marker"), ...kindInputs("route")].filter((input) => input.checked);
+    el("share-title").textContent = chosen.length === 1 && !includeImage.checked
+      ? `Share ${chosen[0]!.dataset.name}` : "Share map";
     if (picking) {
       const inputs = kindInputs(picking), picked = inputs.filter((input) => input.checked).length;
       el("share-all").setAttribute("aria-pressed", String(picked === inputs.length));
@@ -342,6 +346,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       el("share-main").hidden = false;
       el("share-picker").hidden = true;
       el("share-map-name").textContent = displayName(map.name);
+      el("share-title").textContent = "Share map";
       el("share-loading").hidden = false;
       el("share-content").hidden = true;
       el("share-error").hidden = true;
@@ -369,6 +374,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
             input.type = "checkbox";
             input.value = item.id;
             input.dataset.kind = kind;
+            input.dataset.name = "label" in item ? item.label : item.name;
             input.checked = !initial || (initial.kind === kind && initial.id === item.id);
             label.append(icon, text, input);
             items.append(label);

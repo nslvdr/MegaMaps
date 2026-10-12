@@ -77,6 +77,7 @@ export function defaultNavigation(mapId: string): NavigationState {
 // Older saves predate layer visibility; fill any missing fields from defaults.
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
+// A draft with no points only survives when the page went away mid-draw; drop it.
 type StoredMarker = Omit<MapMarker, "kind"> & { kind: MapMarker["kind"] | "bookmark" };
 type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   mapId: string;
@@ -109,7 +110,10 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
       }),
     ),
   ];
-  return { ...defaults, ...current, markers, layers };
+  const routes = (stored.routes ?? defaults.routes).filter(
+    (route) => !route.draft || route.points.length > 0,
+  );
+  return { ...defaults, ...current, markers, routes, layers };
 }
 // Distinct, high-contrast colors on both black and light maps.
 export const routeColors = ["#38d6ff", "#ff6bd6", "#ffd23f", "#7dff8a", "#b18cff"];

@@ -181,6 +181,17 @@ test("legacy bookmarks become landmarks on load and survive queued saves", async
   assert.deepEqual((await loadNavigation(mapId)).markers, [landmark, migrated]);
 });
 
+test("empty route drafts left by a closed page are dropped on load", async () => {
+  const mapId = "empty-draft";
+  await saveMap(map(mapId));
+  const route = (id: string, points: { x: number; y: number }[], draft: boolean) =>
+    ({ id, name: id, points, created: 0, draft });
+  const kept = [route("started", [{ x: 1, y: 2 }], true), route("finished", [{ x: 1, y: 2 }, { x: 3, y: 4 }], false)];
+  await transact("navigation", "readwrite", (s) =>
+    s.put({ ...defaultNavigation(mapId), routes: [route("empty", [], true), ...kept] }));
+  assert.deepEqual((await loadNavigation(mapId)).routes, kept);
+});
+
 test("update preparation saves pending changes and blocks reload after a failed write", async () => {
   await saveMap(map("update-save"));
   const state = defaultNavigation("update-save");

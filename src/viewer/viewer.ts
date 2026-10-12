@@ -124,6 +124,17 @@ export class Viewer {
         return true;
       },
     });
+    // A mouse learns what a click would do before clicking: pins and labels
+    // open, the map is a target while adding, and editable points drag.
+    canvas.addEventListener(
+      "pointermove",
+      (event) => {
+        if (event.pointerType !== "mouse" || event.buttons) return;
+        const rect = canvas.getBoundingClientRect();
+        canvas.style.cursor = this.cursorAt({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      },
+      { signal: this.controller.signal },
+    );
     document.addEventListener(
       "visibilitychange",
       () => {
@@ -304,6 +315,7 @@ export class Viewer {
     this.dragging = undefined;
     this.tool = tool;
     this.target = targetId;
+    this.canvas.style.cursor = "";
     this.overlay?.setEditing(
       tool === "route" ? targetId : undefined,
       tool === "move" ? targetId : undefined,
@@ -313,6 +325,10 @@ export class Viewer {
   setSearch(matches: MapSearchMatch[], active: boolean, selected = 0) {
     this.searchOverlay?.set(matches, active, selected);
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
+    this.invalidate();
+  }
+  pulse(id: string) {
+    this.overlay?.setFound(id);
     this.invalidate();
   }
   previewPlace(place?: Pick<MapMarker, "point" | "kind">) {
@@ -397,6 +413,31 @@ export class Viewer {
       ),
     );
   }
+  /** Slides the map up just enough that a pin stays in sight above a card
+   * whose top edge is at `edge` (in page coordinates). */
+  /** Returns where the point settles on screen, in page coordinates. */
+  reveal(point: Point, edge: number): Point {
+    const camera = this.destination ?? this.camera;
+    const rect = this.canvas.getBoundingClientRect();
+    const p = worldToScreen(camera, point);
+    // The pin and its name stand above the point, so leave room for both.
+    const top = 120,
+      bottom = edge - rect.top - 40;
+    if (!this.navigation.touchLocked && p.y > bottom && bottom >= top) {
+      this.interactions.reset();
+      this.animate({ ...camera, y: camera.y + bottom - p.y });
+      p.y = bottom;
+    }
+    return { x: rect.left + p.x, y: rect.top + p.y };
+  }
+  /** Whether any of the points is on screen, or will be once the map settles. */
+  showing(points: Point[]) {
+    const camera = this.destination ?? this.camera;
+    return points.some((point) => {
+      const p = worldToScreen(camera, point);
+      return p.x >= 0 && p.y >= 0 && p.x <= this.width && p.y <= this.height;
+    });
+  }
   // Frame a route or group of places, leaving room for the floating controls.
   fitPoints(points: Point[]) {
     if (this.navigation.touchLocked || !points.length) return;
@@ -444,11 +485,27 @@ export class Viewer {
       this.options?.onTap(point);
       return true;
     }
-    if (marker) {
-      this.options?.onMarker(marker);
+    // Label chips read as buttons: a place's opens the place, like its pin;
+    // a route's frames the route, like its row in Saved.
+    const label = marker ? undefined : this.overlay?.labelAt(screen);
+    const labelled = marker ?? this.navigation.markers.find((m) => m.id === label?.markerId);
+    if (labelled) {
+      this.options?.onMarker(labelled);
+      return true;
+    }
+    const route = this.navigation.routes.find((r) => r.id === label?.routeId);
+    if (route) {
+      this.fitPoints(route.points);
+      this.pulse(route.id);
       return true;
     }
     return false;
+  }
+  private cursorAt(screen: Point) {
+    if (this.navigation.touchLocked || !insideImage(screenToWorld(this.camera, screen), this.map)) return "";
+    if (this.tool === "browse")
+      return this.nearestPlace(screen) || this.overlay?.labelAt(screen) ? "pointer" : "";
+    return this.grabbable(screen) ? "grab" : "crosshair";
   }
   private near(target: Point, screen: Point) {
     const p = worldToScreen(this.camera, target);
@@ -466,7 +523,7 @@ export class Viewer {
     return nearest;
   }
   // Only while editing: the drawn route's points, or the place being moved.
-  private grab(screen: Point) {
+  private grabbable(screen: Point) {
     const { routes, markers } = this.navigation;
     let found: { point: Point; replace(point: Point): void } | undefined;
     if (this.tool === "route") {
@@ -486,6 +543,10 @@ export class Viewer {
       if (marker && this.near(marker.point, screen) < 36)
         found = { point: marker.point, replace: (p) => (marker.point = p) };
     }
+    return found;
+  }
+  private grab(screen: Point) {
+    const found = this.grabbable(screen);
     if (!found) return false;
     this.options?.onDragStart?.();
     // Its own copy, so a route point snapped onto a place moves alone.

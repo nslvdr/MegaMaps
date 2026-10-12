@@ -31,7 +31,7 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 export const viewerMarkup = `
 <div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches; brackets rotate when unlocked. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
-<p id="toast" class="toast glass" role="status" aria-live="polite" hidden></p>
+<div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-controls="sheet" aria-expanded="false">${icons.list}<span>Saved</span></button>
   <button id="open-display" data-sheet="display" aria-controls="sheet" aria-expanded="false">${icons.layers}<span>View</span></button>
@@ -56,7 +56,7 @@ export const viewerMarkup = `
   <div class="sheet-header"><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-search" data-panel="search" data-title="Search this map" hidden>
-      <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><span id="search-count" class="search-count" hidden></span></div>
+      <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close (Esc)">${icons.close}</button></div>
       <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
     </div>
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
@@ -72,7 +72,7 @@ export const viewerMarkup = `
         ${layerToggle("places", "Places", icons.pin)}
         ${layerToggle("labels", "Names", icons.text)}
       </div>
-      <button id="spotlight" class="panel-action spotlight-action">${icons.sparkle}<span>Highlight</span></button>
+      <button id="spotlight" class="panel-action spotlight-action" title="Dim the map for a moment and pulse every route and place, even hidden ones">${icons.sparkle}<span>Highlight saved</span></button>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>
       <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>
@@ -83,5 +83,5 @@ export const viewerMarkup = `
   </div>
 </section>
 <p id="viewer-error" class="viewer-error" role="alert" hidden></p>
-<dialog id="marker-dialog" class="place-card"><form id="marker-form"><h2 id="marker-dialog-title">New place</h2><div class="kind-picker" role="radiogroup" aria-label="Kind">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><button type="button" id="marker-add-note" class="add-note">${icons.plus}<span>Add note</span></button><label id="marker-note-field" class="place-note" hidden><span>Note</span><textarea id="marker-note" maxlength="2000" rows="2"></textarea></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></form></dialog>
-<dialog id="name-dialog"><form id="name-form"><h2 id="name-title"></h2><label>Name<input id="name-input" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="name-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></form></dialog>`;
+<dialog id="marker-dialog" class="place-card" aria-labelledby="marker-dialog-title"><form id="marker-form"><div class="card-head"><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-move" class="card-move" hidden>${icons.move}<span>Move</span></button></div><div class="kind-picker" role="radiogroup" aria-label="Kind">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><button type="button" id="marker-add-note" class="add-note">${icons.plus}<span>Add note</span></button><label id="marker-note-field" class="place-note" hidden><span>Note</span><textarea id="marker-note" maxlength="2000" rows="2"></textarea></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></form></dialog>
+<dialog id="name-dialog" aria-labelledby="name-title"><form id="name-form"><h2 id="name-title"></h2><label>Name<input id="name-input" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="name-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></form></dialog>`;

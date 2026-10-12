@@ -1,17 +1,18 @@
 import { showDialog } from "./ui/dialog";
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
-import { listMaps, renameMap } from "./storage/database";
+import { listMaps, markOpened, renameMap } from "./storage/database";
 import { payloadStore, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
 import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { findAppUpdate, installAppUpdate } from "./app-update";
 import { icons } from "./ui/icons";
-import { displayName, formatBytes, plural } from "./ui/format";
+import { displayName, formatBytes, lastUsed, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
+import { darkMode, measureTone } from "./viewer/appearance";
 import { initLibraryFooter } from "./ui/library-footer";
 import { initKeyboardInset } from "./ui/keyboard-inset";
 import { loadOcr } from "./storage/ocr";
@@ -30,19 +31,19 @@ app.innerHTML = `
   <main class="home" id="home">
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
     <div class="library-actions"><button class="library-action import-trigger" id="import-open" aria-keyshortcuts="Meta+O Control+O">${icons.plus}<span>Import</span></button></div>
-    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p></div></section>
+    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p><p class="empty-drop">You can also drop or paste one here.</p></div></section>
     <footer class="library-footer"><div class="app-updated"><span>Last app update</span><time id="app-updated-at">Checking…</time></div><div class="connection-status" role="status" aria-live="polite"><span id="internet-status">Checking connection…</span><span id="app-availability">Checking live app…</span><span id="offline-availability">Checking offline app…</span></div></footer>
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
   <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
-  <dialog id="progress-dialog"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
-  <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name"></p><p class="dialog-note">This removes the map and its saved routes and places from this device.</p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
+  <dialog id="progress-dialog" aria-labelledby="progress-title"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
+  <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
-  <dialog id="advanced-map-dialog"><h2>Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>Stop detection</button></div><button class="secondary" id="advanced-map-close">Close</button></dialog>
+  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title"><h2 id="advanced-map-title">Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>Stop detection</span></button></div><button class="secondary" id="advanced-map-close">${icons.close}<span>Close</span></button></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -115,6 +116,27 @@ let importing: AbortController | undefined,
 // Library previews by map id. A map's tiles never change, so returning home
 // reuses them instead of reading storage and flashing placeholders again.
 const thumbnails = new Map<string, string>();
+// A map shown dark is previewed dark too, the way the viewer tones it, rather
+// than as the brightest thing on a black screen.
+const darkFilters = new Map<string, Promise<string>>();
+// The filter each card's preview was last shown with, for the delete dialog.
+const shownFilters = new Map<string, string>();
+function darkFilter(id: string, url: string) {
+  let filter = darkFilters.get(id);
+  if (!filter) {
+    filter = fetch(url)
+      .then((response) => response.blob())
+      .then(createImageBitmap)
+      .then((bitmap) => {
+        const tone = measureTone(bitmap);
+        bitmap.close();
+        return darkMode(tone).filter;
+      })
+      .catch(() => "");
+    darkFilters.set(id, filter);
+  }
+  return filter;
+}
 const channel =
   typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel("map-viewer-library")
@@ -265,7 +287,8 @@ function closeViewer() {
   void refresh()
     .then(() => {
       if (!home.hidden) {
-        window.scrollTo(0, libraryScroll);
+        // The map just left now leads the list; the library opens at it.
+        window.scrollTo(0, maps[0]?.id === closed ? 0 : libraryScroll);
         grid.querySelector<HTMLElement>(`[data-map="${closed}"] .map-open`)?.focus({ preventScroll: true });
       }
     })
@@ -280,6 +303,8 @@ async function openMap(map: MapRecord) {
   if (!home.hidden) libraryScroll = window.scrollY;
   const fromLibrary = home.contains(document.activeElement);
   currentMap = map;
+  map.opened = Date.now();
+  void markOpened(map.id, map.opened).catch(() => {});
   showTitle();
   // An open map gets its own history entry, so the system Back returns home.
   if (history.state?.map) history.replaceState({ map: map.id }, "");
@@ -321,8 +346,30 @@ async function openMap(map: MapRecord) {
 }
 function confirmDelete(map: MapRecord) {
   deleting = map;
-  element("delete-name").textContent = displayName(map.name);
+  // The thumbnail shows which map goes, not just its name.
+  const thumbnail = thumbnails.get(map.id);
+  const img = thumbnail && Object.assign(document.createElement("img"), { src: thumbnail, alt: "", draggable: false });
+  if (img) img.style.filter = shownFilters.get(map.id) ?? "";
+  // Framed from outside, so a dark preview's filter leaves the border alone.
+  const frame = img && Object.assign(document.createElement("span"), { className: "delete-thumb" });
+  if (frame && img) frame.append(img);
+  element("delete-name").replaceChildren(...(frame ? [frame] : []), displayName(map.name));
+  const note = element("delete-note");
+  note.textContent = "This removes the map and its saved routes and places from this device.";
   showDialog(deleteDialog);
+  // Name what would be lost, so an empty map reads as a light delete.
+  void loadNavigation(map.id)
+    .then(({ markers, routes }) => {
+      if (deleting !== map) return;
+      const saved = [
+        markers.length && plural(markers.length, "place"),
+        routes.length && plural(routes.length, "route"),
+      ].filter(Boolean);
+      note.textContent = saved.length
+        ? `This removes the map and its ${saved.join(" and ")} from this device.`
+        : "This removes the map from this device.";
+    })
+    .catch(() => {});
 }
 async function refresh() {
   const version = ++renderVersion;
@@ -330,7 +377,7 @@ async function refresh() {
   if (version !== renderVersion) return;
   maps = records
     .filter((m) => m.status === "ready")
-    .sort((a, b) => b.created - a.created);
+    .sort((a, b) => (b.opened ?? b.created) - (a.opened ?? a.created));
   if (currentMap && !maps.some((m) => m.id === currentMap!.id)) {
     closeViewer();
     showMessage("Map removed", "This map was removed in another window.");
@@ -359,6 +406,8 @@ async function refresh() {
     if (!maps.some((map) => map.id === id)) {
       URL.revokeObjectURL(url);
       thumbnails.delete(id);
+      darkFilters.delete(id);
+      shownFilters.delete(id);
     }
   // Behind an open map the grid is unseen; going home renders it afresh.
   if (home.hidden) return;
@@ -366,28 +415,35 @@ async function refresh() {
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
   element("map-count").textContent = `${maps.length}`;
+  // A 0 beside the empty state says nothing it doesn't.
+  element("map-count").hidden = !maps.length;
   for (const map of maps) {
     const card = document.createElement("article");
     card.className = "map-card";
     card.dataset.map = map.id;
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
-    card.querySelector(".dimensions")!.textContent =
-      `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
-    const size = card.querySelector(".map-size")!;
-    size.textContent = formatBytes(map.bytes);
-    // What's saved on each map helps pick the right one. Leaving a map may
-    // still be writing its last edits.
-    void pendingViewSave
+    // What's on a map is what tells two maps apart; when it was last used
+    // (which is also the list's order) and its size follow. On narrow
+    // screens it breaks between the two parts, not inside one.
+    card.querySelector(".map-meta")!.append(
+      ...[`${lastUsed(map)} · `, formatBytes(map.bytes)]
+        .map((part) => Object.assign(document.createElement("span"), { textContent: part })),
+    );
+    const saved = card.querySelector(".map-saved")!;
+    // Leaving a map may still be writing its last edits.
+    const navigation = pendingViewSave
       .catch(() => {})
-      .then(() => loadNavigation(map.id))
+      .then(() => loadNavigation(map.id));
+    void navigation
       .then(({ markers, routes }) => {
         if (version !== renderVersion) return;
-        const saved = [
+        const items = [
           markers.length && plural(markers.length, "place"),
           routes.length && plural(routes.length, "route"),
         ].filter(Boolean);
-        size.textContent = [formatBytes(map.bytes), ...saved].join(" · ");
+        saved.textContent = items.join(" · ") || "Nothing saved yet";
+        saved.classList.toggle("none", !items.length);
       })
       .catch(() => {});
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
@@ -422,8 +478,13 @@ async function refresh() {
       ]),
     );
     grid.append(card);
-    const showThumbnail = (url: string) => {
+    const showThumbnail = async (url: string) => {
+      const inverted = await navigation.then((state) => state.inverted, () => false);
+      const filter = inverted ? await darkFilter(map.id, url) : "";
+      if (version !== renderVersion) return;
+      shownFilters.set(map.id, filter);
       const img = new Image();
+      img.style.filter = filter;
       img.src = url;
       img.alt = "";
       img.loading = "lazy";
@@ -434,7 +495,7 @@ async function refresh() {
     };
     const cached = thumbnails.get(map.id);
     if (cached) {
-      showThumbnail(cached);
+      void showThumbnail(cached);
       continue;
     }
     void payloadStore(map.backend)
@@ -446,7 +507,7 @@ async function refresh() {
           url = URL.createObjectURL(blob);
           thumbnails.set(map.id, url);
         }
-        if (version === renderVersion) showThumbnail(url);
+        if (version === renderVersion) void showThumbnail(url);
       })
       .catch(() => {
         card.querySelector(".thumbnail-placeholder")!.textContent =
@@ -457,6 +518,8 @@ async function refresh() {
 }
 const importDialog = element<HTMLDialogElement>("import-dialog");
 element("import-open").addEventListener("click", () => showDialog(importDialog));
+// On first run the whole empty card is a target too; Import stays the labelled control.
+element("empty").addEventListener("click", () => element("import-open").click());
 // ⌘O or Ctrl+O imports from the library, as in desktop apps.
 document.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() !== "o" || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
@@ -750,7 +813,7 @@ async function renderOcrSettings() {
     ? ocrJob!.message
     : (ocrErrors.get(map.id) ??
       (index
-        ? `${index.lines.length} detected labels · Last scan ${new Date(index.completedAt).toLocaleString()}`
+        ? `${plural(index.lines.length, "detected label")}\nLast scanned ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(index.completedAt)}`
         : "Text detection has not run yet."));
   element<HTMLButtonElement>("rerun-ocr").disabled = !!ocrJob || !!importing;
   element("stop-ocr").hidden = !running;

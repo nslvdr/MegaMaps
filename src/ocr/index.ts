@@ -34,7 +34,8 @@ export function needsOcr(index: OcrIndex | undefined) {
   return !index || index.version !== OCR_VERSION;
 }
 
-// Phrase matches reveal just the matching words, including partial-word queries.
+// Phrase matches highlight just the matching words, including partial-word
+// queries, but carry the whole line so the callout reads in context.
 export function searchOcr(
   index: OcrIndex | undefined,
   query: string,
@@ -51,6 +52,7 @@ export function searchOcr(
       return { word, text, start, end: cursor - 1 };
     });
     const text = spans.map((span) => span.text).join(" ");
+    const label = line.words.map((word) => word.text).join(" ");
     let offset = text.indexOf(needle);
     while (offset !== -1) {
       const words = spans.filter(
@@ -58,7 +60,7 @@ export function searchOcr(
       );
       if (words.length)
         matches.push({
-          text: words.map(({ word }) => word.text).join(" "),
+          text: label,
           polygons: words.map(({ word }) => word.polygon),
         });
       offset = text.indexOf(needle, offset + needle.length);
@@ -76,6 +78,42 @@ export function searchOcr(
     seen.add(key);
     return true;
   });
+}
+
+// The map label a point sits on, or just beside: a tap on printed text rarely
+// lands inside a word's box. The nearest line wins where labels crowd.
+export function ocrLabelAt(index: OcrIndex | undefined, point: Point) {
+  let best: { text: string; distance: number } | undefined;
+  for (const line of index?.lines ?? []) {
+    const text = line.words.map((word) => word.text).join(" ").trim();
+    if (!normalizeText(text) || text.length > 40) continue;
+    for (const { polygon } of line.words) {
+      const distance = distanceTo(polygon, point);
+      if (distance > reach(polygon) || (best && best.distance <= distance)) continue;
+      best = { text, distance };
+    }
+  }
+  return best?.text;
+}
+
+const edges = (polygon: Point[]) =>
+  polygon.map((a, i) => [a, polygon[(i + 1) % polygon.length]!] as const);
+
+// Half the word's height: about a letter's room around it.
+const reach = (polygon: Point[]) =>
+  Math.min(...edges(polygon).map(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y))) / 2;
+
+function distanceTo(polygon: Point[], p: Point) {
+  let inside = false;
+  let nearest = Infinity;
+  for (const [a, b] of edges(polygon)) {
+    if (a.y > p.y !== b.y > p.y && p.x < a.x + ((p.y - a.y) * (b.x - a.x)) / (b.y - a.y))
+      inside = !inside;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    nearest = Math.min(nearest, Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y));
+  }
+  return inside ? 0 : nearest;
 }
 
 function bounds(line: OcrLine) {

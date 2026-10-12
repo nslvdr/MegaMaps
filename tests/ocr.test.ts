@@ -12,6 +12,7 @@ import {
   normalizeText,
   needsOcr,
   searchOcr,
+  ocrLabelAt,
   addOcrLine,
   type OcrIndex,
   type OcrLine,
@@ -72,7 +73,12 @@ test("OCR search matches accents, phrases, and partial words without revealing u
     polygon(50),
   ]);
   assert.deepEqual(searchOcr(index, "nord")[0]?.polygons, [polygon(100)]);
+  assert.equal(searchOcr(index, "nord")[0]?.text, "Église du Nord", "callouts read the whole line");
   assert.equal(searchOcr(index, "unknown").length, 0);
+  assert.equal(ocrLabelAt(index, { x: 60, y: 37 }), "Église du Nord", "a place dropped on a label takes its name");
+  assert.equal(ocrLabelAt(index, { x: 45, y: 37 }), "Église du Nord", "between its words still counts");
+  assert.equal(ocrLabelAt(index, { x: 60, y: 60 }), undefined, "open map keeps the numbered name");
+  assert.equal(ocrLabelAt(undefined, { x: 60, y: 37 }), undefined);
   assert.equal(searchOcr(index, "  ").length, 0);
   assert.equal(needsOcr(undefined), true);
   assert.equal(
@@ -191,7 +197,7 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   const tick = first.querySelector("line")!;
   assert.equal(tick.hasAttribute("hidden"), true, "the selected match uses its callout connector");
   assert.equal(first.hasAttribute("data-selected"), true);
-  assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "Nord");
+  assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "Église du Nord");
   const beforePan = tick.getAttribute("x2");
   overlay.draw({ x: 70, y: 80, scale: 0.02 }, viewport);
   assert.ok(Math.abs(Number(tick.getAttribute("x2")) - Number(beforePan) - 20) < 1e-9);

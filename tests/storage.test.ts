@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { payloadStore, deleteStoredMap } from "../src/storage/payloads";
-import { listMaps, saveMap, renameMap, removeRecord } from "../src/storage/database";
+import { listMaps, saveMap, renameMap, removeRecord, markOpened } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { defaultNavigation } from "../src/viewer/navigation";
 import type { MapRecord } from "../src/types";
@@ -56,6 +56,11 @@ test("renaming persists only the name and preserves map payloads and navigation"
   assert.deepEqual(await loadNavigation(map.id), navigation);
   await assert.rejects(renameMap(map.id, " \n "), /Enter a map name/);
   assert.equal((await listMaps()).find((record) => record.id === map.id)?.name, "Cave survey");
+  // Opening notes the time and keeps the rest of the record.
+  await markOpened(map.id, 456);
+  assert.deepEqual((await listMaps()).find((record) => record.id === map.id), {
+    ...map, name: "Cave survey", opened: 456,
+  });
   await deleteStoredMap({ ...map, name: "Cave survey" });
 });
 
@@ -68,6 +73,7 @@ test("renaming cannot recreate a deleted map or change an unavailable map", asyn
   };
   await saveMap(map);
   await assert.rejects(renameMap(map.id, "New name"), /no longer available/);
+  await assert.rejects(markOpened(map.id), /no longer available/);
   assert.deepEqual((await listMaps()).find((record) => record.id === map.id), map);
   await removeRecord(map.id);
 });

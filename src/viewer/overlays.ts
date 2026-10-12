@@ -41,14 +41,18 @@ interface PathItem {
 // Screen-space SVG keeps lines/labels legible without another raster surface.
 // Text is assigned through textContent; imported/user names never become markup.
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
+// Covers the camera glide plus two pulses (see .found in style.css).
+const FOUND_MS = 2200;
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
-  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string }[] = [];
+  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string; routeId?: string }[] = [];
   private searchMarkers = new Set<string>();
   private anchors: CalloutBounds[] = [];
   private editing?: string;
   private moving?: string;
+  private found?: string;
+  private foundTimer?: ReturnType<typeof setTimeout>;
   private preview?: Pick<MapMarker, "point" | "kind">;
   private state?: NavigationState;
   constructor(private svg: SVGSVGElement) {}
@@ -57,6 +61,17 @@ export class NavigationOverlay {
     this.editing = routeId;
     this.moving = markerId;
     if (this.state) this.rebuild(this.state);
+  }
+  /** A place or route just jumped to from Saved pulses once the map arrives. */
+  setFound(id: string) {
+    clearTimeout(this.foundTimer);
+    this.found = id;
+    if (this.state) this.rebuild(this.state);
+    // Dropped in place, so later rebuilds don't replay the pulse.
+    this.foundTimer = setTimeout(() => {
+      this.found = undefined;
+      for (const element of this.svg.querySelectorAll(".found")) element.classList.remove("found");
+    }, FOUND_MS);
   }
   /** An unsaved place, lifted like a moving pin while its details are chosen. */
   setPreview(place?: Pick<MapMarker, "point" | "kind">) {
@@ -101,13 +116,13 @@ export class NavigationOverlay {
     };
     const label = (
       parent: SVGGElement, text: string, point: Point,
-      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string,
+      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string, routeId?: string,
     ) => {
       const callout = new MapCallout(icon, color);
       callout.element.classList.add("overlay-label");
       callout.setText(text);
       parent.append(callout.element);
-      this.callouts.push({ callout, point, padding, layer, priority, markerId });
+      this.callouts.push({ callout, point, padding, layer, priority, markerId, routeId });
     };
     const pin = (parent: SVGGElement, point: Point) => {
       const element = node("g");
@@ -122,7 +137,9 @@ export class NavigationOverlay {
     for (const route of state.routes) {
       const color = routeColor(state, route.id),
         active = route.id === this.editing;
-      const layer = node("g", { class: active ? "route editing" : "route" });
+      const layer = node("g", {
+        class: active ? "route editing" : route.id === this.found ? "route found" : "route",
+      });
       routes.append(layer);
       path(layer, route.points, { stroke: CASING, "stroke-width": "9" });
       path(layer, route.points, {
@@ -151,7 +168,7 @@ export class NavigationOverlay {
         body.append(
           node("circle", { r: "8", fill: color, stroke: CASING, "stroke-width": "3" }),
         );
-        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0);
+        label(layer, route.name, start, icons.route, color, active ? 10 : 8, "routes", active ? 1 : 0, undefined, route.id);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
@@ -190,6 +207,7 @@ export class NavigationOverlay {
       const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
       const { element, body } = pin(places, marker.point);
       if (marker.id === this.moving) element.classList.add("moving");
+      else if (marker.id === this.found) element.classList.add("found");
       placeBody(body, marker.kind);
       const moving = marker.id === this.moving;
       label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, moving ? 18 : 12, "places", moving ? 2 : 0, marker.id);
@@ -289,7 +307,16 @@ export class NavigationOverlay {
       callout.draw(p, viewport, bounds, labels);
     }
   }
+  /** The place or route whose label chip covers this screen point, if any. */
+  labelAt(screen: Point): { markerId?: string; routeId?: string } | undefined {
+    for (const { callout, markerId, routeId } of this.callouts) {
+      const bounds = callout.bounds;
+      if (bounds && screen.x >= bounds.left && screen.x <= bounds.right &&
+        screen.y >= bounds.top && screen.y <= bounds.bottom) return { markerId, routeId };
+    }
+  }
   dispose() {
+    clearTimeout(this.foundTimer);
     this.svg.replaceChildren();
   }
 }

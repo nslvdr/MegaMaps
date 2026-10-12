@@ -18,11 +18,12 @@ import {
   type PlannedRoute,
 } from "../viewer/navigation";
 import { icons } from "./icons";
-import { plural } from "./format";
+import { nextName, plural } from "./format";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
+  ocrLabelAt,
   type OcrIndex,
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
@@ -33,8 +34,8 @@ type Sheet = (typeof sheets)[number];
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const darkMessages: Record<DarkMode["kind"], string> = {
-  inverted: "Colors inverted, background pure black",
-  deepened: "Background deepened to pure black",
+  inverted: "Colors inverted on pure black",
+  deepened: "Background deepened to black",
   "already-dark": "Map is already dark",
 };
 
@@ -44,7 +45,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing">>;
   private ocr?: OcrIndex;
   private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
@@ -69,9 +70,15 @@ export class ViewerControls {
   private editingMarker?: string;
   private markerPoint?: Point;
   private autoMarkerName = "";
+  /** Printed map text under the place being added, which names it better than a number. */
+  private mapLabel?: string;
   private nameAction?: (name: string) => void;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private toastUndo?: () => void;
   private spotlightTimer?: ReturnType<typeof setTimeout>;
+  private moveAfterSave = false;
+  private cardDeleteArmed = false;
+  private cardDeleteTimer?: ReturnType<typeof setTimeout>;
   private confirmTimer?: ReturnType<typeof setTimeout>;
   private confirming?: string;
   private rowMenu?: string;
@@ -186,13 +193,29 @@ export class ViewerControls {
     if (this.openSheet === "search" && !this.searchTimer) this.renderSearch();
     this.render();
   }
-  private toast(message: string) {
+  private toast(message: string, undo?: () => void) {
     const toast = this.el("toast");
     toast.textContent = message;
-    toast.hidden = false;
+    this.toastUndo = undo;
+    this.el("toast-undo").hidden = !undo;
+    this.showToast(true);
     clearTimeout(this.toastTimer);
-    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up to 6 s.
-    this.toastTimer = setTimeout(() => (toast.hidden = true), Math.min(6000, 1500 + message.length * 50));
+    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up
+    // to 6 s, which is also how long an Undo stays on offer.
+    this.toastTimer = setTimeout(() => this.showToast(false),
+      undo ? 6000 : Math.min(6000, 1500 + message.length * 50));
+  }
+  private showToast(shown: boolean) {
+    this.el("toast").hidden = this.el("toast-bar").hidden = !shown;
+    if (!shown) this.toastUndo = undefined;
+  }
+  /** Deletes stay two taps, and a few seconds to change your mind after. */
+  private deleted(label: string, restore: () => void) {
+    this.toast(`${label} deleted`, () => {
+      restore();
+      this.changed();
+      this.toast(`${label} restored`);
+    });
   }
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;
@@ -275,23 +298,36 @@ export class ViewerControls {
     ))
       input.checked = input.value === kind;
   }
+  private markerName(kind: MapMarker["kind"]) {
+    return this.mapLabel ??
+      nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
+  }
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? this.newMarkerKind;
+    this.mapLabel = marker ? undefined : ocrLabelAt(this.ocr, point);
     this.autoMarkerName = marker
       ? ""
-      : `${markerKinds[kind].label} ${this.state.markers.length + 1}`;
+      : this.markerName(kind);
     this.el("marker-dialog-title").textContent = title;
     this.input("marker-label").value = marker?.label ?? this.autoMarkerName;
     this.setMarkerKind(kind);
     this.el<HTMLTextAreaElement>("marker-note").value = marker?.note ?? "";
     this.el("marker-delete").hidden = !marker;
+    this.el("marker-move").hidden = !marker;
+    this.armCardDelete(false);
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
     // A new place shows where it will go while it is named.
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
-    showDialog(this.dialog("marker-dialog"));
+    const card = this.dialog("marker-dialog");
+    showDialog(card);
+    // The card covers the bottom of the map; keep the place it's about in sight,
+    // lit through the scrim.
+    const spot = this.viewer?.reveal?.(point, card.offsetTop);
+    card.style.setProperty("--spot-x", spot ? `${spot.x}px` : "");
+    card.style.setProperty("--spot-y", spot ? `${spot.y}px` : "");
   }
   private notes(open: boolean) {
     this.el("marker-note-field").hidden = !open;
@@ -328,6 +364,8 @@ export class ViewerControls {
     this.activeRoute = route.id;
     this.changed();
     this.mode("route");
+    // Like Move, editing opens on the work: the whole route, in frame.
+    if (route.points.length) this.viewer?.fitPoints(route.points);
   }
   // A route is only kept with at least two points; Done always leaves it finished.
   private finishRoute() {
@@ -428,6 +466,8 @@ export class ViewerControls {
   }
   private editMarker(marker: MapMarker) {
     this.openMarker("Edit place", marker.point, marker);
+    // Under the card's shade every pin looks alike; this one says it's the one.
+    this.viewer?.pulse?.(marker.id);
   }
   private spotlight() {
     const stage = this.el("map-stage");
@@ -458,6 +498,10 @@ export class ViewerControls {
       if (this.openSheet === "search") this.input("map-search").blur();
     });
     this.on(this.input("map-search"), "input", () => this.queueSearch());
+    this.click("search-count", () => this.stepSearch());
+    // Tapping the map also closes Search; this says so where the eye already is.
+    this.click("search-close", () => this.sheet(undefined, true));
+    this.click("toast-undo", () => this.toastUndo?.());
     this.on(this.input("map-search"), "keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.isComposing) {
@@ -581,7 +625,7 @@ export class ViewerControls {
     this.click("add-route", () => {
       const route: PlannedRoute = {
         id: crypto.randomUUID(),
-        name: `Route ${this.state.routes.length + 1}`,
+        name: nextName("Route", this.state.routes.map((r) => r.name)),
         points: [],
         created: Date.now(),
         draft: true,
@@ -607,14 +651,22 @@ export class ViewerControls {
       this.notes(true);
       this.el("marker-note").focus();
     });
+    // Two taps here too, as in the Saved menu: the first arms Delete briefly.
     this.click("marker-delete", () => {
+      if (!this.cardDeleteArmed) {
+        this.armCardDelete(true);
+        return;
+      }
+      this.armCardDelete(false);
+      const index = this.state.markers.findIndex((m) => m.id === this.editingMarker);
+      const deleted = this.state.markers[index];
       this.state.markers = this.state.markers.filter(
         (m) => m.id !== this.editingMarker,
       );
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");
-      this.toast("Place deleted");
+      if (deleted) this.deleted(deleted.label, () => this.state.markers.splice(index, 0, deleted));
     });
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
       'input[name="marker-kind"]',
@@ -623,7 +675,7 @@ export class ViewerControls {
         // Keep auto names in sync with the chosen kind until the user types.
         const label = this.input("marker-label");
         if (this.autoMarkerName && label.value === this.autoMarkerName) {
-          this.autoMarkerName = `${markerKinds[this.markerKind()].label} ${this.state.markers.length + 1}`;
+          this.autoMarkerName = this.markerName(this.markerKind());
           label.value = this.autoMarkerName;
         }
         if (!this.editingMarker && this.markerPoint)
@@ -653,13 +705,29 @@ export class ViewerControls {
         kind: this.markerKind(),
         created: existing?.created ?? Date.now(),
       };
-      this.state.markers = this.state.markers.filter((m) => m.id !== marker.id);
-      this.state.markers.push(marker);
-      if (!existing) this.newMarkerKind = marker.kind;
+      const unchanged = !!existing && existing.label === marker.label &&
+        existing.note === marker.note && existing.kind === marker.kind &&
+        existing.point.x === marker.point.x && existing.point.y === marker.point.y;
+      // An edit keeps the place where it was in the Saved list.
+      if (!existing) {
+        this.state.markers.push(marker);
+        this.newMarkerKind = marker.kind;
+      } else if (!unchanged)
+        this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
       this.dialog("marker-dialog").close();
-      this.changed();
+      if (!unchanged) this.changed();
+      if (this.moveAfterSave) {
+        this.moveMarker(marker);
+        return;
+      }
       this.mode("browse");
-      this.toast(existing ? "Place updated" : `${label} saved`);
+      this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
+    });
+    // Move from the card keeps what was typed, then lifts the pin.
+    this.click("marker-move", () => {
+      this.moveAfterSave = true;
+      this.el<HTMLFormElement>("marker-form").requestSubmit();
+      this.moveAfterSave = false;
     });
     this.click("name-cancel", () => this.dialog("name-dialog").close());
     this.on(this.el("name-form"), "submit", (event) => {
@@ -781,8 +849,12 @@ export class ViewerControls {
       ],
       marker: ["New place", "Tap the map where it goes"],
       route: [
-        `${route?.name ?? "Route"} · ${plural(count, "point")}`,
-        count ? "Tap to add, drag points to adjust" : "Tap where the route starts",
+        count
+          ? `${route?.name ?? "Route"} · ${plural(count, "point")}`
+          : (route?.name ?? "Route"),
+        // Done waits for a second point, so the hint asks for it.
+        count > 1 ? "Tap to add, drag points to adjust"
+          : count ? "Tap where it goes next" : "Tap where the route starts",
       ],
     };
     const [title, message] = texts[this.tool];
@@ -835,6 +907,8 @@ export class ViewerControls {
     button.append(icon, text);
     button.addEventListener("click", () => {
       options.jump();
+      // Arriving, the item pulses so the eye finds it at once.
+      this.viewer?.pulse?.(options.key);
       this.sheet(undefined);
       // The keyboard carries on from the map: arrows pan, +/− zoom.
       this.el("map-canvas").focus({ preventScroll: true });
@@ -971,6 +1045,16 @@ export class ViewerControls {
       updateLabel();
     };
   }
+  private armCardDelete(armed: boolean) {
+    this.cardDeleteArmed = armed;
+    clearTimeout(this.cardDeleteTimer);
+    if (armed) this.cardDeleteTimer = setTimeout(() => this.armCardDelete(false), 3000);
+    // The card's buttons share a row, so the armed label stays short and the
+    // button fills red instead.
+    const button = this.el("marker-delete");
+    button.classList.toggle("armed", armed);
+    button.querySelector("span")!.textContent = armed ? "Tap again" : "Delete";
+  }
   private deleteLabel(key: string) {
     return this.confirming === key ? "Tap again to delete" : "Delete";
   }
@@ -1041,11 +1125,12 @@ export class ViewerControls {
             danger: true,
             action: this.confirmDelete(marker.id, () => {
               this.rowMenu = undefined;
+              const index = this.state.markers.indexOf(marker);
               this.state.markers = this.state.markers.filter(
                 (m) => m.id !== marker.id,
               );
               this.changed();
-              this.toast("Place deleted");
+              this.deleted(marker.label, () => this.state.markers.splice(index, 0, marker));
             }),
           },
         ],
@@ -1086,6 +1171,7 @@ export class ViewerControls {
             danger: true,
             action: this.confirmDelete(route.id, () => {
               this.rowMenu = undefined;
+              const index = this.state.routes.indexOf(route);
               this.state.routes = this.state.routes.filter(
                 (r) => r.id !== route.id,
               );
@@ -1094,20 +1180,28 @@ export class ViewerControls {
                 this.mode("browse");
               }
               this.changed();
-              this.toast("Route deleted");
+              this.deleted(route.name, () => this.state.routes.splice(index, 0, route));
             }),
           },
         ],
       });
     }
-    for (const [container, empty] of [
-      [markers, "No places yet. Use Add › Place."],
-      [routes, "No routes yet. Use Add › Route, then tap along passages."],
+    // An empty list offers the one thing to do next, rather than pointing at Add.
+    for (const [container, empty, label, icon, start] of [
+      [markers, "No places yet.", "Add place", icons.pin, "add-marker"],
+      [routes, "No routes yet.", "Draw route", icons.route, "add-route"],
     ] as const)
-      if (!container.childElementCount && empty) {
+      if (!container.childElementCount) {
         const item = document.createElement("li");
         item.className = "empty-list";
-        item.textContent = empty;
+        const text = document.createElement("span");
+        text.textContent = empty;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "empty-action";
+        button.innerHTML = `${icon}<span>${label}</span>`;
+        button.addEventListener("click", () => this.el(start).click());
+        item.append(text, button);
         container.append(item);
       }
     // Measure only after all rows are back in the list and the panel has its final height.
@@ -1139,7 +1233,22 @@ export class ViewerControls {
       this.renderSearch();
       return;
     }
-    this.searchTimer = setTimeout(() => this.renderSearch(), SEARCH_DEBOUNCE_MS);
+    this.searchTimer = setTimeout(() => {
+      this.renderSearch();
+      this.bringMatchIntoView();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+  // Like find-in-page: when no result is anywhere on screen, typing brings the
+  // first one into view instead of leaving a dimmed map and a count.
+  private bringMatchIntoView() {
+    const showing = this.viewer?.showing;
+    const first = this.searchMatches[0];
+    if (!first || !showing) return;
+    const points = (match: MapSearchMatch) =>
+      match.marker ? [match.marker.point] : match.polygons.flat();
+    if (this.searchMatches.some((match) => showing.call(this.viewer, points(match)))) return;
+    if (first.marker) this.viewer?.jumpTo(first.marker.point);
+    else this.viewer?.fitPoints(points(first));
   }
   private renderSearch(statusOnly = false) {
     if (!statusOnly) {
@@ -1153,17 +1262,25 @@ export class ViewerControls {
     }
     const active = !!normalizeText(this.searchQuery);
     const count = this.searchMatches.length;
+    const stepping = count > 1 && this.searchPosition >= 0;
     const message = active
-      ? count ? `${count} ${count === 1 ? "match" : "matches"}`
+      ? stepping ? `Match ${this.searchPosition + 1} of ${count}`
+        : count ? `${count} ${count === 1 ? "match" : "matches"}`
         : this.ocr ? "No matching text or saved places found." : "No matching saved places yet."
       : "Search map text and saved places. Drag and zoom to explore.";
     const progress = this.ocrMessage || (!this.ocr ? "Text detection is not ready. Open the map’s Advanced settings to retry." : "");
     this.el("search-status").textContent = progress ? `${message} · ${progress}` : message;
-    const badge = this.el("search-count");
-    badge.textContent = String(count);
+    // The count doubles as Next, so a touch screen can step through matches
+    // once Enter has put the keyboard away; it then shows where you are.
+    const badge = this.el<HTMLButtonElement>("search-count");
+    // A bare grey 0 is easy to miss; a miss says so in words.
+    badge.textContent = stepping ? `${this.searchPosition + 1}/${count}` : count ? String(count) : "No match";
     badge.hidden = !active;
-    badge.setAttribute("aria-label", `${count} ${count === 1 ? "result" : "results"}`);
-    badge.title = this.el("search-status").textContent ?? "";
+    badge.disabled = !count;
+    badge.classList.toggle("empty", !count);
+    badge.setAttribute("aria-label", stepping
+      ? `Match ${this.searchPosition + 1} of ${count}. Next match`
+      : `${count} ${count === 1 ? "result" : "results"}`);
     this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {
@@ -1180,6 +1297,7 @@ export class ViewerControls {
     // pan around the match while Enter keeps stepping.
     this.el("map-canvas").focus({ preventScroll: true });
     this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
+    this.renderSearch(true);
     if (match.marker) this.viewer?.jumpTo(match.marker.point);
     else this.viewer?.fitPoints(match.polygons.flat());
   }
@@ -1203,9 +1321,10 @@ export class ViewerControls {
     clearTimeout(this.searchTimer);
     clearTimeout(this.toastTimer);
     clearTimeout(this.spotlightTimer);
+    clearTimeout(this.cardDeleteTimer);
     clearTimeout(this.confirmTimer);
     this.el("map-stage").classList.remove("spotlight");
-    this.el("toast").hidden = true;
+    this.showToast(false);
     const saved = this.flush();
     this.controller.abort();
     this.dialog("marker-dialog").close();

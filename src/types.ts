@@ -19,6 +19,8 @@ export interface MapRecord {
   backend: Backend;
   levels: Level[];
   created: number;
+  /** Last time the map was opened; the library lists recent maps first. */
+  opened?: number;
   status: "importing" | "ready" | "deleting";
   importMs?: number;
   tileBytes?: number;
