@@ -1269,8 +1269,8 @@ button.glass:active:not(:disabled) {
   border-color: color-mix(in srgb, var(--c) 55%, #000);
 }
 .search-field > svg {
-  width: 18px;
-  height: 18px;
+  width: calc(var(--icon-button-size) - 2 * var(--space-8));
+  height: calc(var(--icon-button-size) - 2 * var(--space-8));
   flex-shrink: 0;
 }
 #map-search {
