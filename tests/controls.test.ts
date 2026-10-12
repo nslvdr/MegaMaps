@@ -517,9 +517,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(done.disabled, true);
     assert.equal((el("route-undo") as HTMLButtonElement).disabled, true);
     assert.equal(controls.undo(), false, "keyboard undo has nothing to take back");
+    assert.equal(el("tool-message").textContent, "Tap where the route starts");
     tap(900, 1000);
+    assert.equal(el("tool-message").textContent, "Tap where it goes next", "one point asks for the next");
     tap(1500, 1700);
     assert.equal(done.disabled, false);
+    assert.equal(el("tool-message").textContent, "Tap to add, drag points to adjust");
     click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
     assert.equal(done.disabled, true);

@@ -820,7 +820,9 @@ export class ViewerControls {
         count
           ? `${route?.name ?? "Route"} · ${plural(count, "point")}`
           : (route?.name ?? "Route"),
-        count ? "Tap to add, drag points to adjust" : "Tap where the route starts",
+        // Done waits for a second point, so the hint asks for it.
+        count > 1 ? "Tap to add, drag points to adjust"
+          : count ? "Tap where it goes next" : "Tap where the route starts",
       ],
     };
     const [title, message] = texts[this.tool];
