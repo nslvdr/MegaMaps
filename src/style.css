@@ -35,7 +35,7 @@
   --radius-round: 50%;
   --button-h: 50px;
   --icon-button-size: 44px;
-  --header-button-size: 36px;
+  --header-line-height: 28px;
   /* One footprint for the library, dialogs, panels, and their controls. */
   --edge-l: max(var(--space-12), env(safe-area-inset-left));
   --edge-r: max(var(--space-12), env(safe-area-inset-right));
@@ -623,7 +623,7 @@ dialog p {
   min-width: 0;
   margin: 0;
   padding: 0;
-  line-height: 28px;
+  line-height: var(--header-line-height);
 }
 /* Align the icon with the first title line, including titles that wrap. */
 .dialog-title-icon {
@@ -632,7 +632,7 @@ dialog p {
   flex: none;
   width: 24px;
   height: 24px;
-  margin-top: calc((28px - 24px) / 2);
+  margin-top: calc((var(--header-line-height) - 24px) / 2);
   color: var(--accent);
 }
 .dialog-title-icon svg {
@@ -646,21 +646,21 @@ dialog p {
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--header-button-size);
-  height: var(--header-button-size);
-  padding: var(--space-2);
+  width: var(--header-line-height);
+  height: var(--header-line-height);
+  padding: var(--space-4);
   border-radius: var(--radius-round);
   background: color-mix(in srgb, var(--accent) 14%, var(--bg));
   color: var(--accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
-/* Smaller visible header buttons keep a 44px click area. */
+/* Match the title visually while retaining the standard click area. */
 .dialog-close::after,
 .sheet-close::after,
 .sheet-share::after {
   content: "";
   position: absolute;
-  inset: calc(-1 * var(--space-4));
+  inset: calc((var(--header-line-height) - var(--icon-button-size)) / 2);
 }
 .dialog-close svg,
 .sheet-close svg,
