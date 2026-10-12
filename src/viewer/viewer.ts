@@ -66,6 +66,8 @@ export class Viewer {
   private camera: Camera = { x: 0, y: 0, scale: 1 };
   private width = 1;
   private height = 1;
+  /** Map height hidden under a card at the bottom of the screen. */
+  private covered = 0;
   private dpr = 1;
   private frame = 0;
   private animation = 0;
@@ -209,6 +211,10 @@ export class Viewer {
   private viewport() {
     return { width: this.width, height: this.height };
   }
+  /** The map area above any covering card, where places center. */
+  private visible() {
+    return { width: this.width, height: Math.max(1, this.height - this.covered) };
+  }
   private limits(rotation = this.camera.rotation ?? 0) {
     return {
       min: fitCamera(this.map, this.viewport(), rotation).scale,
@@ -299,7 +305,7 @@ export class Viewer {
           x: this.width / 2,
           y: this.height / 2,
         });
-    this.camera = constrain(limited, this.map, this.viewport());
+    this.camera = constrain(limited, this.map, this.visible());
     this.navigation.view = captureView(this.camera, this.viewport());
     this.options?.onView();
     this.onZoom(Math.round(this.camera.scale * 100));
@@ -386,21 +392,34 @@ export class Viewer {
       y: this.camera.y + y,
     });
   }
+  /** A card whose top edge is at `edge` (in page coordinates) hides the map
+   * below it; places center above it. Without an edge, the whole map shows. */
+  cover(edge?: number) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.covered = edge === undefined
+      ? 0
+      : Math.min(this.height, Math.max(0, rect.top + this.height - edge));
+    // Uncovering can leave the map's edge past the middle; ease it back.
+    const camera = this.destination ?? this.camera;
+    const constrained = constrain(camera, this.map, this.visible());
+    if (constrained.x !== camera.x || constrained.y !== camera.y)
+      this.animate(constrained);
+  }
   // Glide to a place, or follow a resizing detail pane immediately without zooming out.
   jumpTo(point: Point, minimumScale = 0.2, animated = true) {
     if (this.navigation.touchLocked) return;
-    const previousScale = this.camera.scale;
-    // Place details reserve part of the screen; center in the map's current area.
-    this.resize();
     this.interactions.reset();
     const camera = cameraAt(
       point,
-      this.viewport(),
-      Math.max(this.camera.scale, previousScale, minimumScale),
+      this.visible(),
+      Math.max(this.camera.scale, minimumScale),
       this.camera.rotation ?? 0,
     );
     if (animated) this.animate(camera);
-    else this.setCamera(camera);
+    else {
+      this.stopAnimation();
+      this.setCamera(camera);
+    }
   }
   /** Slides the map up just enough that a pin stays in sight above a card
    * whose top edge is at `edge` (in page coordinates). */
@@ -579,7 +598,7 @@ export class Viewer {
   }
   private animate(target: Camera) {
     this.stopAnimation();
-    target = constrain(target, this.map, this.viewport());
+    target = constrain(target, this.map, this.visible());
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       this.setCamera(target);
       return;

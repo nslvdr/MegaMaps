@@ -49,7 +49,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
@@ -335,6 +335,7 @@ export class ViewerControls {
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
     if (!card.hasAttribute("open")) showDialog(card);
     else this.el("marker-dialog-title").focus({ preventScroll: true });
+    this.viewer?.cover?.();
     if (marker) this.viewer?.jumpTo(point, 1);
     // The card covers the bottom of the map; keep the place it's about in sight,
     // lit through the scrim.
@@ -579,6 +580,8 @@ export class ViewerControls {
     const overflowing = details.querySelector<HTMLElement>(".place-detail-content")!.scrollHeight > details.clientHeight;
     details.dataset.expandable = String(overflowing);
     details.tabIndex = overflowing ? 0 : -1;
+    // The map stays full size behind the pane; the place centers above it.
+    this.viewer?.cover?.(card.offsetTop);
     this.viewer?.jumpTo(marker.point, 1);
     this.viewer?.pulse?.(marker.id);
     this.viewer?.refreshLabels?.();
@@ -789,6 +792,7 @@ export class ViewerControls {
       const height = `${offset}px`;
       if (this.root.style.getPropertyValue("--place-pane-scroll") === height) return;
       this.root.style.setProperty("--place-pane-scroll", height);
+      this.viewer?.cover?.(card.offsetTop);
       const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
       if (marker) this.viewer?.jumpTo(marker.point, 1, false);
     });
@@ -842,6 +846,7 @@ export class ViewerControls {
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
       this.photoURLs.clear();
       this.root.style.removeProperty("--place-pane-scroll");
+      this.viewer?.cover?.();
       this.viewer?.previewPlace?.();
       this.viewer?.refreshLabels?.();
     });

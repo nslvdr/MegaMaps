@@ -1049,10 +1049,12 @@ test("place details read long descriptions safely and expand while scrolling", a
   state.markers = [marker];
   const original = structuredClone(marker);
   const centered: { point: Point; animated: boolean | undefined }[] = [];
+  const covers: (number | undefined)[] = [];
   const controls = new ViewerControls(root, map, state);
   controls.attach({
     setTool() {}, updateNavigation() {}, fitPoints() {},
     jumpTo(point, _minimumScale, animated) { centered.push({ point, animated }); },
+    cover(edge) { covers.push(edge); },
   });
   const details = document.getElementById("marker-details")!,
     noteElement = document.getElementById("marker-detail-description")!,
@@ -1062,6 +1064,7 @@ test("place details read long descriptions safely and expand while scrolling", a
     get: () => contentHeight,
   });
   Object.defineProperty(details, "clientHeight", { value: 200 });
+  Object.defineProperty(card, "offsetTop", { value: 420 });
   // Linkedom lacks layout; these are the pane's collapsed/maximum CSS heights.
   Object.defineProperty(globalThis, "getComputedStyle", {
     value: () => ({ minHeight: "400px", maxHeight: "700px" }), configurable: true,
@@ -1072,6 +1075,7 @@ test("place details read long descriptions safely and expand while scrolling", a
   };
   try {
     controls.options().onMarker(marker);
+    assert.equal(covers.at(-1), 420, "the map stays full size; the pane only covers it");
     assert.equal(editor.hidden, true);
     assert.equal(noteElement.textContent, note, "long notes retain every line");
     assert.equal(noteElement.querySelector("img"), null, "notes cannot inject markup");
@@ -1106,6 +1110,7 @@ test("place details read long descriptions safely and expand while scrolling", a
     assert.equal(noteElement.hidden, true, "a place without a description shows none");
     document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
     assert.equal(card.hasAttribute("open"), false);
+    assert.equal(covers.at(-1), undefined, "closing the pane uncovers the map");
     assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "");
   } finally {
     await controls.dispose();
