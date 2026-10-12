@@ -366,6 +366,23 @@ h2 {
   border-radius: var(--radius-lg);
   padding: 36px 20px;
   text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.empty:hover,
+.dropping .empty {
+  border-color: color-mix(in srgb, var(--neon-saved) 50%, transparent);
+  background: color-mix(in srgb, var(--neon-saved) 5%, transparent);
+}
+.empty .empty-drop {
+  display: none;
+  margin-top: 12px;
+  font-size: 13px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .empty .empty-drop {
+    display: block;
+  }
 }
 .empty-icon {
   margin: 0 auto 20px;
