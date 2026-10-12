@@ -1857,10 +1857,11 @@ input[type="range"] {
   border: 1px solid var(--glass-line);
   border-radius: 13px;
   background: var(--fill);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 .layer-toggle.routes { --c: var(--kind-route); }
 .layer-toggle.places { --c: var(--kind-place); }
@@ -1877,9 +1878,10 @@ input[type="range"] {
 .layer-toggle svg {
   width: 21px;
   height: 21px;
-  color: var(--muted);
 }
+/* A hidden layer reads as off at a glance: its name greys with its icon. */
 .layer-toggle:has(input:checked) {
+  color: var(--text);
   border-color: color-mix(in srgb, var(--c) 40%, transparent);
   background: color-mix(in srgb, var(--c) 5%, #000);
 }
