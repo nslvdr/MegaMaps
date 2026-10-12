@@ -23,6 +23,7 @@ import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
+  ocrLabelAt,
   type OcrIndex,
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
@@ -69,6 +70,8 @@ export class ViewerControls {
   private editingMarker?: string;
   private markerPoint?: Point;
   private autoMarkerName = "";
+  /** Printed map text under the place being added, which names it better than a number. */
+  private mapLabel?: string;
   private nameAction?: (name: string) => void;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private toastUndo?: () => void;
@@ -296,12 +299,14 @@ export class ViewerControls {
       input.checked = input.value === kind;
   }
   private markerName(kind: MapMarker["kind"]) {
-    return nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
+    return this.mapLabel ??
+      nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
   }
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? this.newMarkerKind;
+    this.mapLabel = marker ? undefined : ocrLabelAt(this.ocr, point);
     this.autoMarkerName = marker
       ? ""
       : this.markerName(kind);
