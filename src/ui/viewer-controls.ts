@@ -1247,7 +1247,8 @@ export class ViewerControls {
     // The count doubles as Next, so a touch screen can step through matches
     // once Enter has put the keyboard away; it then shows where you are.
     const badge = this.el<HTMLButtonElement>("search-count");
-    badge.textContent = stepping ? `${this.searchPosition + 1}/${count}` : String(count);
+    // A bare grey 0 is easy to miss; a miss says so in words.
+    badge.textContent = stepping ? `${this.searchPosition + 1}/${count}` : count ? String(count) : "No match";
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);

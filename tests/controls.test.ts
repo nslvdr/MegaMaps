@@ -855,7 +855,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(highlights?.matches.length, 0);
     assert.equal(highlights?.active, true);
     assert.match(el("search-status").textContent!, /No matching/);
-    assert.equal(el("search-count").textContent, "0");
+    assert.equal(el("search-count").textContent, "No match");
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
     input("map-search", "");
