@@ -79,6 +79,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.equal(el<HTMLDialogElement>("share-dialog").open, true);
   assert.equal(el("share-places-count").textContent, "All 1");
   assert.equal(el("share-routes-count").textContent, "None");
+  assert.equal(el("share-title").textContent, "Share <script>entrance</script>", "one item is named, as text");
   assert.match(el("share-size").textContent!, /Annotations only/);
   const inputs = [...el("share-items").querySelectorAll<HTMLInputElement>("input")];
   assert.deepEqual(inputs.map((input) => input.checked), [true, false]);
@@ -92,6 +93,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.equal(el("share-all").getAttribute("aria-pressed"), "true");
   click("share-none");
   assert.equal(inputs[0]!.checked, false);
+  assert.equal(el("share-title").textContent, "Share map");
   assert.equal(escape("share-dialog"), false, "Escape steps back instead of closing");
   assert.equal(el("share-main").hidden, false);
   assert.equal(el("share-places-count").textContent, "None");
