@@ -1075,7 +1075,7 @@ button.glass:active:not(:disabled) {
   align-items: center;
   gap: 10px;
   height: var(--dock-h);
-  padding: 0 15px;
+  padding: 0 12px 0 15px;
   border-radius: 27px;
 }
 .search-field:focus-within {
@@ -1159,6 +1159,35 @@ button.glass:active:not(:disabled) {
   background: var(--fill-strong);
   color: var(--muted);
   opacity: 1;
+}
+.search-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--fill-strong);
+  color: var(--muted);
+}
+.search-close svg {
+  width: 16px;
+  height: 16px;
+}
+.search-close::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+.search-close:active {
+  color: var(--text);
+}
+@media (hover: hover) {
+  .search-close:hover {
+    color: var(--text);
+  }
 }
 .map-options {
   display: flex;

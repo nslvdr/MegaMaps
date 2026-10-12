@@ -731,7 +731,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, true, "search replaces the navbar");
     assert.equal(el("close-sheet").hidden, true);
     assert.equal(el("sheet-search").querySelectorAll("input").length, 1);
-    assert.equal(el("sheet-search").querySelectorAll("button").length, 1, "only the count, which is also Next");
+    assert.equal(el("sheet-search").querySelectorAll("button").length, 2, "the count, which is also Next, and Close");
     assert.equal(el("search-count").parentElement, el("map-search").parentElement);
     assert.equal(el("search-count").hidden, true);
     assert.equal(el("sheet-dismiss").hidden, true, "search leaves the canvas available for gestures");
@@ -775,6 +775,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(sheet.hidden, true, "clicking outside closes search");
     assert.equal(dock.hidden, false, "closing search restores the navbar");
     assert.equal(highlights?.active, false, "closing removes search highlights");
+    assert.equal((el("map-search") as HTMLInputElement).value, "");
+    click("open-search");
+    input("map-search", "north");
+    el("search-close").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(sheet.hidden, true, "Close in the field ends Search");
+    assert.equal(dock.hidden, false);
     assert.equal((el("map-search") as HTMLInputElement).value, "");
     focus.mock.resetCalls();
     click("open-search");

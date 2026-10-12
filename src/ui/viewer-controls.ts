@@ -481,6 +481,8 @@ export class ViewerControls {
     });
     this.on(this.input("map-search"), "input", () => this.queueSearch());
     this.click("search-count", () => this.stepSearch());
+    // Tapping the map also closes Search; this says so where the eye already is.
+    this.click("search-close", () => this.sheet(undefined, true));
     this.click("toast-undo", () => this.toastUndo?.());
     this.on(this.input("map-search"), "keydown", (event) => {
       const key = event as KeyboardEvent;

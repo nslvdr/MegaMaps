@@ -56,7 +56,7 @@ export const viewerMarkup = `
   <div class="sheet-header"><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-search" data-panel="search" data-title="Search this map" hidden>
-      <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button></div>
+      <div class="search-field glass">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" placeholder="Search text and places…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close (Esc)">${icons.close}</button></div>
       <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
     </div>
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
