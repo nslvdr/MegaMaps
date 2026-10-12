@@ -217,6 +217,18 @@ export class Viewer {
     };
   }
   private resize() {
+    const viewportWidth = Math.max(1, this.canvas.clientWidth),
+      viewportHeight = Math.max(1, this.canvas.clientHeight);
+    // Cap the backing canvas at 4 MP (16 MiB); don't blindly allocate DPR=3 canvases.
+    const dpr = Math.min(
+      window.devicePixelRatio || 1,
+      2,
+      Math.sqrt(4_000_000 / (viewportWidth * viewportHeight)),
+    );
+    // A dialog may already have synchronized the new size before its observer fires.
+    if (viewportWidth === this.width && viewportHeight === this.height &&
+      dpr === this.dpr && this.canvas.width === Math.round(viewportWidth * dpr) &&
+      this.canvas.height === Math.round(viewportHeight * dpr)) return;
     this.interactions?.reset();
     const old = this.viewport(),
       center = screenToWorld(this.camera, {
@@ -228,14 +240,9 @@ export class Viewer {
       Math.abs(this.camera.scale - fitted.scale) < 0.00001 &&
       Math.abs(this.camera.x - fitted.x) < 0.00001 &&
       Math.abs(this.camera.y - fitted.y) < 0.00001;
-    this.width = Math.max(1, this.canvas.clientWidth);
-    this.height = Math.max(1, this.canvas.clientHeight);
-    // Cap the backing canvas at 4 MP (16 MiB); don't blindly allocate DPR=3 canvases.
-    this.dpr = Math.min(
-      window.devicePixelRatio || 1,
-      2,
-      Math.sqrt(4_000_000 / (this.width * this.height)),
-    );
+    this.width = viewportWidth;
+    this.height = viewportHeight;
+    this.dpr = dpr;
     const width = Math.round(this.width * this.dpr),
       height = Math.round(this.height * this.dpr);
     // Assigning a size clears the canvas, even when it is unchanged.
@@ -385,18 +392,21 @@ export class Viewer {
       y: this.camera.y + y,
     });
   }
-  // Glides to a place; detail views can request a minimum zoom without zooming out.
-  jumpTo(point: Point, minimumScale = 0.2) {
+  // Glide to a place, or follow a resizing detail pane immediately without zooming out.
+  jumpTo(point: Point, minimumScale = 0.2, animated = true) {
     if (this.navigation.touchLocked) return;
+    const previousScale = this.camera.scale;
+    // Place details reserve part of the screen; center in the map's current area.
+    this.resize();
     this.interactions.reset();
-    this.animate(
-      cameraAt(
-        point,
-        this.viewport(),
-        Math.max(this.camera.scale, minimumScale),
-        this.camera.rotation ?? 0,
-      ),
+    const camera = cameraAt(
+      point,
+      this.viewport(),
+      Math.max(this.camera.scale, previousScale, minimumScale),
+      this.camera.rotation ?? 0,
     );
+    if (animated) this.animate(camera);
+    else this.setCamera(camera);
   }
   /** Slides the map up just enough that a pin stays in sight above a card
    * whose top edge is at `edge` (in page coordinates). */

@@ -8,6 +8,7 @@ import { Viewer, type ViewerOptions } from "../viewer/viewer";
 import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
+  brightnessPercent,
   insideImage,
   layerNames,
   markerKinds,
@@ -67,6 +68,8 @@ export class ViewerControls {
   private movingMarker?: string;
   private moveFrom?: Point;
   private editingMarker?: string;
+  /** Keeps the detail view available while its place is being edited. */
+  private viewingMarker?: string;
   private markerPoint?: Point;
   private autoMarkerName = "";
   /** Printed map text under the place being added, which names it better than a number. */
@@ -156,7 +159,7 @@ export class ViewerControls {
         this.persistence.changed();
       },
       onTap: (point) => this.onTap(point),
-      onMarker: (marker) => this.editMarker(marker),
+      onMarker: (marker) => this.showMarker(marker),
       // Long-press drops a place without going through Add.
       onLongPress: (point) => {
         if (this.tool !== "browse") return;
@@ -232,7 +235,7 @@ export class ViewerControls {
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
-    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.list;
+    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.saved;
     this.el("search-close").hidden = name !== "search";
     this.input("map-search").setAttribute("aria-expanded", String(name === "search"));
     for (const sheet of sheets) {
@@ -303,6 +306,12 @@ export class ViewerControls {
       nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
   }
   private openMarker(title: string, point: Point, marker?: MapMarker) {
+    const card = this.dialog("marker-dialog");
+    card.dataset.mode = "edit";
+    this.el("marker-details").hidden = true;
+    this.el("marker-edit").hidden = true;
+    this.el("marker-form").hidden = false;
+    this.el("marker-dialog-title-icon").innerHTML = icons.pin;
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? this.newMarkerKind;
@@ -321,8 +330,9 @@ export class ViewerControls {
     this.notes(!!marker?.note);
     // A new place shows where it will go while it is named.
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
-    const card = this.dialog("marker-dialog");
-    showDialog(card);
+    if (!card.hasAttribute("open")) showDialog(card);
+    else this.el("marker-dialog-title").focus({ preventScroll: true });
+    if (marker) this.viewer?.jumpTo(point, 1);
     // The card covers the bottom of the map; keep the place it's about in sight,
     // lit through the scrim.
     const spot = this.viewer?.reveal?.(point, card.offsetTop);
@@ -465,10 +475,48 @@ export class ViewerControls {
     this.mode("browse");
   }
   private editMarker(marker: MapMarker) {
-    this.viewer?.jumpTo(marker.point, 1);
     this.openMarker("Edit place", marker.point, marker);
     // Under the card's shade every pin looks alike; this one says it's the one.
     this.viewer?.pulse?.(marker.id);
+  }
+  /** Read a saved place first, keeping editing behind an explicit action. */
+  private showMarker(marker: MapMarker) {
+    this.sheet(undefined);
+    const card = this.dialog("marker-dialog");
+    this.root.style.removeProperty("--place-pane-scroll");
+    this.viewingMarker = marker.id;
+    card.dataset.mode = "view";
+    this.el("marker-form").hidden = true;
+    this.el("marker-details").hidden = false;
+    this.el("marker-edit").hidden = false;
+    this.el("marker-dialog-title").textContent = marker.label;
+    this.el("marker-dialog-title-icon").innerHTML = placeIcon(marker.kind);
+    this.el("marker-detail-kind").textContent = markerKinds[marker.kind].label;
+    const note = this.el("marker-detail-note");
+    note.textContent = marker.note || "No notes yet.";
+    note.classList.toggle("no-note", !marker.note);
+    this.el("marker-details").scrollTop = 0;
+    if (!card.hasAttribute("open")) showDialog(card);
+    else this.el("marker-dialog-title").focus({ preventScroll: true });
+    const details = this.el("marker-details");
+    const overflowing = details.querySelector<HTMLElement>(".place-detail-content")!.scrollHeight > details.clientHeight;
+    details.dataset.expandable = String(overflowing);
+    details.tabIndex = overflowing ? 0 : -1;
+    this.viewer?.jumpTo(marker.point, 1);
+    this.viewer?.pulse?.(marker.id);
+    this.viewer?.refreshLabels?.();
+  }
+  /** The initial native scroll distance unfolds the pane before the notes scroll. */
+  private markerExpansionRange() {
+    const style = getComputedStyle(this.dialog("marker-dialog"));
+    return Math.max(0, parseFloat(style.maxHeight) - parseFloat(style.minHeight));
+  }
+  /** Cancel an edit back to its unchanged detail view, or close a new-place form. */
+  private cancelMarkerEdit() {
+    const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
+    if (this.dialog("marker-dialog").dataset.mode === "edit" && marker)
+      this.showMarker(marker);
+    else this.dialog("marker-dialog").close();
   }
   private spotlight() {
     const stage = this.el("map-stage");
@@ -577,7 +625,7 @@ export class ViewerControls {
       );
     });
     for (const level of BRIGHTNESS_LEVELS) {
-      const input = this.input(`brightness-${level * 100}`);
+      const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
         if (!input.checked) return;
         this.state.dimming = level;
@@ -607,7 +655,7 @@ export class ViewerControls {
     this.on(window, "pagehide", () => {
       void this.flush();
     });
-    // Add's button turns into × : it closes the choice or cancels the tool.
+    // Add switches to X to close the choices or cancel the tool.
     this.click("open-add", () => {
       if (this.tool === "route") this.cancelRoute();
       else if (this.tool === "move") this.finishMove(false);
@@ -641,7 +689,27 @@ export class ViewerControls {
       else return;
       this.changed();
     });
-    this.click("marker-cancel", () => this.dialog("marker-dialog").close());
+    this.click("marker-cancel", () => this.cancelMarkerEdit());
+    this.click("marker-edit", () => {
+      const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
+      if (marker) this.editMarker(marker);
+    });
+    const details = this.el("marker-details");
+    this.on(details, "scroll", () => {
+      const card = this.dialog("marker-dialog");
+      if (!card.hasAttribute("open") || card.dataset.mode !== "view") return;
+      const offset = Math.min(Math.max(0, details.scrollTop), this.markerExpansionRange());
+      const height = `${offset}px`;
+      if (this.root.style.getPropertyValue("--place-pane-scroll") === height) return;
+      this.root.style.setProperty("--place-pane-scroll", height);
+      const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
+      if (marker) this.viewer?.jumpTo(marker.point, 1, false);
+    });
+    this.on(this.dialog("marker-dialog"), "cancel", (event) => {
+      if (this.dialog("marker-dialog").dataset.mode !== "edit" || !this.viewingMarker) return;
+      event.preventDefault();
+      this.cancelMarkerEdit();
+    });
     this.click("marker-add-note", () => {
       this.notes(true);
       this.el("marker-note").focus();
@@ -676,7 +744,12 @@ export class ViewerControls {
         if (!this.editingMarker && this.markerPoint)
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
-    this.on(this.dialog("marker-dialog"), "close", () => this.viewer?.previewPlace?.());
+    this.on(this.dialog("marker-dialog"), "close", () => {
+      this.viewingMarker = undefined;
+      this.root.style.removeProperty("--place-pane-scroll");
+      this.viewer?.previewPlace?.();
+      this.viewer?.refreshLabels?.();
+    });
     // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
     this.on(this.el("marker-note"), "keydown", (event) => {
       const key = event as KeyboardEvent;
@@ -686,7 +759,7 @@ export class ViewerControls {
     });
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
-      if (!this.markerPoint) return;
+      if (!this.markerPoint || this.dialog("marker-dialog").dataset.mode !== "edit") return;
       const label = this.input("marker-label").value.trim();
       if (!label) return;
       const existing = this.state.markers.find(
@@ -709,13 +782,15 @@ export class ViewerControls {
         this.newMarkerKind = marker.kind;
       } else if (!unchanged)
         this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
-      this.dialog("marker-dialog").close();
+      const returnToDetails = this.viewingMarker === marker.id && !this.moveAfterSave;
+      if (!returnToDetails) this.dialog("marker-dialog").close();
       if (!unchanged) this.changed();
       if (this.moveAfterSave) {
         this.moveMarker(marker);
         return;
       }
-      this.mode("browse");
+      if (returnToDetails) this.showMarker(marker);
+      else this.mode("browse");
       this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
     });
     // Move from the card keeps what was typed, then lifts the pin.
@@ -768,6 +843,7 @@ export class ViewerControls {
     const add = this.el("open-add");
     add.setAttribute("aria-expanded", String(this.choosing));
     add.classList.toggle("active", editing || this.choosing);
+    add.innerHTML = editing || this.choosing ? icons.close : icons.add;
     const addLabel = editing
       ? this.confirming === "cancel-route"
         ? "Discard?"
@@ -810,7 +886,7 @@ export class ViewerControls {
     this.el<HTMLButtonElement>("tool-done").disabled =
       this.tool === "route" && count < 2;
   }
-  // Saved list items: tap to jump; ⋯ opens actions outside the scrolling list.
+  // Saved rows open a place's details or jump to a route; ⋯ exposes actions.
   private row(
     container: HTMLElement,
     options: {
@@ -854,7 +930,8 @@ export class ViewerControls {
       this.viewer?.pulse?.(options.key);
       this.sheet(undefined);
       // The keyboard carries on from the map: arrows pan, +/− zoom.
-      this.el("map-canvas").focus({ preventScroll: true });
+      if (!this.root.querySelector("dialog[open]"))
+        this.el("map-canvas").focus({ preventScroll: true });
     });
     const open = this.rowMenu === options.key;
     const toggle = document.createElement("button");
@@ -1012,9 +1089,10 @@ export class ViewerControls {
       this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
     );
     rotationLock.title = this.state.rotationLocked ? "Unlock rotation" : "Lock rotation";
+    rotationLock.innerHTML = this.state.rotationLocked ? icons.rotationLock : icons.rotateRight;
     this.input("dark-map").checked = this.state.inverted;
     for (const level of BRIGHTNESS_LEVELS)
-      this.input(`brightness-${level * 100}`).checked = this.state.dimming === level;
+      this.input(`brightness-${brightnessPercent(level)}`).checked = this.state.dimming === level;
     this.renderDark();
     const counts = {
       routes: this.state.routes.length,
@@ -1047,7 +1125,7 @@ export class ViewerControls {
         label: marker.label,
         detail: `${kind.label}${marker.note ? " · " + marker.note : ""}`,
         icon: placeIcon(marker.kind),
-        jump: () => this.viewer?.jumpTo(marker.point, 1),
+        jump: () => this.showMarker(marker),
         rename: () => this.editMarker(marker),
         actions: [
           {
@@ -1218,6 +1296,7 @@ export class ViewerControls {
     // A bare grey 0 is easy to miss; a miss says so in words.
     badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
       : count ? `${count} ${count === 1 ? "match" : "matches"}` : "No matches";
+    badge.insertAdjacentHTML("beforeend", icons.next);
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);
