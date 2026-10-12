@@ -941,6 +941,8 @@ button.glass:active:not(:disabled) {
   background: var(--glass-strong);
   font-size: 14px;
   text-align: center;
+  /* Longer messages wrap to two even lines, not a line and a stray word. */
+  text-wrap: balance;
   z-index: 6;
   pointer-events: none;
   animation: toast-in 0.2s ease-out;
