@@ -59,12 +59,9 @@ export const saveMap = (map: MapRecord) =>
   transact("maps", "readwrite", (s) => s.put(map));
 export const listMaps = () =>
   transact<MapRecord[]>("maps", "readonly", (s) => s.getAll());
-// Update only the name on the latest record, without restoring a removed map.
-export async function renameMap(id: string, name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) throw new Error("Enter a map name.");
-  const db = await database();
-  return new Promise<void>((resolve, reject) => {
+// Update fields on the latest record, without restoring a removed map.
+function patchMap(id: string, patch: Partial<MapRecord>, failure: string) {
+  return database().then((db) => new Promise<void>((resolve, reject) => {
     const tx = db.transaction("maps", "readwrite");
     const store = tx.objectStore("maps");
     const request: IDBRequest<MapRecord | undefined> = store.get(id);
@@ -76,13 +73,21 @@ export async function renameMap(id: string, name: string) {
         tx.abort();
         return;
       }
-      store.put({ ...map, name: trimmed });
+      store.put({ ...map, ...patch });
     };
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(missing
       ? new Error("This map is no longer available.")
-      : tx.error ?? new Error("Could not save the map name."));
-  });
+      : tx.error ?? new Error(failure));
+  }));
 }
+export async function renameMap(id: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Enter a map name.");
+  return patchMap(id, { name: trimmed }, "Could not save the map name.");
+}
+// The library lists the maps in use first.
+export const markOpened = (id: string, opened = Date.now()) =>
+  patchMap(id, { opened }, "Could not note when the map was opened.");
 export const removeRecord = (id: string) =>
   transact("maps", "readwrite", (s) => s.delete(id));

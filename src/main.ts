@@ -1,7 +1,7 @@
 import { showDialog } from "./ui/dialog";
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
-import { listMaps, renameMap } from "./storage/database";
+import { listMaps, markOpened, renameMap } from "./storage/database";
 import { payloadStore, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
 import { Viewer } from "./viewer/viewer";
@@ -265,7 +265,8 @@ function closeViewer() {
   void refresh()
     .then(() => {
       if (!home.hidden) {
-        window.scrollTo(0, libraryScroll);
+        // The map just left now leads the list; the library opens at it.
+        window.scrollTo(0, maps[0]?.id === closed ? 0 : libraryScroll);
         grid.querySelector<HTMLElement>(`[data-map="${closed}"] .map-open`)?.focus({ preventScroll: true });
       }
     })
@@ -280,6 +281,8 @@ async function openMap(map: MapRecord) {
   if (!home.hidden) libraryScroll = window.scrollY;
   const fromLibrary = home.contains(document.activeElement);
   currentMap = map;
+  map.opened = Date.now();
+  void markOpened(map.id, map.opened).catch(() => {});
   showTitle();
   // An open map gets its own history entry, so the system Back returns home.
   if (history.state?.map) history.replaceState({ map: map.id }, "");
@@ -345,7 +348,7 @@ async function refresh() {
   if (version !== renderVersion) return;
   maps = records
     .filter((m) => m.status === "ready")
-    .sort((a, b) => b.created - a.created);
+    .sort((a, b) => (b.opened ?? b.created) - (a.opened ?? a.created));
   if (currentMap && !maps.some((m) => m.id === currentMap!.id)) {
     closeViewer();
     showMessage("Map removed", "This map was removed in another window.");
