@@ -314,14 +314,26 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dimensions,
-.map-size {
+.map-saved,
+.map-meta {
   font-size: 13px;
   color: var(--muted);
   margin: 0;
 }
-.map-size {
+/* What's saved reads first and brighter; the file details sit under it. */
+.map-saved {
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+}
+.map-saved.none {
+  color: var(--muted);
+}
+.map-meta {
   margin-top: 3px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.map-meta span {
+  white-space: nowrap;
 }
 .map-more {
   display: grid;

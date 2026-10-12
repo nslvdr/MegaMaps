@@ -385,24 +385,27 @@ async function refresh() {
     const card = document.createElement("article");
     card.className = "map-card";
     card.dataset.map = map.id;
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="dimensions"></p><p class="map-size"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
-    card.querySelector(".dimensions")!.textContent =
-      `${map.width.toLocaleString()} × ${map.height.toLocaleString()} px`;
-    const size = card.querySelector(".map-size")!;
-    size.textContent = formatBytes(map.bytes);
-    // What's saved on each map helps pick the right one. Leaving a map may
-    // still be writing its last edits.
+    // What's on a map is what tells two maps apart; size and pixels follow.
+    // On narrow screens it breaks between the two parts, not inside one.
+    card.querySelector(".map-meta")!.append(
+      ...[`${map.width.toLocaleString()} × ${map.height.toLocaleString()} px · `, formatBytes(map.bytes)]
+        .map((part) => Object.assign(document.createElement("span"), { textContent: part })),
+    );
+    const saved = card.querySelector(".map-saved")!;
+    // Leaving a map may still be writing its last edits.
     void pendingViewSave
       .catch(() => {})
       .then(() => loadNavigation(map.id))
       .then(({ markers, routes }) => {
         if (version !== renderVersion) return;
-        const saved = [
+        const items = [
           markers.length && plural(markers.length, "place"),
           routes.length && plural(routes.length, "route"),
         ].filter(Boolean);
-        size.textContent = [formatBytes(map.bytes), ...saved].join(" · ");
+        saved.textContent = items.join(" · ") || "Nothing saved yet";
+        saved.classList.toggle("none", !items.length);
       })
       .catch(() => {});
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
