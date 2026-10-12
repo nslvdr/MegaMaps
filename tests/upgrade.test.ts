@@ -35,7 +35,7 @@ test("version 1 libraries and payloads survive the navigation and OCR upgrade", 
     };
   });
   const db = await database();
-  assert.equal(db.version, 3);
+  assert.equal(db.version, 4);
   assert.equal((await listMaps())[0]?.name, "existing.png");
   assert.equal(
     await (await payloadStore("indexeddb").get("legacy", "original")).text(),

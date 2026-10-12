@@ -3,6 +3,9 @@ import type { MapRecord } from "../types";
 import type { Point } from "../viewer/camera";
 import type { DarkMode } from "../viewer/appearance";
 import { NavigationPersistence, loadNavigation } from "../storage/navigation";
+import { loadPhoto, savePhoto } from "../storage/photos";
+import { preparePhoto } from "../processing/photo";
+import { PhotoViewer } from "./photo-viewer";
 import { preserveUnseenImports } from "../sharing/annotations";
 import { Viewer, type ViewerOptions } from "../viewer/viewer";
 import {
@@ -94,6 +97,14 @@ export class ViewerControls {
   private darkKind: DarkMode["kind"] = "inverted";
   /** New places start as the kind last saved, for runs of entrances or notes. */
   private newMarkerKind: MapMarker["kind"] = "landmark";
+  /** Photos in the place form, saved with the place on Save. */
+  private formPhotos: string[] = [];
+  /** Bumped per form so a photo still being prepared can't land on another place. */
+  private formVersion = 0;
+  private photoJobs = 0;
+  /** Object URLs for the open card, revoked when it closes. */
+  private photoURLs = new Map<string, Promise<string | undefined>>();
+  private photoViewer?: PhotoViewer;
   constructor(
     private root: HTMLElement,
     private map: MapRecord,
@@ -313,12 +324,13 @@ export class ViewerControls {
     this.el("marker-dialog-title").textContent = title;
     this.input("marker-label").value = marker?.label ?? this.autoMarkerName;
     this.setMarkerKind(kind);
-    this.el<HTMLTextAreaElement>("marker-note").value = marker?.note ?? "";
+    this.el<HTMLTextAreaElement>("marker-description").value = marker?.description ?? "";
     this.el("marker-delete").hidden = !marker;
     this.el("marker-move").hidden = !marker;
     this.armCardDelete(false);
-    // Notes stay tucked away unless there already is one.
-    this.notes(!!marker?.note);
+    this.formVersion++;
+    this.formPhotos = [...(marker?.photos ?? [])];
+    this.renderFormPhotos();
     // A new place shows where it will go while it is named.
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
     if (!card.hasAttribute("open")) showDialog(card);
@@ -330,9 +342,78 @@ export class ViewerControls {
     card.style.setProperty("--spot-x", spot ? `${spot.x}px` : "");
     card.style.setProperty("--spot-y", spot ? `${spot.y}px` : "");
   }
-  private notes(open: boolean) {
-    this.el("marker-note-field").hidden = !open;
-    this.el("marker-add-note").hidden = open;
+  private photoURL(id: string) {
+    let url = this.photoURLs.get(id);
+    if (!url) {
+      url = loadPhoto(this.map.id, id).then((blob) => blob && URL.createObjectURL(blob), () => undefined);
+      this.photoURLs.set(id, url);
+    }
+    return url;
+  }
+  /** Slots are laid out at once and filled as photos load, so nothing shifts. */
+  private photoImage(id: string, alt: string, slot: HTMLElement = this.root.ownerDocument.createElement("img")) {
+    const image = slot.tagName === "IMG" ? slot as HTMLImageElement : slot.querySelector("img")!;
+    image.alt = alt;
+    image.decoding = "async";
+    void this.photoURL(id).then((url) => {
+      if (url) image.src = url;
+      else slot.remove();
+    });
+    return slot;
+  }
+  /** Full screen, swiping through the place's photos from the one tapped. */
+  private showPhotos(ids: string[], index: number) {
+    this.photoViewer ??= new PhotoViewer(this.dialog("photo-viewer"), this.controller.signal);
+    this.photoViewer.show(ids.map((id, i) => this.photoImage(id, `Photo ${i + 1} of ${ids.length}`) as HTMLImageElement), index);
+  }
+  private renderFormPhotos() {
+    const list = this.el("marker-photo-list"), count = this.formPhotos.length;
+    list.replaceChildren(...this.formPhotos.map((id, index) => {
+      const item = this.root.ownerDocument.createElement("li");
+      item.append(this.root.ownerDocument.createElement("img"));
+      const remove = this.root.ownerDocument.createElement("button");
+      remove.type = "button";
+      remove.className = "photo-remove";
+      remove.innerHTML = icons.close;
+      remove.setAttribute("aria-label", `Remove photo ${index + 1}`);
+      remove.title = "Remove photo";
+      this.on(remove, "click", () => {
+        this.formPhotos = this.formPhotos.filter((photo) => photo !== id);
+        this.renderFormPhotos();
+        this.el("marker-add-photos").focus();
+      });
+      item.append(remove);
+      return this.photoImage(id, `Photo ${index + 1} of ${count}`, item);
+    }));
+    this.el("marker-photos-field").hidden = !count;
+    const busy = this.photoJobs > 0;
+    this.el<HTMLButtonElement>("marker-add-photos").disabled = busy;
+    this.el("marker-add-photos").querySelector("span")!.textContent = busy ? "Adding photos…" : "Add photos";
+    this.el<HTMLButtonElement>("marker-save").disabled = busy;
+  }
+  /** Photos are shrunk and stored as they are picked; the place keeps them on Save. */
+  private async addPhotos(files: File[]) {
+    const version = this.formVersion;
+    this.photoJobs++;
+    this.renderFormPhotos();
+    let failed = 0;
+    try {
+      for (const file of files) {
+        try {
+          const id = await savePhoto(this.map.id, await preparePhoto(file));
+          if (version !== this.formVersion) return;
+          this.formPhotos.push(id);
+          this.renderFormPhotos();
+        } catch {
+          failed++;
+        }
+      }
+    } finally {
+      this.photoJobs--;
+      this.renderFormPhotos();
+    }
+    if (failed) this.toast(failed === files.length && failed === 1
+      ? "This photo could not be added." : `${plural(failed, "photo")} could not be added.`);
   }
   private onTap(point: Point) {
     if (!insideImage(point, this.map)) return;
@@ -477,10 +558,20 @@ export class ViewerControls {
     this.el("marker-edit").hidden = false;
     this.el("marker-dialog-title").textContent = marker.label;
     this.el("marker-dialog-title-icon").innerHTML = placeIcon(marker.kind);
-    this.el("marker-detail-kind").textContent = markerKinds[marker.kind].label;
-    const note = this.el("marker-detail-note");
-    note.textContent = marker.note || "No notes yet.";
-    note.classList.toggle("no-note", !marker.note);
+    const description = this.el("marker-detail-description");
+    description.textContent = marker.description;
+    description.hidden = !marker.description;
+    const photos = this.el("marker-detail-photos"), count = marker.photos?.length ?? 0;
+    photos.replaceChildren(...(marker.photos ?? []).map((id, index) => {
+      const open = this.root.ownerDocument.createElement("button");
+      open.type = "button";
+      open.title = "View full screen";
+      open.append(this.root.ownerDocument.createElement("img"));
+      this.on(open, "click", () => this.showPhotos(marker.photos!, index));
+      return this.photoImage(id, `Photo ${index + 1} of ${count}`, open);
+    }));
+    photos.hidden = !count;
+    photos.scrollLeft = 0;
     this.el("marker-details").scrollTop = 0;
     if (!card.hasAttribute("open")) showDialog(card);
     else this.el("marker-dialog-title").focus({ preventScroll: true });
@@ -706,9 +797,12 @@ export class ViewerControls {
       event.preventDefault();
       this.cancelMarkerEdit();
     });
-    this.click("marker-add-note", () => {
-      this.notes(true);
-      this.el("marker-note").focus();
+    this.click("marker-add-photos", () => this.input("marker-photo-input").click());
+    this.on(this.input("marker-photo-input"), "change", () => {
+      const input = this.input("marker-photo-input");
+      const files = [...input.files ?? []];
+      input.value = "";
+      if (files.length) void this.addPhotos(files);
     });
     // Two taps here too, as in the Saved menu: the first arms Delete briefly.
     this.click("marker-delete", () => {
@@ -740,14 +834,19 @@ export class ViewerControls {
         if (!this.editingMarker && this.markerPoint)
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
+    this.click("photo-viewer-close", () => this.dialog("photo-viewer").close());
     this.on(this.dialog("marker-dialog"), "close", () => {
+      this.dialog("photo-viewer").close();
       this.viewingMarker = undefined;
+      this.formVersion++;
+      for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
+      this.photoURLs.clear();
       this.root.style.removeProperty("--place-pane-scroll");
       this.viewer?.previewPlace?.();
       this.viewer?.refreshLabels?.();
     });
-    // ⌘/Ctrl+Enter saves from the note, where Enter starts a new line.
-    this.on(this.el("marker-note"), "keydown", (event) => {
+    // ⌘/Ctrl+Enter saves from the description, where Enter starts a new line.
+    this.on(this.el("marker-description"), "keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key !== "Enter" || !(key.metaKey || key.ctrlKey) || key.isComposing) return;
       key.preventDefault();
@@ -755,7 +854,7 @@ export class ViewerControls {
     });
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
-      if (!this.markerPoint || this.dialog("marker-dialog").dataset.mode !== "edit") return;
+      if (!this.markerPoint || this.dialog("marker-dialog").dataset.mode !== "edit" || this.photoJobs) return;
       const label = this.input("marker-label").value.trim();
       if (!label) return;
       const existing = this.state.markers.find(
@@ -765,12 +864,14 @@ export class ViewerControls {
         id: existing?.id ?? crypto.randomUUID(),
         point: this.markerPoint,
         label,
-        note: this.el<HTMLTextAreaElement>("marker-note").value.trim(),
+        description: this.el<HTMLTextAreaElement>("marker-description").value.trim(),
+        ...(this.formPhotos.length ? { photos: [...this.formPhotos] } : {}),
         kind: this.markerKind(),
         created: existing?.created ?? Date.now(),
       };
       const unchanged = !!existing && existing.label === marker.label &&
-        existing.note === marker.note && existing.kind === marker.kind &&
+        existing.description === marker.description && existing.kind === marker.kind &&
+        (existing.photos ?? []).join() === (marker.photos ?? []).join() &&
         existing.point.x === marker.point.x && existing.point.y === marker.point.y;
       // An edit keeps the place where it was in the Saved list.
       if (!existing) {
@@ -916,7 +1017,8 @@ export class ViewerControls {
     title.title = options.label;
     description.textContent = options.detail;
     description.title = options.detail;
-    text.append(title, description);
+    text.append(title);
+    if (options.detail) text.append(description);
     button.append(icon, text);
     button.addEventListener("click", () => {
       options.jump();
@@ -1113,11 +1215,10 @@ export class ViewerControls {
     markers.replaceChildren();
     routes.replaceChildren();
     for (const marker of this.state.markers) {
-      const kind = markerKinds[marker.kind] ?? markerKinds.landmark;
       this.row(markers, {
         key: marker.id,
         label: marker.label,
-        detail: `${kind.label}${marker.note ? " · " + marker.note : ""}`,
+        detail: marker.description,
         icon: placeIcon(marker.kind),
         jump: () => this.showMarker(marker),
         rename: () => this.editMarker(marker),

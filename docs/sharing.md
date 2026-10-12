@@ -6,7 +6,7 @@ MegaMaps exchanges independent, editable copies through `.megamap` files. Export
 
 - In the library, tap a map's **Share** icon. In the viewer, use **Saved → Share map or selected items**.
 - A place or finished route's **⋯ → Share** starts with only that item selected.
-- Select any combination of places and finished routes. Place notes are included. **Select all** and **Clear selection** change the annotation selection.
+- Select any combination of places and finished routes. Place descriptions and photos are included. **Select all** and **Clear selection** change the annotation selection.
 - **Include map image** adds the original JPEG, PNG, or WebP, without its generated tiles. Image-only exports are supported. The dialog shows the total file size before sending.
 - **Share file** opens native file sharing when supported. Otherwise it saves the file. **Save file** always downloads it.
 
@@ -25,20 +25,21 @@ Each destination remembers imported annotation identities. Repeated merges add n
 
 An annotation write reads the latest map and navigation together in one IndexedDB transaction. New-copy failures clean up that copy. Stale camera saves preserve imports that their window has not yet seen. Replace increments a local annotation revision so older saves cannot restore removed places or finished routes; a library-channel notification refreshes annotations in an open viewer.
 
-## Version 1 file format
+## File format (version 2)
 
 The binary container is deliberately simple and does not compress or base64-encode an already compressed map image:
 
 1. Eight ASCII bytes: `MEGAMAP1`.
 2. Four bytes: unsigned little-endian UTF-8 manifest length.
 3. UTF-8 JSON manifest.
-4. Optional original image bytes, exactly the length declared in the manifest.
+4. Place photo bytes, back to back in the order of the manifest's `photos` list.
+5. Optional original image bytes, exactly the length declared in the manifest.
 
-The manifest contains `format: "megamap"`, `version: 1`, map name, original pixel dimensions, lowercase SHA-256 `fingerprint`, arrays of `markers` and finished `routes`, and optional image metadata (`name`, MIME `type`, `bytes`). Items retain their source IDs. Import history uses `marker:<id>` and `route:<id>` keys and is not exported. Map display settings, saved camera, tile cache, and unfinished routes are not part of this version.
+The manifest contains `format: "megamap"`, `version: 2`, map name, original pixel dimensions, lowercase SHA-256 `fingerprint`, arrays of `markers` and finished `routes`, an optional `photos` list (`id`, MIME `type`, `bytes`), and optional image metadata (`name`, MIME `type`, `bytes`). A marker's `photos` lists its photo IDs in display order; each photo in the file belongs to exactly one marker. Version 1 files, which have no photos and call the description `note`, are still read. Older apps reject version 2 files and ask to be updated. Items retain their source IDs. Import history uses `marker:<id>` and `route:<id>` keys and is not exported. Map display settings, saved camera, tile cache, and unfinished routes are not part of this version.
 
 Files contain plain annotations and an optional original image. MegaMaps has no sharing server or account system.
 
-Parsing limits are 4 MiB of manifest JSON, 10,000 combined annotations, 100,000 route points, and the existing 256 MiB original-image limit. Imported names, types, counts, timestamps, coordinates, identities, image metadata, and payload lengths are validated. Fingerprinting reads at most 1 MiB at a time; packaging uses Blob parts and parsing slices the optional image without loading it into one ArrayBuffer.
+Parsing limits are 4 MiB of manifest JSON, 10,000 combined annotations, 100,000 route points, 2,000 photos of up to 16 MiB each (50 per place), and the existing 256 MiB original-image limit. Imported names, types, counts, timestamps, coordinates, identities, photo references, image metadata, and payload lengths are validated. Photos of added places are written in the same transaction as the annotations. Fingerprinting reads at most 1 MiB at a time; packaging uses Blob parts and parsing slices the optional image without loading it into one ArrayBuffer.
 
 ## Verification
 

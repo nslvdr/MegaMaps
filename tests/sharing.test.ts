@@ -8,7 +8,8 @@ import { exportFile, importAnnotations, importNewCopy, matchingMaps, prepareExpo
 import { defaultNavigation } from "../src/viewer/navigation";
 import { database, listMaps, saveMap } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
-import { payloadStore } from "../src/storage/payloads";
+import { deleteStoredMap, payloadStore } from "../src/storage/payloads";
+import { loadPhoto, prunePhotos, savePhoto } from "../src/storage/photos";
 import type { MapRecord } from "../src/types";
 
 // A container header is enough for image identity checks; decoding stays in the existing importer.
@@ -23,9 +24,9 @@ function image(width = 512, height = 256, salt = "original") {
 }
 async function fixture() {
   const original = image();
-  const manifest: ShareManifest = { format: "megamap", version: 1,
+  const manifest: ShareManifest = { format: "megamap", version: 2,
     map: { name: "Survey <2026>", width: 512, height: 256, fingerprint: await fingerprint(original) },
-    markers: [{ id: "place-a", label: "Entrance <west>", note: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
+    markers: [{ id: "place-a", label: "Entrance <west>", description: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
     routes: [{ id: "route-a", name: "Way out", points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], draft: false, created: 2 }] };
   return { original, manifest };
 }
@@ -58,7 +59,7 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   const legacy = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "bookmark" }] };
   const decoded = await readShare(rawFile(legacy));
   assert.deepEqual(decoded.manifest.markers, [{ ...manifest.markers[0]!, kind: "landmark" }]);
-  for (const kind of ["junction", "note"]) {
+  for (const kind of ["junction", "note", "shaft", "machinery"]) {
     const retired = { ...manifest, markers: [{ ...manifest.markers[0]!, kind }] };
     assert.equal((await readShare(rawFile(retired))).manifest.markers[0]!.kind, "landmark", `retired ${kind} places become landmarks`);
   }
@@ -68,6 +69,79 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   await saveMap(destination);
   await importAnnotations(destination.id, decoded.manifest);
   assert.deepEqual((await loadNavigation(destination.id)).markers, decoded.manifest.markers);
+});
+
+test("place photos travel with their place, and version 1 notes arrive as descriptions", async () => {
+  const { manifest } = await fixture();
+  const photos = new Map([["photo-a", new Blob(["first jpeg"], { type: "image/jpeg" })], ["photo-b", new Blob(["second"], { type: "image/webp" })]]);
+  const withPhotos: ShareManifest = { ...manifest,
+    markers: [{ ...manifest.markers[0]!, photos: ["photo-b", "photo-a"] }],
+    photos: [{ id: "photo-a", type: "image/jpeg", bytes: 10 }, { id: "photo-b", type: "image/webp", bytes: 6 }] };
+  const decoded = await readShare(encodeShare(withPhotos, undefined, photos));
+  assert.deepEqual(decoded.manifest, withPhotos);
+  assert.equal(await decoded.photos!.get("photo-a")!.text(), "first jpeg");
+  assert.equal(await decoded.photos!.get("photo-b")!.text(), "second");
+  assert.equal(decoded.photos!.get("photo-b")!.type, "image/webp");
+
+  const { description, ...place } = manifest.markers[0]!;
+  const legacy = await readShare(rawFile({ ...manifest, version: 1, markers: [{ ...place, note: description }] }));
+  assert.equal(legacy.manifest.markers[0]!.description, description);
+  assert.equal(legacy.manifest.version, 2, "older shares re-export in the current format");
+
+  const encoded = (value: unknown, tail: Blob) => readShare(rawFile(value, tail));
+  const bytes = new Blob(["first jpeg", "second"]);
+  const one = { ...withPhotos, markers: [{ ...withPhotos.markers[0]!, photos: ["photo-a"] }] };
+  await assert.rejects(encoded(one, bytes), /invalid/, "every photo in the file belongs to a place");
+  const missing = { ...withPhotos, markers: [{ ...withPhotos.markers[0]!, photos: ["photo-a", "photo-b", "photo-c"] }] };
+  await assert.rejects(encoded(missing, bytes), /invalid/, "a place cannot point at a photo the file lacks");
+  const twice = { ...withPhotos, markers: [{ ...withPhotos.markers[0]!, photos: ["photo-a", "photo-a", "photo-b"] }] };
+  await assert.rejects(encoded(twice, bytes), /invalid/);
+  const html = { ...withPhotos, photos: [withPhotos.photos![0]!, { ...withPhotos.photos![1]!, type: "text/html" }] };
+  await assert.rejects(encoded(html, bytes), /invalid/);
+  const full = encodeShare(withPhotos, undefined, photos);
+  await assert.rejects(readShare(full.slice(0, full.size - 1)), /incomplete/);
+});
+
+test("exports carry only the chosen places' photos; imports store photos of added places", async () => {
+  const original = image(512, 256, "photos");
+  const source = record("photo-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", original);
+  const state = defaultNavigation(source.id);
+  const first = await savePhoto(source.id, new Blob(["gate"], { type: "image/jpeg" }));
+  const second = await savePhoto(source.id, new Blob(["shaft"], { type: "image/jpeg" }));
+  state.markers = [
+    { id: "gate", label: "Gate", description: "Rusty", photos: [first, "gone"], point: { x: 1, y: 1 }, kind: "entrance", created: 1 },
+    { id: "shaft", label: "Shaft", description: "", photos: [second], point: { x: 2, y: 2 }, kind: "stairs", created: 2 },
+  ];
+  const prepared = await prepareExport(source, state);
+  assert.deepEqual(prepared.markers[0]!.photos, [first], "a photo missing from storage is left out");
+  const shared = await readShare(exportFile(prepared, { markers: ["gate"], routes: [], includeImage: false }));
+  assert.deepEqual(shared.manifest.photos?.map((photo) => photo.id), [first], "unselected places keep their photos");
+
+  const destination = { ...record("photo-destination"), fingerprint: shared.manifest.map.fingerprint };
+  await saveMap(destination);
+  await importAnnotations(destination.id, shared.manifest, "merge", undefined, shared.photos);
+  assert.deepEqual((await loadNavigation(destination.id)).markers[0]!.photos, [first]);
+  assert.equal(await (await loadPhoto(destination.id, first))!.text(), "gate");
+
+  await deleteStoredMap(destination);
+  assert.equal(await loadPhoto(destination.id, first), undefined, "deleting a map deletes its photos");
+});
+
+test("pruning removes old photos no place uses and keeps fresh ones for unsaved forms", async () => {
+  const map = record("photo-prune");
+  await saveMap(map);
+  const kept = await savePhoto(map.id, new Blob(["kept"]));
+  const removed = await savePhoto(map.id, new Blob(["removed"]));
+  const state = defaultNavigation(map.id);
+  state.markers = [{ id: "place", label: "Place", description: "", photos: [kept], point: { x: 1, y: 1 }, kind: "landmark", created: 1 }];
+  await saveNavigation(state);
+  await prunePhotos(map.id);
+  assert.ok(await loadPhoto(map.id, removed), "a photo just added may still be in an open form");
+  await prunePhotos(map.id, Date.now() + 2 * 24 * 60 * 60 * 1000);
+  assert.equal(await loadPhoto(map.id, removed), undefined);
+  assert.ok(await loadPhoto(map.id, kept));
 });
 
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
@@ -98,7 +172,7 @@ test("import routing recognizes the shared header regardless of filename or MIME
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
   const { manifest, original } = await fixture();
   await assert.rejects(readShare(new Blob(["not a MegaMaps file"])), /exported by MegaMaps/);
-  await assert.rejects(readShare(rawFile({ ...manifest, version: 2 })), /not supported/);
+  await assert.rejects(readShare(rawFile({ ...manifest, version: 3 })), /not supported/);
   await assert.rejects(readShare(rawFile({ ...manifest, map: { ...manifest.map, width: 0 } })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], point: { x: 513, y: 2 } }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], kind: "__proto__" }] })), /invalid/);
@@ -123,13 +197,13 @@ test("repeat imports preserve edits and deleted items while later shares add new
   state.markers.push({ ...manifest.markers[0]!, id: "local", label: "My own place" });
   const first = mergeAnnotations(state, manifest);
   assert.equal(first.added, 2);
-  first.state.markers.find((item) => item.id === "place-a")!.note = "My corrected note";
+  first.state.markers.find((item) => item.id === "place-a")!.description = "My corrected description";
   first.state.routes = [];
   const later = { ...manifest, markers: [...manifest.markers, { ...manifest.markers[0]!, id: "new-place" }] };
   const second = mergeAnnotations(first.state, later);
   assert.equal(second.added, 1);
   assert.equal(second.skipped, 2);
-  assert.equal(second.state.markers.find((item) => item.id === "place-a")!.note, "My corrected note");
+  assert.equal(second.state.markers.find((item) => item.id === "place-a")!.description, "My corrected description");
   assert.equal(second.state.routes.length, 0, "locally deleted imports stay deleted");
   assert.equal(second.state.markers.find((item) => item.id === "local")!.label, "My own place");
   assert.equal(state.markers.length, 1, "merging does not mutate the original snapshot");
@@ -203,8 +277,8 @@ test("replace swaps places and finished routes for the shared ones but keeps dra
   const state = defaultNavigation(map.id);
   state.dimming = 0.3;
   state.markers = [
-    { id: "mine", point: { x: 1, y: 1 }, label: "Mine", note: "", kind: "landmark", created: 1 },
-    { id: "theirs-edited", point: { x: 2, y: 2 }, label: "Edited", note: "", kind: "landmark", created: 1 },
+    { id: "mine", point: { x: 1, y: 1 }, label: "Mine", description: "", kind: "landmark", created: 1 },
+    { id: "theirs-edited", point: { x: 2, y: 2 }, label: "Edited", description: "", kind: "landmark", created: 1 },
   ];
   state.routes = [
     { id: "done", name: "Done", points: [{ x: 1, y: 1 }, { x: 5, y: 5 }], draft: false, created: 1 },
@@ -229,9 +303,9 @@ test("replace swaps places and finished routes for the shared ones but keeps dra
   assert.equal(afterStaleSave.annotationRevision, 1);
   assert.equal(afterStaleSave.dimming, 0.6);
   const refreshed = preserveUnseenImports(state, afterStaleSave);
-  refreshed.markers[0]!.note = "Edited after replacement";
+  refreshed.markers[0]!.description = "Edited after replacement";
   await saveNavigation(refreshed);
-  assert.equal((await loadNavigation(map.id)).markers[0]!.note, "Edited after replacement", "edits after refreshing still persist");
+  assert.equal((await loadNavigation(map.id)).markers[0]!.description, "Edited after replacement", "edits after refreshing still persist");
   const later = { ...manifest, markers: [{ ...manifest.markers[0]!, id: "next-share" }], routes: [] };
   await importAnnotations(map.id, later, "replace");
   await saveNavigation(refreshed);

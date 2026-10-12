@@ -1,5 +1,4 @@
 import {
-  ArrowDownToLine,
   ArrowRight,
   Ban,
   Bookmark,
@@ -9,7 +8,6 @@ import {
   ChevronsUp,
   Circle,
   CirclePlus,
-  Cog,
   Contrast,
   Crosshair,
   DoorOpen,
@@ -17,6 +15,7 @@ import {
   Ellipsis,
   Flag,
   Folder,
+  ImagePlus,
   Layers,
   LockKeyhole,
   Map,
@@ -63,13 +62,11 @@ const svg = (nodes: typeof X) => {
 export const placeSymbols = {
   landmark: Flag,
   entrance: DoorOpen,
-  shaft: ArrowDownToLine,
   stairs: ChevronsUp,
   squeeze: Shrink,
   "dead-end": Ban,
   unstable: TriangleAlert,
   flooded: Waves,
-  machinery: Cog,
   graffiti: SprayCan,
   "new-room": Pickaxe,
 } satisfies Record<MapMarker["kind"], typeof X>;
@@ -102,6 +99,7 @@ export const icons = {
   sparkle: svg(Sparkles),
   undo: svg(Undo2),
   pin: svg(MapPin),
+  photo: svg(ImagePlus),
   route: svg(Route),
   sun: svg(Sun),
   text: svg(CaseSensitive),

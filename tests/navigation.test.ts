@@ -118,7 +118,7 @@ test("notes, routes and settings persist; deletion blocks late writes", async ()
     point: { x: 500, y: 700 },
     label: "Entrance",
     kind: "entrance",
-    note: "Second opening",
+    description: "Second opening",
     created: 1,
   });
   state.routes.push({
@@ -162,7 +162,7 @@ test("legacy bookmarks become landmarks on load and survive queued saves", async
   await saveMap(map(mapId));
   const bookmark = {
     id: "old-bookmark", kind: "bookmark" as const, label: "Waterfall",
-    note: "Stay left", point: { x: 150, y: 250 }, created: 7,
+    description: "Stay left", point: { x: 150, y: 250 }, created: 7,
   };
   const landmark = { ...bookmark, id: "old-landmark", kind: "landmark" as const };
   const stored = { ...defaultNavigation(mapId), markers: [bookmark, landmark],

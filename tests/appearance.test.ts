@@ -93,7 +93,7 @@ test("stored navigation from before layers gains every default", () => {
         id: "check",
         point: { x: 4, y: 5 },
         label: "Junction",
-        note: "",
+        description: "",
         kind: "landmark",
         created: 6,
       },

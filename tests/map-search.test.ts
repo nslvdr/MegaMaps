@@ -5,9 +5,9 @@ import type { MapMarker } from "../src/viewer/navigation";
 import type { OcrIndex } from "../src/ocr/index";
 
 const places: MapMarker[] = [
-  { id: "church", kind: "landmark", label: "Église du Nord", note: "Entrée principale", point: { x: 100, y: 200 }, created: 1 },
-  { id: "church-copy", kind: "landmark", label: "Église du Nord", note: "", point: { x: 500, y: 600 }, created: 2 },
-  { id: "camp", kind: "landmark", label: "Camp", note: "Water and supplies", point: { x: 800, y: 900 }, created: 3 },
+  { id: "church", kind: "landmark", label: "Église du Nord", description: "Entrée principale", point: { x: 100, y: 200 }, created: 1 },
+  { id: "church-copy", kind: "landmark", label: "Église du Nord", description: "", point: { x: 500, y: 600 }, created: 2 },
+  { id: "camp", kind: "landmark", label: "Camp", description: "Water and supplies", point: { x: 800, y: 900 }, created: 3 },
 ];
 const polygon = [{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 30 }, { x: 10, y: 30 }];
 const index: OcrIndex = {
@@ -30,7 +30,7 @@ test("combined search includes all saved place kinds, notes, and text without co
 test("combined search never limits matches and uses the latest edited place data", () => {
   const markers = Array.from({ length: 250 }, (_, i) => ({ ...places[0]!, id: String(i), point: { x: i, y: i } }));
   assert.equal(searchMap(index, markers, "nord").length, 251);
-  const edited = { ...places[0]!, label: "South church", note: "", point: { x: 999, y: 999 } };
+  const edited = { ...places[0]!, label: "South church", description: "", point: { x: 999, y: 999 } };
   assert.equal(searchMap(index, [edited], "eglise").length, 0);
   assert.deepEqual(searchMap(undefined, [edited], "south")[0]!.marker?.point, edited.point);
 });
