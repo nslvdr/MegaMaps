@@ -944,6 +944,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("marker-delete");
     assert.equal(state.markers.length, before.length - 1);
     assert.equal(el("toast").textContent, "Upper exit deleted");
+    // Undo puts it back where it was in the list.
+    assert.equal(el("toast-undo").hidden, false, "a delete offers Undo");
+    click("toast-undo");
+    assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
+    assert.equal(el("toast").textContent, "Upper exit restored");
+    assert.equal(el("toast-undo").hidden, true, "Undo is offered once");
   } finally {
     controls.dispose();
     await controls.flush();

@@ -71,6 +71,7 @@ export class ViewerControls {
   private autoMarkerName = "";
   private nameAction?: (name: string) => void;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private toastUndo?: () => void;
   private spotlightTimer?: ReturnType<typeof setTimeout>;
   private cardDeleteArmed = false;
   private cardDeleteTimer?: ReturnType<typeof setTimeout>;
@@ -188,13 +189,29 @@ export class ViewerControls {
     if (this.openSheet === "search" && !this.searchTimer) this.renderSearch();
     this.render();
   }
-  private toast(message: string) {
+  private toast(message: string, undo?: () => void) {
     const toast = this.el("toast");
     toast.textContent = message;
-    toast.hidden = false;
+    this.toastUndo = undo;
+    this.el("toast-undo").hidden = !undo;
+    this.showToast(true);
     clearTimeout(this.toastTimer);
-    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up to 6 s.
-    this.toastTimer = setTimeout(() => (toast.hidden = true), Math.min(6000, 1500 + message.length * 50));
+    // Long hints stay up longer: 50 ms a character (a word in about 0.3 s), up
+    // to 6 s, which is also how long an Undo stays on offer.
+    this.toastTimer = setTimeout(() => this.showToast(false),
+      undo ? 6000 : Math.min(6000, 1500 + message.length * 50));
+  }
+  private showToast(shown: boolean) {
+    this.el("toast").hidden = this.el("toast-bar").hidden = !shown;
+    if (!shown) this.toastUndo = undefined;
+  }
+  /** Deletes stay two taps, and a few seconds to change your mind after. */
+  private deleted(label: string, restore: () => void) {
+    this.toast(`${label} deleted`, () => {
+      restore();
+      this.changed();
+      this.toast(`${label} restored`);
+    });
   }
   private sheet(name: Sheet | undefined, returnFocus = false) {
     const previous = this.openSheet;
@@ -462,6 +479,7 @@ export class ViewerControls {
     });
     this.on(this.input("map-search"), "input", () => this.queueSearch());
     this.click("search-count", () => this.stepSearch());
+    this.click("toast-undo", () => this.toastUndo?.());
     this.on(this.input("map-search"), "keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.isComposing) {
@@ -618,14 +636,15 @@ export class ViewerControls {
         return;
       }
       this.armCardDelete(false);
-      const deleted = this.state.markers.find((m) => m.id === this.editingMarker);
+      const index = this.state.markers.findIndex((m) => m.id === this.editingMarker);
+      const deleted = this.state.markers[index];
       this.state.markers = this.state.markers.filter(
         (m) => m.id !== this.editingMarker,
       );
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");
-      this.toast(`${deleted?.label ?? "Place"} deleted`);
+      if (deleted) this.deleted(deleted.label, () => this.state.markers.splice(index, 0, deleted));
     });
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
       'input[name="marker-kind"]',
@@ -1070,11 +1089,12 @@ export class ViewerControls {
             danger: true,
             action: this.confirmDelete(marker.id, () => {
               this.rowMenu = undefined;
+              const index = this.state.markers.indexOf(marker);
               this.state.markers = this.state.markers.filter(
                 (m) => m.id !== marker.id,
               );
               this.changed();
-              this.toast(`${marker.label} deleted`);
+              this.deleted(marker.label, () => this.state.markers.splice(index, 0, marker));
             }),
           },
         ],
@@ -1115,6 +1135,7 @@ export class ViewerControls {
             danger: true,
             action: this.confirmDelete(route.id, () => {
               this.rowMenu = undefined;
+              const index = this.state.routes.indexOf(route);
               this.state.routes = this.state.routes.filter(
                 (r) => r.id !== route.id,
               );
@@ -1123,7 +1144,7 @@ export class ViewerControls {
                 this.mode("browse");
               }
               this.changed();
-              this.toast(`${route.name} deleted`);
+              this.deleted(route.name, () => this.state.routes.splice(index, 0, route));
             }),
           },
         ],
@@ -1251,7 +1272,7 @@ export class ViewerControls {
     clearTimeout(this.cardDeleteTimer);
     clearTimeout(this.confirmTimer);
     this.el("map-stage").classList.remove("spotlight");
-    this.el("toast").hidden = true;
+    this.showToast(false);
     const saved = this.flush();
     this.controller.abort();
     this.dialog("marker-dialog").close();

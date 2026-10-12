@@ -966,6 +966,46 @@ button.glass:active:not(:disabled) {
   pointer-events: none;
   animation: toast-in 0.2s ease-out;
 }
+.toast p {
+  margin: 0;
+}
+/* After a delete the pill carries Undo, the one part of it you can tap. */
+.toast:has(.toast-undo:not([hidden])) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 5px 5px 18px;
+  text-align: left;
+}
+.toast-undo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px 0 11px;
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--neon-add) 14%, #000);
+  color: var(--neon-add);
+  font-size: 14px;
+  font-weight: 650;
+  pointer-events: auto;
+}
+.toast-undo::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+.toast-undo svg {
+  width: 17px;
+  height: 17px;
+}
+@media (hover: hover) {
+  .toast-undo:hover {
+    background: color-mix(in srgb, var(--neon-add) 22%, #000);
+  }
+}
 @keyframes toast-in {
   from {
     opacity: 0;

@@ -31,7 +31,7 @@ const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? 
 export const viewerMarkup = `
 <div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches; brackets rotate when unlocked. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
-<p id="toast" class="toast glass" role="status" aria-live="polite" hidden></p>
+<div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-controls="sheet" aria-expanded="false">${icons.list}<span>Saved</span></button>
   <button id="open-display" data-sheet="display" aria-controls="sheet" aria-expanded="false">${icons.layers}<span>View</span></button>
