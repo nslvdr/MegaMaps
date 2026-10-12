@@ -61,6 +61,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const pulses: string[] = [];
   const reveals: Point[] = [];
+  let onScreen = true;
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
@@ -93,6 +94,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     reveal(point) {
       reveals.push(point);
       return { x: 40, y: 300 };
+    },
+    showing() {
+      return onScreen;
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -765,7 +769,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     };
     controls.updateOcr(index);
     assert.equal(highlights?.active, false, "OCR arriving during typing preserves the debounce");
+    onScreen = false;
     t.mock.timers.tick(200);
+    onScreen = true;
+    assert.deepEqual(framed.at(-1), polygon, "a result nowhere on screen is brought into view");
     assert.equal(highlights?.active, true);
     assert.equal(highlights?.matches.length, 1);
     el("map-canvas").dispatchEvent(new window.Event("pointerdown"));

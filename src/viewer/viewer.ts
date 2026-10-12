@@ -418,6 +418,14 @@ export class Viewer {
     }
     return { x: rect.left + p.x, y: rect.top + p.y };
   }
+  /** Whether any of the points is on screen, or will be once the map settles. */
+  showing(points: Point[]) {
+    const camera = this.destination ?? this.camera;
+    return points.some((point) => {
+      const p = worldToScreen(camera, point);
+      return p.x >= 0 && p.y >= 0 && p.x <= this.width && p.y <= this.height;
+    });
+  }
   // Frame a route or group of places, leaving room for the floating controls.
   fitPoints(points: Point[]) {
     if (this.navigation.touchLocked || !points.length) return;

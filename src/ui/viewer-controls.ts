@@ -44,7 +44,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing">>;
   private ocr?: OcrIndex;
   private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
@@ -1228,7 +1228,22 @@ export class ViewerControls {
       this.renderSearch();
       return;
     }
-    this.searchTimer = setTimeout(() => this.renderSearch(), SEARCH_DEBOUNCE_MS);
+    this.searchTimer = setTimeout(() => {
+      this.renderSearch();
+      this.bringMatchIntoView();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+  // Like find-in-page: when no result is anywhere on screen, typing brings the
+  // first one into view instead of leaving a dimmed map and a count.
+  private bringMatchIntoView() {
+    const showing = this.viewer?.showing;
+    const first = this.searchMatches[0];
+    if (!first || !showing) return;
+    const points = (match: MapSearchMatch) =>
+      match.marker ? [match.marker.point] : match.polygons.flat();
+    if (this.searchMatches.some((match) => showing.call(this.viewer, points(match)))) return;
+    if (first.marker) this.viewer?.jumpTo(first.marker.point);
+    else this.viewer?.fitPoints(points(first));
   }
   private renderSearch(statusOnly = false) {
     if (!statusOnly) {
