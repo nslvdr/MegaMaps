@@ -43,7 +43,7 @@ async function setup() {
   const state = defaultNavigation(map.id);
   state.markers = [{ id: "place", point: { x: 100, y: 80 }, label: "<script>entrance</script>", description: "A note", kind: "entrance", created: 1 }];
   state.routes = [{ id: "route", name: "Exit", points: [{ x: 100, y: 80 }, { x: 300, y: 200 }], draft: false, created: 1 }];
-  const manifest: ShareManifest = { format: "megamap", version: 2,
+  const manifest: ShareManifest = { format: "megamap", version: 3,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: await fingerprint(original) },
     markers: state.markers, routes: state.routes };
   const calls: { share: SharedMap; destination: ShareDestination }[] = [];

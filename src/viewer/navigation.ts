@@ -25,6 +25,10 @@ interface LegacyCheckpoint {
 export interface PlannedRoute {
   id: string;
   name: string;
+  /** Read and edited in the same card as a place's. */
+  description?: string;
+  /** Photo IDs, shown in this order; the blobs live in the photos store. */
+  photos?: string[];
   points: Point[];
   created: number;
   draft: boolean;

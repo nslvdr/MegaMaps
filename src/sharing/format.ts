@@ -12,17 +12,17 @@ const MAX_ITEMS = 10_000;
 const MAX_POINTS = 100_000;
 const MAX_PHOTOS = 2_000;
 const MAX_PHOTO_BYTES = 16 * 1024 * 1024;
-const MAX_PHOTOS_PER_PLACE = 50;
+const MAX_PHOTOS_PER_ITEM = 50;
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export interface SharePhoto { id: string; type: string; bytes: number }
 export interface ShareManifest {
   format: "megamap";
-  version: 2;
+  version: 3;
   map: { name: string; width: number; height: number; fingerprint: string };
   image?: { name: string; type: string; bytes: number };
   markers: MapMarker[];
   routes: PlannedRoute[];
-  /** Place photos, stored in this order after the manifest and before the map image. */
+  /** Place and route photos, stored in this order after the manifest and before the map image. */
   photos?: SharePhoto[];
 }
 export interface SharedMap {
@@ -67,8 +67,8 @@ function invalid(): never {
 /** Treat shared files as untrusted; construct only the fields this version accepts. */
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
-  // Version 1 predates photos and named descriptions `note`.
-  if (value.version !== 1 && value.version !== 2) throw new Error("This sharing format is not supported. Update MegaMaps and try again.");
+  // Version 1 predates photos and named descriptions `note`; version 2 routes have neither.
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3) throw new Error("This sharing format is not supported. Update MegaMaps and try again.");
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -101,6 +101,16 @@ export function validateManifest(value: unknown): ShareManifest {
     });
   }
   const unused = new Set(photos.map((photo) => photo.id));
+  // Each photo belongs to exactly one place or route and must be in the file.
+  const ownPhotos = (value: Record<string, unknown>) => {
+    if (value.photos === undefined) return {};
+    if (!Array.isArray(value.photos) || value.photos.length > MAX_PHOTOS_PER_ITEM) invalid();
+    const own = value.photos.map((id: unknown) => {
+      if (typeof id !== "string" || !unused.delete(id)) invalid();
+      return id;
+    });
+    return own.length ? { photos: own } : {};
+  };
   const version = value.version;
   const markers = value.markers.map((value: unknown): MapMarker => {
     if (!object(value)) invalid();
@@ -108,29 +118,22 @@ export function validateManifest(value: unknown): ShareManifest {
     if (!name(value.label, 100) || !text(description, 2000) ||
         typeof value.kind !== "string" ||
         (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind))) invalid();
-    let own: string[] = [];
-    if (value.photos !== undefined) {
-      if (!Array.isArray(value.photos) || value.photos.length > MAX_PHOTOS_PER_PLACE) invalid();
-      // Each photo belongs to exactly one place and must be in the file.
-      own = value.photos.map((id: unknown) => {
-        if (typeof id !== "string" || !unused.delete(id)) invalid();
-        return id;
-      });
-    }
     return { ...identity(value, "marker"), label: value.label, description,
-      ...(own.length ? { photos: own } : {}),
+      ...ownPhotos(value),
       kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]), point: point(value.point) };
   });
-  if (unused.size) invalid();
   let points = 0;
   const routes = value.routes.map((value: unknown): PlannedRoute => {
     if (!object(value) || !name(value.name, 100) || value.draft !== false ||
+        (value.description !== undefined && !text(value.description, 2000)) ||
         !Array.isArray(value.points) || value.points.length < 2) invalid();
     points += value.points.length;
     if (points > MAX_POINTS) invalid();
     return { ...identity(value, "route"), name: value.name,
+      ...(value.description ? { description: value.description } : {}), ...ownPhotos(value),
       points: value.points.map(point), draft: false };
   });
+  if (unused.size) invalid();
   let image: ShareManifest["image"];
   if (value.image !== undefined) {
     const input = value.image;
@@ -141,14 +144,14 @@ export function validateManifest(value: unknown): ShareManifest {
   }
   if (!image && markers.length + routes.length === 0)
     throw new Error("Select at least one place or route, or include the map image.");
-  return { format: "megamap", version: 2,
+  return { format: "megamap", version: 3,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}) };
 }
 const photoBytes = (manifest: ShareManifest) =>
   (manifest.photos ?? []).reduce((total, photo) => total + photo.bytes, 0);
 
-/** A small length-prefixed JSON manifest followed by place photos and the optional original bytes. */
+/** A small length-prefixed JSON manifest followed by place and route photos and the optional original bytes. */
 export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new Map<string, Blob>()) {
   const valid = validateManifest(manifest);
   if ((valid.image?.bytes ?? 0) !== (image?.size ?? 0)) invalid();

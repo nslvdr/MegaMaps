@@ -2374,7 +2374,13 @@ label.panel-row {
   filter: drop-shadow(0 0 8px rgb(255 255 255 / 0.7));
   animation: lifted 1.2s ease-in-out infinite;
 }
-/* The place being read stands out from the others. */
+/* The place or route being read stands out from the others. */
+.route.selected .route-casing {
+  stroke-width: 13px;
+}
+.route.selected .route-line {
+  stroke-width: 7px;
+}
 .selected .pin-body {
   transform: scale(1.5);
   transition: transform 0.2s var(--ease-out);

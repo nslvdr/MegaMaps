@@ -76,6 +76,10 @@ test("saved places and routes have typed callouts that follow their anchors and 
   }
   assert.deepEqual(overlay.labelAt({ x: boxes[0]!.left + 2, y: boxes[0]!.top + 2 }),
     { markerId: undefined, routeId: "exit-route" }, "a route's label chip names the route");
+  overlay.setSelected("exit-route");
+  assert.ok(svg.querySelector(".route.selected"), "the selected route stands out while its details are open");
+  overlay.setSelected();
+  assert.equal(svg.querySelector(".route.selected"), null, "closing details clears selection");
   overlay.setLayers({ places: false, routes: false, labels: false });
   assert.equal(svg.classList.contains("hide-labels"), true);
   assert.equal(svg.classList.contains("hide-places"), true);

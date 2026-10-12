@@ -71,9 +71,12 @@ export class ViewerControls {
   private movingMarker?: string;
   private moveFrom?: Point;
   private editingMarker?: string;
-  /** Keeps the detail view available while its place is being edited. */
+  /** The route whose name, description and photos are in the form. */
+  private editingRoute?: string;
+  /** Keep the detail view available while its place or route is being edited. */
   private viewingMarker?: string;
-  /** Editing holds focus in the place card; reading leaves the map usable. */
+  private viewingRoute?: string;
+  /** Editing holds focus in the details card; reading leaves the map usable. */
   private cardModal = false;
   private reopeningCard = false;
   private markerPoint?: Point;
@@ -84,6 +87,7 @@ export class ViewerControls {
   private toastTimer?: ReturnType<typeof setTimeout>;
   private toastUndo?: () => void;
   private spotlightTimer?: ReturnType<typeof setTimeout>;
+  /** Move (a place) or Edit points (a route) saves the form first. */
   private moveAfterSave = false;
   private cardDeleteArmed = false;
   private cardDeleteTimer?: ReturnType<typeof setTimeout>;
@@ -171,7 +175,8 @@ export class ViewerControls {
         this.persistence.changed();
       },
       onTap: (point) => this.onTap(point),
-      onMarker: (marker) => this.showMarker(marker),
+      onMarker: (marker) => this.showDetails(marker),
+      onRoute: (route) => this.showDetails(route),
       onEmptyTap: () => this.closePlaceDetails(),
       // Long-press drops a place without going through Add.
       onLongPress: (point) => {
@@ -313,13 +318,37 @@ export class ViewerControls {
     return this.mapLabel ??
       nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
   }
-  private openMarker(title: string, point: Point, marker?: MapMarker) {
+  /** Places and routes share one form: a name, a description and photos. */
+  private openForm(
+    title: string,
+    icon: string,
+    fields: { id?: string; name: string; description?: string; photos?: string[] },
+    route?: PlannedRoute,
+  ) {
     const card = this.dialog("marker-dialog");
+    // Cancel goes back to the details only when they are this item's.
+    if (!fields.id || fields.id !== (this.viewingMarker ?? this.viewingRoute))
+      this.viewingMarker = this.viewingRoute = undefined;
     card.dataset.mode = "edit";
     this.el("marker-details").hidden = true;
     this.el("marker-edit").hidden = true;
     this.el("marker-form").hidden = false;
-    this.el("marker-dialog-title-icon").innerHTML = icons.pin;
+    this.el("marker-dialog-title-icon").innerHTML = icon;
+    this.el("marker-dialog-title").textContent = title;
+    this.editingRoute = route?.id;
+    // A route's look comes from its line, so only places pick an icon.
+    this.el("marker-kinds").hidden = !!route;
+    this.el("marker-move").hidden = true;
+    this.el("route-points").hidden = !route;
+    this.input("marker-label").value = fields.name;
+    this.el<HTMLTextAreaElement>("marker-description").value = fields.description ?? "";
+    this.armCardDelete(false);
+    this.formVersion++;
+    this.formPhotos = [...(fields.photos ?? [])];
+    this.renderFormPhotos();
+  }
+  private openMarker(title: string, point: Point, marker?: MapMarker) {
+    const card = this.dialog("marker-dialog");
     this.editingMarker = marker?.id;
     this.markerPoint = point;
     const kind = marker?.kind ?? this.newMarkerKind;
@@ -327,19 +356,12 @@ export class ViewerControls {
     this.autoMarkerName = marker
       ? ""
       : this.markerName(kind);
-    this.el("marker-dialog-title").textContent = title;
-    this.input("marker-label").value = marker?.label ?? this.autoMarkerName;
+    this.openForm(title, icons.pin, { ...marker, name: marker?.label ?? this.autoMarkerName });
     this.setMarkerKind(kind);
-    this.el<HTMLTextAreaElement>("marker-description").value = marker?.description ?? "";
     this.el("marker-delete").hidden = !marker;
     this.el("marker-move").hidden = !marker;
-    this.armCardDelete(false);
-    this.formVersion++;
-    this.formPhotos = [...(marker?.photos ?? [])];
-    this.renderFormPhotos();
     // A new place shows where it will go while it is named.
     if (!marker) {
-      this.viewingMarker = undefined;
       this.viewer?.select?.();
       this.viewer?.previewPlace?.({ point, kind });
     }
@@ -371,7 +393,7 @@ export class ViewerControls {
     });
     return slot;
   }
-  /** Full screen, swiping through the place's photos from the one tapped. */
+  /** Full screen, swiping through the item's photos from the one tapped. */
   private showPhotos(ids: string[], index: number) {
     this.photoViewer ??= new PhotoViewer(this.dialog("photo-viewer"), this.controller.signal);
     this.photoViewer.show(ids.map((id, i) => this.photoImage(id, `Photo ${i + 1} of ${ids.length}`) as HTMLImageElement), index);
@@ -401,7 +423,7 @@ export class ViewerControls {
     this.el("marker-add-photos").querySelector("span")!.textContent = busy ? "Adding photos…" : "Add photos";
     this.el<HTMLButtonElement>("marker-save").disabled = busy;
   }
-  /** Photos are shrunk and stored as they are picked; the place keeps them on Save. */
+  /** Photos are shrunk and stored as they are picked; the item keeps them on Save. */
   private async addPhotos(files: File[]) {
     const version = this.formVersion;
     this.photoJobs++;
@@ -556,34 +578,60 @@ export class ViewerControls {
     // Under the card's shade every pin looks alike; this one says it's the one.
     this.viewer?.pulse?.(marker.id);
   }
-  /** Read a saved place first, keeping editing behind an explicit action. */
-  private showMarker(marker: MapMarker) {
+  private editRouteDetails(route: PlannedRoute) {
+    const card = this.dialog("marker-dialog");
+    this.editingMarker = undefined;
+    this.markerPoint = undefined;
+    this.openForm("Edit route", this.routeIcon(route), route, route);
+    this.el("marker-delete").hidden = false;
+    this.presentCard(true);
+    this.viewer?.cover?.();
+    card.style.setProperty("--spot-x", "");
+    card.style.setProperty("--spot-y", "");
+    this.viewer?.pulse?.(route.id);
+  }
+  private routeIcon(route: PlannedRoute) {
+    return icons.route.replace("<svg ", `<svg style="color:${routeColor(this.state, route.id)}" `);
+  }
+  /** The place or route whose details are open. */
+  private viewedItem() {
+    return this.state.markers.find((m) => m.id === this.viewingMarker) ??
+      this.state.routes.find((r) => r.id === this.viewingRoute);
+  }
+  /** Read a saved place or route first, keeping editing behind an explicit action. */
+  private showDetails(item: MapMarker | PlannedRoute) {
     this.sheet(undefined);
     const card = this.dialog("marker-dialog");
     this.root.style.removeProperty("--place-pane-scroll");
-    this.viewingMarker = marker.id;
+    const place = "label" in item ? item : undefined;
+    this.viewingMarker = place?.id;
+    this.viewingRoute = place ? undefined : item.id;
     card.dataset.mode = "view";
     this.el("marker-form").hidden = true;
-    this.el("marker-edit").hidden = false;
-    this.el("marker-dialog-title").textContent = marker.label;
-    this.el("marker-dialog-title-icon").innerHTML = placeIcon(marker.kind);
+    const edit = this.el("marker-edit");
+    edit.hidden = false;
+    edit.title = place ? "Edit place" : "Edit route";
+    edit.setAttribute("aria-label", edit.title);
+    this.el("marker-dialog-title").textContent = "label" in item ? item.label : item.name;
+    this.el("marker-dialog-title-icon").innerHTML = "label" in item ? placeIcon(item.kind) : this.routeIcon(item);
     const description = this.el("marker-detail-description");
-    description.textContent = marker.description;
-    description.hidden = !marker.description;
-    const photos = this.el("marker-detail-photos"), count = marker.photos?.length ?? 0;
-    photos.replaceChildren(...(marker.photos ?? []).map((id, index) => {
+    description.textContent = item.description ?? "";
+    description.hidden = !item.description;
+    const photos = this.el("marker-detail-photos"), count = item.photos?.length ?? 0;
+    photos.replaceChildren(...(item.photos ?? []).map((id, index) => {
       const open = this.root.ownerDocument.createElement("button");
       open.type = "button";
       open.title = "View full screen";
       open.append(this.root.ownerDocument.createElement("img"));
-      this.on(open, "click", () => this.showPhotos(marker.photos!, index));
+      this.on(open, "click", () => this.showPhotos(item.photos!, index));
       return this.photoImage(id, `Photo ${index + 1} of ${count}`, open);
     }));
     photos.hidden = !count;
     photos.scrollLeft = 0;
     const details = this.el("marker-details");
+    details.setAttribute("aria-label", place ? "Place details" : "Route details");
     // With nothing to read, the card shrinks to its header.
-    details.hidden = !marker.description && !count;
+    details.hidden = !item.description && !count;
     details.scrollTop = 0;
     // Measured at its natural height, up to half the screen.
     details.dataset.expandable = "false";
@@ -591,12 +639,17 @@ export class ViewerControls {
     const overflowing = details.querySelector<HTMLElement>(".place-detail-content")!.scrollHeight > details.clientHeight;
     details.dataset.expandable = String(overflowing);
     details.tabIndex = overflowing ? 0 : -1;
-    // The map stays full size behind the pane; the place centers above it.
+    // The map stays full size behind the pane; the item centers above it.
     this.viewer?.cover?.(card.offsetTop);
-    this.viewer?.jumpTo(marker.point, 1);
-    this.viewer?.select?.(marker.id);
-    this.viewer?.pulse?.(marker.id);
+    this.frame(item);
+    this.viewer?.select?.(item.id);
+    this.viewer?.pulse?.(item.id);
     this.viewer?.refreshLabels?.();
+  }
+  /** A place centers without zooming out; a route fits whole. */
+  private frame(item: MapMarker | PlannedRoute, animated = true) {
+    if ("label" in item) this.viewer?.jumpTo(item.point, 1, animated);
+    else this.viewer?.fitPoints(item.points, animated);
   }
   private presentCard(modal: boolean) {
     const card = this.dialog("marker-dialog");
@@ -612,7 +665,7 @@ export class ViewerControls {
     this.cardModal = modal;
     showDialog(card, modal);
   }
-  /** Closes the place being read; true if there was one. */
+  /** Closes the place or route being read; true if there was one. */
   private closePlaceDetails() {
     const card = this.dialog("marker-dialog");
     if (!card.hasAttribute("open") || this.cardModal) return false;
@@ -627,12 +680,43 @@ export class ViewerControls {
     const style = getComputedStyle(this.dialog("marker-dialog"));
     return Math.max(0, parseFloat(style.maxHeight) - parseFloat(style.minHeight));
   }
-  /** Cancel an edit back to its unchanged detail view, or close a new-place form. */
+  /** Cancel an edit back to its unchanged detail view, or close a form opened elsewhere. */
   private cancelMarkerEdit() {
-    const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
-    if (this.dialog("marker-dialog").dataset.mode === "edit" && marker)
-      this.showMarker(marker);
+    const item = this.viewedItem();
+    if (this.dialog("marker-dialog").dataset.mode === "edit" && item)
+      this.showDetails(item);
     else this.dialog("marker-dialog").close();
+  }
+  private deleteRoute(route: PlannedRoute) {
+    const index = this.state.routes.indexOf(route);
+    this.state.routes = this.state.routes.filter((r) => r.id !== route.id);
+    if (this.activeRoute === route.id) {
+      this.activeRoute = undefined;
+      this.mode("browse");
+    }
+    this.changed();
+    this.deleted(route.name, () => this.state.routes.splice(index, 0, route));
+  }
+  private saveRoute(route: PlannedRoute) {
+    const name = this.input("marker-label").value.trim();
+    if (!name) return;
+    const description = this.el<HTMLTextAreaElement>("marker-description").value.trim();
+    const unchanged = route.name === name && (route.description ?? "") === description &&
+      (route.photos ?? []).join() === this.formPhotos.join();
+    route.name = name;
+    if (description) route.description = description;
+    else delete route.description;
+    if (this.formPhotos.length) route.photos = [...this.formPhotos];
+    else delete route.photos;
+    const returnToDetails = this.viewingRoute === route.id && !this.moveAfterSave;
+    if (!returnToDetails) this.dialog("marker-dialog").close();
+    if (!unchanged) this.changed();
+    if (this.moveAfterSave) {
+      this.editRoute(route);
+      return;
+    }
+    if (returnToDetails) this.showDetails(route);
+    this.toast(unchanged ? `${name} unchanged` : `${name} updated`);
   }
   private spotlight() {
     const stage = this.el("map-stage");
@@ -824,8 +908,9 @@ export class ViewerControls {
     });
     this.click("marker-cancel", () => this.cancelMarkerEdit());
     this.click("marker-edit", () => {
-      const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
-      if (marker) this.editMarker(marker);
+      const item = this.viewedItem();
+      if (item && "label" in item) this.editMarker(item);
+      else if (item) this.editRouteDetails(item);
     });
     const details = this.el("marker-details");
     this.on(details, "scroll", () => {
@@ -836,11 +921,11 @@ export class ViewerControls {
       if (this.root.style.getPropertyValue("--place-pane-scroll") === height) return;
       this.root.style.setProperty("--place-pane-scroll", height);
       this.viewer?.cover?.(card.offsetTop);
-      const marker = this.state.markers.find((item) => item.id === this.viewingMarker);
-      if (marker) this.viewer?.jumpTo(marker.point, 1, false);
+      const item = this.viewedItem();
+      if (item) this.frame(item, false);
     });
     this.on(this.dialog("marker-dialog"), "cancel", (event) => {
-      if (this.dialog("marker-dialog").dataset.mode !== "edit" || !this.viewingMarker) return;
+      if (this.dialog("marker-dialog").dataset.mode !== "edit" || !this.viewedItem()) return;
       event.preventDefault();
       this.cancelMarkerEdit();
     });
@@ -858,6 +943,13 @@ export class ViewerControls {
         return;
       }
       this.armCardDelete(false);
+      const route = this.state.routes.find((r) => r.id === this.editingRoute);
+      if (route) {
+        this.dialog("marker-dialog").close();
+        this.deleteRoute(route);
+        this.mode("browse");
+        return;
+      }
       const index = this.state.markers.findIndex((m) => m.id === this.editingMarker);
       const deleted = this.state.markers[index];
       this.state.markers = this.state.markers.filter(
@@ -888,7 +980,7 @@ export class ViewerControls {
         return;
       }
       this.dialog("photo-viewer").close();
-      this.viewingMarker = undefined;
+      this.viewingMarker = this.viewingRoute = undefined;
       this.viewer?.select?.();
       this.formVersion++;
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
@@ -907,7 +999,10 @@ export class ViewerControls {
     });
     this.on(this.el("marker-form"), "submit", (event) => {
       event.preventDefault();
-      if (!this.markerPoint || this.dialog("marker-dialog").dataset.mode !== "edit" || this.photoJobs) return;
+      if (this.dialog("marker-dialog").dataset.mode !== "edit" || this.photoJobs) return;
+      const route = this.state.routes.find((r) => r.id === this.editingRoute);
+      if (route) return this.saveRoute(route);
+      if (!this.markerPoint) return;
       const label = this.input("marker-label").value.trim();
       if (!label) return;
       const existing = this.state.markers.find(
@@ -939,16 +1034,18 @@ export class ViewerControls {
         this.moveMarker(marker);
         return;
       }
-      if (returnToDetails) this.showMarker(marker);
+      if (returnToDetails) this.showDetails(marker);
       else this.mode("browse");
       this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
     });
-    // Move from the card keeps what was typed, then lifts the pin.
-    this.click("marker-move", () => {
-      this.moveAfterSave = true;
-      this.el<HTMLFormElement>("marker-form").requestSubmit();
-      this.moveAfterSave = false;
-    });
+    // Move or Edit points from the card keeps what was typed, then lifts the
+    // pin or the route's points.
+    for (const id of ["marker-move", "route-points"])
+      this.click(id, () => {
+        this.moveAfterSave = true;
+        this.el<HTMLFormElement>("marker-form").requestSubmit();
+        this.moveAfterSave = false;
+      });
     this.click("name-cancel", () => this.dialog("name-dialog").close());
     this.on(this.el("name-form"), "submit", (event) => {
       event.preventDefault();
@@ -1035,7 +1132,7 @@ export class ViewerControls {
     this.el<HTMLButtonElement>("tool-done").disabled =
       this.tool === "route" && count < 2;
   }
-  // Saved rows open a place's details or jump to a route; ⋯ exposes actions.
+  // Saved rows open a place's or route's details; ⋯ exposes actions.
   private row(
     container: HTMLElement,
     options: {
@@ -1274,7 +1371,7 @@ export class ViewerControls {
         label: marker.label,
         detail: marker.description,
         icon: placeIcon(marker.kind),
-        jump: () => this.showMarker(marker),
+        jump: () => this.showDetails(marker),
         rename: () => this.editMarker(marker),
         actions: [
           {
@@ -1307,31 +1404,23 @@ export class ViewerControls {
       });
     }
     for (const route of this.state.routes) {
-      const rename = () =>
-        this.name("Rename route", route.name, (name) => {
-          route.name = name;
-          this.changed();
-        });
       this.row(routes, {
         key: route.id,
         label: route.name,
         detail: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
-        icon: icons.route.replace(
-          "<svg ",
-          `<svg style="color:${routeColor(this.state, route.id)}" `,
-        ),
-        jump: () => this.viewer?.fitPoints(route.points),
-        rename,
+        icon: this.routeIcon(route),
+        jump: () => this.showDetails(route),
+        rename: () => this.editRouteDetails(route),
         actions: [
           {
-            label: route.draft ? "Continue" : "Edit points",
+            label: "Edit",
             icon: icons.edit,
-            action: () => this.editRoute(route),
+            action: () => this.editRouteDetails(route),
           },
           {
-            label: "Rename",
-            icon: icons.text,
-            action: rename,
+            label: route.draft ? "Continue" : "Edit points",
+            icon: icons.route,
+            action: () => this.editRoute(route),
           },
           ...(this.onShare && !route.draft ? [{ label: "Share", icon: icons.share,
             action: () => this.onShare?.({ kind: "route", id: route.id }) }] : []),
@@ -1341,16 +1430,7 @@ export class ViewerControls {
             danger: true,
             action: this.confirmDelete(route.id, () => {
               this.rowMenu = undefined;
-              const index = this.state.routes.indexOf(route);
-              this.state.routes = this.state.routes.filter(
-                (r) => r.id !== route.id,
-              );
-              if (this.activeRoute === route.id) {
-                this.activeRoute = undefined;
-                this.mode("browse");
-              }
-              this.changed();
-              this.deleted(route.name, () => this.state.routes.splice(index, 0, route));
+              this.deleteRoute(route);
             }),
           },
         ],

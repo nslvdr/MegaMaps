@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import { ViewerControls } from "../src/ui/viewer-controls";
 import { viewerMarkup } from "../src/ui/viewer-markup";
-import { defaultNavigation } from "../src/viewer/navigation";
+import { defaultNavigation, type PlannedRoute } from "../src/viewer/navigation";
 import { saveMap } from "../src/storage/database";
 import { loadNavigation } from "../src/storage/navigation";
 import { savePhoto } from "../src/storage/photos";
@@ -619,11 +619,16 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.routes[0]?.draft, false);
     assert.match(el("toast").textContent!, /unchanged/);
 
-    // Saved route rows frame the route.
+    // Saved route rows open the route's details, like a place's, and frame it.
     el("route-list")
       .querySelector<HTMLButtonElement>(".navigation-jump")!
       .dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-dialog").dataset.mode, "view");
+    assert.equal(el("marker-dialog-title").textContent, "Lower loop");
+    assert.equal(el("marker-edit").getAttribute("aria-label"), "Edit route");
     assert.deepEqual(framed.at(-1), state.routes[0]!.points);
+    click("marker-cancel");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
 
     // Arrows walk the Saved rows, staying in the jump or ⋯ column.
     assert.equal(state.markers.length, 1);
@@ -642,12 +647,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(names, ["Lower loop", "<Entrance>"]);
     assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
     assert.equal(typed.defaultPrevented, true);
-    // As in the library, F2 renames a row and Delete arms its menu's Delete.
+    // As in the library, F2 edits a row and Delete arms its menu's Delete.
     key(routeJump, "F2");
-    assert.equal(el("name-dialog").hasAttribute("open"), true);
-    assert.equal(el("name-title").textContent, "Rename route");
-    click("name-cancel");
-    assert.equal(el("name-dialog").hasAttribute("open"), false);
+    assert.equal(el("marker-dialog").hasAttribute("open"), true);
+    assert.equal(el("marker-dialog-title").textContent, "Edit route");
+    assert.equal(el("marker-kinds").hidden, true, "a route's look comes from its line");
+    click("marker-cancel");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
     key(placeJump, "F2");
     assert.equal(el("marker-dialog").hasAttribute("open"), true, "a place edits its name and kind");
     click("marker-cancel");
@@ -661,7 +667,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     key(root, "Escape");
     assert.equal(root.querySelector(".row-popover"), null);
 
-    // Rename via the name dialog, delete needs two taps; all behind ⋯.
+    // Edit uses the place form, delete needs two taps; all behind ⋯.
     const openMenu = () => {
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
       if (more.getAttribute("aria-expanded") !== "true")
@@ -674,12 +680,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     openMenu();
     assert.deepEqual(
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
-      ["Edit points", "Rename", "Share", "Delete"],
+      ["Edit", "Edit points", "Share", "Delete"],
     );
     // An open menu takes the arrows, entering from ⋯ and wrapping around.
     key(el("route-list").querySelector(".row-more")!, "ArrowDown");
-    assert.ok(focusedLast() === rowButton(/Edit points/), "Down enters the menu");
-    key(rowButton(/Edit points/), "ArrowUp");
+    assert.ok(focusedLast() === rowButton(/^Edit$/), "Down enters the menu");
+    key(rowButton(/^Edit$/), "ArrowUp");
     assert.ok(focusedLast() === rowButton(/Delete/), "Up wraps to the last action");
     rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
     assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
@@ -689,10 +695,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-saved");
     focusIn(el("route-list").querySelector(".row-more")!);
     openMenu();
-    rowButton(/Rename/).dispatchEvent(new window.Event("click"));
-    input("name-input", "Exit plan");
-    submit("name-form");
+    rowButton(/^Edit$/).dispatchEvent(new window.Event("click"));
+    input("marker-label", "Exit plan");
+    input("marker-description", "Mind the low ceiling");
+    submit("marker-form");
     assert.equal(state.routes[0]?.name, "Exit plan");
+    assert.equal(state.routes[0]?.description, "Mind the low ceiling");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false, "opened from Saved, Save goes back there");
     assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "focus returns to the rebuilt row");
     await controls.flush();
     assert.equal(
@@ -1264,6 +1273,110 @@ test("place photos lead the details as a carousel and are removed from the edit 
     el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
     assert.equal(state.markers[0]!.photos, undefined);
     assert.equal(carousel.hidden, true);
+  } finally {
+    await controls.dispose();
+  }
+});
+
+test("a route reads and edits like a place: name, description and photos", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "route-details", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  await saveMap(map);
+  const photo = await savePhoto(map.id, new Blob(["gallery"], { type: "image/jpeg" }));
+  const state = defaultNavigation(map.id);
+  const route: PlannedRoute = {
+    id: "gallery", name: "Gallery", points: [{ x: 100, y: 100 }, { x: 400, y: 300 }],
+    created: 0, draft: false,
+  };
+  state.routes = [route];
+  const framed: Point[][] = [], selected: (string | undefined)[] = [], tools: string[] = [];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool(tool) { tools.push(tool); }, updateNavigation() {}, jumpTo() {},
+    fitPoints(points) { framed.push(points); },
+    select(id) { selected.push(id); },
+  });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
+  const submit = () => el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  (el("marker-form") as HTMLFormElement).requestSubmit = submit;
+  try {
+    controls.options().onRoute!(route);
+    assert.equal(el("marker-dialog").dataset.mode, "view", "tapping a route opens readable details first");
+    assert.equal(el("marker-dialog-title").textContent, "Gallery");
+    assert.equal(el("marker-details").hidden, true, "nothing to read yet: just the header");
+    assert.deepEqual(framed.at(-1), route.points, "the whole route is framed");
+    assert.equal(selected.at(-1), route.id, "and stands out from the others");
+
+    click("marker-edit");
+    assert.equal(el("marker-dialog").dataset.mode, "edit");
+    assert.equal(el("marker-dialog-title").textContent, "Edit route");
+    assert.equal(el("marker-kinds").hidden, true);
+    assert.equal(el("marker-move").hidden, true);
+    assert.equal(el("route-points").hidden, false);
+    assert.equal((el("marker-label") as HTMLInputElement).value, "Gallery");
+    (el("marker-label") as HTMLInputElement).value = "North gallery";
+    (el("marker-description") as HTMLTextAreaElement).value = "  Low ceiling past the pillar  ";
+    // A photo picked in the form, as addPhotos would leave it.
+    (controls as unknown as { formPhotos: string[] }).formPhotos = [photo];
+    submit();
+    assert.deepEqual(
+      { name: route.name, description: route.description, photos: route.photos },
+      { name: "North gallery", description: "Low ceiling past the pillar", photos: [photo] },
+    );
+    assert.equal(el("marker-dialog").dataset.mode, "view", "saving returns to the details");
+    assert.equal(el("marker-detail-description").textContent, "Low ceiling past the pillar");
+    assert.equal(el("marker-detail-photos").querySelectorAll("img").length, 1);
+    await controls.flush();
+    assert.deepEqual((await loadNavigation(map.id)).routes[0], route,
+      "route details survive saving and reopening the map");
+
+    click("marker-edit");
+    (el("marker-label") as HTMLInputElement).value = "Discarded name";
+    (el("marker-description") as HTMLTextAreaElement).value = "Discarded description";
+    click("marker-cancel");
+    assert.equal(el("marker-dialog").dataset.mode, "view");
+    assert.equal(el("marker-dialog-title").textContent, "North gallery");
+    assert.equal(route.description, "Low ceiling past the pillar", "Cancel keeps the saved details");
+
+    // Edit points keeps what was typed, then draws on the route.
+    click("marker-edit");
+    (el("marker-description") as HTMLTextAreaElement).value = "";
+    click("route-points");
+    assert.equal(route.description, undefined, "a cleared description is removed");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    assert.equal(tools.at(-1), "route");
+    click("tool-done");
+    assert.equal(tools.at(-1), "browse");
+
+    controls.options().onRoute!(route);
+    click("marker-edit");
+    click("marker-delete");
+    assert.equal(state.routes.length, 1, "the first tap only arms Delete");
+    click("marker-delete");
+    assert.equal(state.routes.length, 0);
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    click("toast-undo");
+    assert.deepEqual(state.routes, [route], "Undo brings it back");
   } finally {
     await controls.dispose();
   }

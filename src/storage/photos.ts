@@ -39,14 +39,15 @@ export function putPhotos(tx: IDBTransaction, mapId: string, photos: Map<string,
 export const deleteMapPhotos = (mapId: string) =>
   transact("photos", "readwrite", (s) => s.delete(range(mapId)));
 
-/** Removed photos, deleted places and abandoned forms leave blobs no place refers to. */
+/** Removed photos, deleted places or routes and abandoned forms leave blobs nothing refers to. */
 export async function prunePhotos(mapId: string, now = Date.now()) {
   const db = await database();
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(["navigation", "photos"], "readwrite");
     const state: IDBRequest<NavigationState | undefined> = tx.objectStore("navigation").get(mapId);
     state.onsuccess = () => {
-      const used = new Set(state.result?.markers.flatMap((marker) => marker.photos ?? []));
+      const used = new Set([...state.result?.markers ?? [], ...state.result?.routes ?? []]
+        .flatMap((item) => item.photos ?? []));
       const cursor = tx.objectStore("photos").openCursor(range(mapId));
       cursor.onsuccess = () => {
         const entry = cursor.result;

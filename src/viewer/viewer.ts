@@ -25,6 +25,7 @@ import {
   type NavigationState,
   type Tool,
   type MapMarker,
+  type PlannedRoute,
 } from "./navigation";
 import { NavigationOverlay } from "./overlays";
 import {
@@ -45,6 +46,8 @@ export interface ViewerOptions {
   onView(): void;
   onTap(point: Point): void;
   onMarker(marker: MapMarker): void;
+  /** A browsing tap on a route's line or name. */
+  onRoute?(route: PlannedRoute): void;
   /** A browsing tap that hit no place, label or route. */
   onEmptyTap?(): void;
   /** Long press on the map while browsing, in image coordinates. */
@@ -54,6 +57,14 @@ export interface ViewerOptions {
   /** It was put down (moved) or put back (interrupted). */
   onDrop?(moved: boolean): void;
   onAppearance?(mode: DarkMode): void;
+}
+/** Screen distance from a point to the segment between a and b. */
+function segmentDistance(p: Point, a: Point, b: Point) {
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1,
+    ((p.x - a.x) * dx + (p.y - a.y) * dy) / Math.max(1e-9, dx * dx + dy * dy)));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
 }
 export class Viewer {
   private navigation: NavigationState;
@@ -453,8 +464,9 @@ export class Viewer {
       return p.x >= 0 && p.y >= 0 && p.x <= this.width && p.y <= this.height;
     });
   }
-  // Frame a route or group of places, leaving room for the floating controls.
-  fitPoints(points: Point[]) {
+  // Frame a route or group of places above any covering card, leaving room
+  // for the floating controls.
+  fitPoints(points: Point[], animated = true) {
     if (this.navigation.touchLocked || !points.length) return;
     this.interactions.reset();
     const xs = points.map((p) => p.x),
@@ -468,24 +480,29 @@ export class Viewer {
       s = Math.abs(Math.sin(rotation));
     const width = c * (maxX - minX) + s * (maxY - minY),
       height = s * (maxX - minX) + c * (maxY - minY);
-    const { min, max } = this.limits();
+    const { min, max } = this.limits(),
+      visible = this.visible();
+    // A covering card hides the bottom controls; only the top ones remain.
     const scale = Math.max(
       min,
       Math.min(
         max,
         1,
         (this.width - 96) / Math.max(1, width),
-        (this.height - 260) / Math.max(1, height),
+        (visible.height - (this.covered ? 160 : 260)) / Math.max(1, height),
       ),
     );
-    this.animate(
-      cameraAt(
-        { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
-        this.viewport(),
-        scale,
-        rotation,
-      ),
+    const camera = cameraAt(
+      { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
+      visible,
+      scale,
+      rotation,
     );
+    if (animated) this.animate(camera);
+    else {
+      this.stopAnimation();
+      this.setCamera(camera);
+    }
   }
   private tap(screen: Point) {
     const point = screenToWorld(this.camera, screen);
@@ -504,18 +521,18 @@ export class Viewer {
       this.options?.onTap(point);
       return true;
     }
-    // Label chips read as buttons: a place's opens the place, like its pin;
-    // a route's frames the route, like its row in Saved.
+    // Label chips read as buttons: a place's opens the place, like its pin,
+    // and a route's opens the route, like its line.
     const label = marker ? undefined : this.overlay?.labelAt(screen);
     const labelled = marker ?? this.navigation.markers.find((m) => m.id === label?.markerId);
     if (labelled) {
       this.options?.onMarker(labelled);
       return true;
     }
-    const route = this.navigation.routes.find((r) => r.id === label?.routeId);
-    if (route) {
-      this.fitPoints(route.points);
-      this.pulse(route.id);
+    const route = this.navigation.routes.find((r) => r.id === label?.routeId) ??
+      this.nearestRoute(screen);
+    if (route && this.options?.onRoute) {
+      this.options.onRoute(route);
       return true;
     }
     // Not consumed, so a double tap still zooms.
@@ -525,7 +542,8 @@ export class Viewer {
   private cursorAt(screen: Point) {
     if (this.navigation.touchLocked || !insideImage(screenToWorld(this.camera, screen), this.map)) return "";
     if (this.tool === "browse")
-      return this.nearestPlace(screen) || this.overlay?.labelAt(screen) ? "pointer" : "";
+      return this.nearestPlace(screen) || this.overlay?.labelAt(screen) || this.nearestRoute(screen)
+        ? "pointer" : "";
     return this.grabbable(screen) ? "grab" : "crosshair";
   }
   private near(target: Point, screen: Point) {
@@ -540,6 +558,20 @@ export class Viewer {
     for (const marker of this.navigation.markers) {
       const distance = this.near(marker.point, screen);
       if (distance < best) [nearest, best] = [marker, distance];
+    }
+    return nearest;
+  }
+  // A visible route whose line passes within reach; the closest one wins.
+  private nearestRoute(screen: Point) {
+    if (!this.navigation.layers.routes) return undefined;
+    let nearest: PlannedRoute | undefined,
+      best = 16;
+    for (const route of this.navigation.routes) {
+      const points = route.points.map((point) => worldToScreen(this.camera, point));
+      points.forEach((point, index) => {
+        const distance = segmentDistance(screen, points[index - 1] ?? point, point);
+        if (distance < best) [nearest, best] = [route, distance];
+      });
     }
     return nearest;
   }
