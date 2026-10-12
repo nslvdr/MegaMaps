@@ -608,13 +608,14 @@ export class ViewerControls {
       this.el("marker-note").focus();
     });
     this.click("marker-delete", () => {
+      const deleted = this.state.markers.find((m) => m.id === this.editingMarker);
       this.state.markers = this.state.markers.filter(
         (m) => m.id !== this.editingMarker,
       );
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");
-      this.toast("Place deleted");
+      this.toast(`${deleted?.label ?? "Place"} deleted`);
     });
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
       'input[name="marker-kind"]',
@@ -1053,7 +1054,7 @@ export class ViewerControls {
                 (m) => m.id !== marker.id,
               );
               this.changed();
-              this.toast("Place deleted");
+              this.toast(`${marker.label} deleted`);
             }),
           },
         ],
@@ -1102,7 +1103,7 @@ export class ViewerControls {
                 this.mode("browse");
               }
               this.changed();
-              this.toast("Route deleted");
+              this.toast(`${route.name} deleted`);
             }),
           },
         ],
