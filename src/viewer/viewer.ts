@@ -401,6 +401,19 @@ export class Viewer {
       ),
     );
   }
+  /** Slides the map up just enough that a pin stays in sight above a card
+   * whose top edge is at `edge` (in page coordinates). */
+  reveal(point: Point, edge: number) {
+    if (this.navigation.touchLocked) return;
+    const camera = this.destination ?? this.camera;
+    // The pin and its name stand above the point, so leave room for both.
+    const top = 120,
+      bottom = edge - this.canvas.getBoundingClientRect().top - 40,
+      y = worldToScreen(camera, point).y;
+    if (y <= bottom || bottom < top) return;
+    this.interactions.reset();
+    this.animate({ ...camera, y: camera.y + bottom - y });
+  }
   // Frame a route or group of places, leaving room for the floating controls.
   fitPoints(points: Point[]) {
     if (this.navigation.touchLocked || !points.length) return;

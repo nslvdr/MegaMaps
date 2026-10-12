@@ -44,7 +44,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse">>;
+    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal">>;
   private ocr?: OcrIndex;
   private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
@@ -313,7 +313,10 @@ export class ViewerControls {
     this.notes(!!marker?.note);
     // A new place shows where it will go while it is named.
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
-    showDialog(this.dialog("marker-dialog"));
+    const card = this.dialog("marker-dialog");
+    showDialog(card);
+    // The card covers the bottom of the map; keep the place it's about in sight.
+    this.viewer?.reveal?.(point, card.offsetTop);
   }
   private notes(open: boolean) {
     this.el("marker-note-field").hidden = !open;

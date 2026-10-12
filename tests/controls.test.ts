@@ -60,6 +60,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const pulses: string[] = [];
+  const reveals: Point[] = [];
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
   assert.equal(state.dimming, 0.85, "older brightness values use the nearest preset");
@@ -88,6 +89,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     pulse(id) {
       pulses.push(id);
+    },
+    reveal(point) {
+      reveals.push(point);
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -328,6 +332,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "landmark" }, "the new pin shows where it goes");
+    assert.deepEqual(reveals.at(-1), { x: 500, y: 600 }, "the map keeps the spot clear of the card");
     assert.notEqual(
       document.activeElement,
       el("marker-label"),
