@@ -49,7 +49,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const state = defaultNavigation("controls");
   assert.equal(state.dimming, 0.85, "new maps default to 85% brightness");
   state.dimming = 0.8; // Simulate a brightness saved by the old slider.
-  let rotation = 0;
   let labelRefreshes = 0;
   const tools: string[] = [],
     framed: Point[][] = [],
@@ -61,6 +60,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const pulses: string[] = [];
   const reveals: Point[] = [];
+  const requestedZooms: (number | undefined)[] = [];
   let onScreen = true;
   const controls = new ViewerControls(root, map, state, (item) => shares.push(item));
   assert.equal(state.touchLocked, false);
@@ -70,11 +70,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       tools.push(tool);
     },
     updateNavigation() {},
-    rotateTo(value: number) {
-      rotation = value;
-    },
-    jumpTo(point: Point) {
+    jumpTo(point: Point, minimumScale?: number) {
       jumps.push(point);
+      requestedZooms.push(minimumScale);
     },
     fitPoints(points: Point[]) {
       framed.push(points);
@@ -152,23 +150,23 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       assert.equal(document.getElementById(gone), null);
     assert.equal(
       el("rotation-lock").parentElement,
-      dock,
-      "Lock lives in the pill",
+      el("display-chips"),
+      "Lock lives beside View in the top corner",
     );
+    assert.equal(el("open-display").parentElement, el("display-chips"));
+    for (const id of ["rotation-lock", "open-display"]) {
+      assert.equal(el(id).querySelector("span"), null, "corner buttons show icons only");
+      assert.ok(el(id).getAttribute("aria-label"), "icon buttons have accessible names");
+    }
     assert.equal(toolBar.hidden, true);
     assert.equal(root.dataset.tool, "browse");
 
-    // Panels open above the pill, which stays visible as tabs.
+    // Search occupies the space between Saved and Add.
     assert.deepEqual(
-      [...dock.querySelectorAll("button")].map((b) => b.id),
-      [
-        "open-saved",
-        "open-display",
-        "open-search",
-        "open-add",
-        "rotation-lock",
-      ],
+      [...dock.children].map((element) => element.id),
+      ["open-saved", "open-search", "open-add"],
     );
+    assert.equal(el("map-search").parentElement, el("open-search"));
     // An empty Saved list offers a button that starts adding that kind of item.
     const emptyAction = (id: string) =>
       el(id).querySelector<HTMLButtonElement>(".empty-list .empty-action")!;
@@ -216,11 +214,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(addBar.hidden, false);
     assert.equal(el("open-add").getAttribute("aria-expanded"), "true");
     assert.equal(el("open-add").classList.contains("active"), true);
-    assert.equal(el("open-add-label").textContent, "Close");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Close");
     assert.equal(document.getElementById("add-close"), null);
     click("open-add");
     assert.equal(addBar.hidden, true);
-    assert.equal(el("open-add-label").textContent, "Add");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Add");
     click("open-add");
     key(root, "Escape");
     assert.equal(addBar.hidden, true, "Escape backs out of the choice");
@@ -269,9 +267,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     check("dark-map", true);
     assert.equal(state.inverted, true);
 
-    // Lock in the pill only stops rotation; fine rotation appears once off.
+    // The corner lock controls two-finger rotation.
     assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "true");
-    assert.equal(el("rotation-controls").hidden, true);
     click("rotation-lock");
     assert.equal(state.rotationLocked, false);
     assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "false");
@@ -280,41 +277,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "Lock rotation",
     );
     assert.match(el("toast").textContent!, /Rotation unlocked/);
-    assert.equal(el("rotation-controls").hidden, false);
-    click("rotate-right");
-    assert.ok(Math.abs(rotation - Math.PI / 12) < 1e-9);
-    state.view = { center: { x: 0, y: 0 }, scale: 1, rotation: Math.PI / 12 };
-    controls.options().onView();
-    assert.equal(el("rotation-value").textContent, "15°");
-    assert.equal((el("rotation-angle") as HTMLInputElement).value, "15");
-    // Panning calls this every frame; an unchanged angle leaves the DOM alone.
-    const shown = el("rotation-value").firstChild;
-    controls.options().onView();
-    assert.ok(el("rotation-value").firstChild === shown, "readout rewritten");
-    // Steps land on the 15° grid, so a few taps always reach north.
-    const degrees = () => Math.round((rotation * 180) / Math.PI);
-    state.view = { ...state.view, rotation: (22 * Math.PI) / 180 };
-    click("rotate-left");
-    assert.equal(degrees(), 15);
-    click("rotate-right");
-    assert.equal(degrees(), 30);
-    // The slider snaps to north near either end.
-    const angle = el("rotation-angle") as HTMLInputElement;
-    for (const [value, expected] of [["357", 0], ["3", 0], ["40", 40]] as const) {
-      angle.value = value;
-      angle.dispatchEvent(new window.Event("input"));
-      assert.equal(degrees(), expected);
-    }
-    assert.equal(angle.value, "40");
-    // The [ and ] keys step like the buttons, but only while unlocked.
-    state.view = { ...state.view, rotation: (40 * Math.PI) / 180 };
-    assert.equal(controls.rotateStep(1), true);
-    assert.equal(degrees(), 45);
     click("rotation-lock");
     assert.equal(state.rotationLocked, true);
-    assert.equal(el("rotation-controls").hidden, true);
-    assert.equal(controls.rotateStep(-1), false);
-    assert.equal(degrees(), 45);
+    assert.equal(el("rotation-lock").getAttribute("aria-pressed"), "true");
 
     // Highlight with nothing saved explains instead of animating.
     click("spotlight");
@@ -330,8 +295,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(toolBar.hidden, false);
     assert.equal(el("tool-message").textContent, "Tap the map where it goes");
     assert.equal(el("tool-actions").hidden, true, "a place needs no buttons");
-    assert.equal(el("open-add-label").textContent, "Cancel");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Cancel");
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, true);
+    assert.equal((el("map-search") as HTMLInputElement).disabled, true, "search waits until placing is over");
     assert.equal(root.dataset.tool, "marker");
     tap(500, 600);
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
@@ -381,10 +347,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("marker-dialog").dispatchEvent(new window.Event("close"));
     assert.equal(previews.at(-1), undefined, "the saved pin replaces the preview");
     assert.equal(toolBar.hidden, true);
-    assert.equal(el("open-add-label").textContent, "Add");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Add");
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
+    assert.equal((el("map-search") as HTMLInputElement).disabled, false);
     controls.options().onMarker(state.markers[0]!);
     assert.equal(pulses.at(-1), state.markers[0]!.id, "the place being edited pulses");
+    assert.deepEqual(jumps.at(-1), state.markers[0]!.point, "opening a place centers it before revealing it above the card");
+    assert.equal(requestedZooms.at(-1), 1, "opening a place requests native detail zoom");
     assert.equal(entrance.checked, true);
     assert.equal(
       el("marker-note-field").hidden,
@@ -470,6 +439,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
     assert.equal(pulses.at(-1), state.markers[0]!.id, "the place pulses once the map arrives");
+    assert.equal(requestedZooms.at(-1), 1, "Saved places request the same detail zoom");
     assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
     // An application role names the map and hands it the arrow keys from screen readers.
     assert.equal(el("map-canvas").getAttribute("role"), "application");
@@ -597,7 +567,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     tap(200, 200);
     click("open-add");
     assert.equal(state.routes.length, 2, "first × only asks");
-    assert.equal(el("open-add-label").textContent, "Discard?");
+    assert.equal(el("open-add").getAttribute("aria-label"), "Discard?");
     assert.match(el("toast").textContent!, /Tap × again to discard Route 2/);
     click("open-add");
     assert.equal(state.routes.length, 1);
@@ -740,11 +710,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Search stays usable while OCR runs, then reveals every matching location.
     t.mock.timers.enable({ apis: ["setTimeout"] });
     el("open-search").dispatchEvent(new window.Event("click", { bubbles: true }));
-    assert.equal(el("sheet-search").hidden, false);
-    assert.equal(dock.hidden, true, "search replaces the navbar");
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
+    assert.equal(dock.hidden, false, "search keeps Saved and Add available");
+    assert.equal(sheet.hidden, true, "search lives in the dock rather than a panel");
     assert.equal(el("close-sheet").hidden, true);
-    assert.equal(el("sheet-search").querySelectorAll("input").length, 1);
-    assert.equal(el("sheet-search").querySelectorAll("button").length, 2, "the count, which is also Next, and Close");
+    assert.equal(el("open-search").querySelectorAll("input").length, 1);
+    assert.equal(el("open-search").querySelectorAll("button").length, 2, "the count, which is also Next, and Close");
+    assert.equal(el("search-close").hidden, false);
+    assert.equal(el("search-status").closest("[hidden]"), null, "search status stays available to screen readers");
     assert.equal(el("search-count").parentElement, el("map-search").parentElement);
     assert.equal(el("search-count").hidden, true);
     assert.equal(el("sheet-dismiss").hidden, true, "search leaves the canvas available for gestures");
@@ -776,35 +749,37 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(highlights?.active, true);
     assert.equal(highlights?.matches.length, 1);
     el("map-canvas").dispatchEvent(new window.Event("pointerdown"));
-    assert.equal(sheet.hidden, false, "touching the map keeps search open");
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true", "touching the map keeps search open");
     assert.equal((el("map-search") as HTMLInputElement).value, "north");
     assert.equal(highlights?.active, true, "map gestures keep the matches highlighted");
     assert.match(el("search-status").textContent!, /1 match/);
-    assert.equal(el("search-count").textContent, "1");
+    assert.equal(el("search-count").textContent, "1 match");
     assert.equal(el("search-count").hidden, false);
     assert.equal(el("search-count").getAttribute("aria-label"), "1 result");
     el("map-search").dispatchEvent(new window.Event("click", { bubbles: true }));
     el("search-count").dispatchEvent(new window.Event("click", { bubbles: true }));
-    assert.equal(sheet.hidden, false, "clicking inside the search field keeps it open");
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true", "clicking inside the search field keeps it open");
     assert.equal(highlights?.active, true);
     el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
-    assert.equal(sheet.hidden, true, "clicking outside closes search");
-    assert.equal(dock.hidden, false, "closing search restores the navbar");
-    assert.equal(highlights?.active, false, "closing removes search highlights");
-    assert.equal((el("map-search") as HTMLInputElement).value, "");
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true", "map clicks keep search open");
+    assert.equal(dock.hidden, false, "closing search keeps the navbar visible");
+    assert.equal(highlights?.active, true, "map clicks preserve search highlights");
+    assert.equal((el("map-search") as HTMLInputElement).value, "north");
     click("open-search");
     input("map-search", "north");
     el("search-close").dispatchEvent(new window.Event("click", { bubbles: true }));
-    assert.equal(sheet.hidden, true, "Close in the field ends Search");
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "false", "Close in the field ends Search without reopening it through event bubbling");
+    assert.equal(el("search-close").hidden, true);
     assert.equal(dock.hidden, false);
     assert.equal((el("map-search") as HTMLInputElement).value, "");
     focus.mock.resetCalls();
     click("open-search");
-    assert.equal(focus.mock.callCount(), 0, "opening Search waits for a click on the input");
-    el("map-canvas").dispatchEvent(new window.Event("click", { bubbles: true }));
+    assert.equal(focus.mock.callCount(), 1, "tapping the search field opens it ready to type");
+    click("search-close");
     assert.equal(controls.stepSearch(), false, "Enter is left alone with Search closed");
+    focus.mock.resetCalls();
     assert.equal(controls.openSearch(), true);
-    assert.equal(el("sheet-search").hidden, false);
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
     assert.equal(focus.mock.callCount(), 1, "the / key opens Search ready to type");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
@@ -814,7 +789,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     controls.updateOcr(index, "Detecting map text · 20%");
     assert.match(
       el("search-count").textContent!,
-      /^1$/,
+      /^1 match$/,
       "progress keeps the selected result",
     );
     const secondPolygon = polygon.map(({ x, y }) => ({ x: x + 500, y }));
@@ -828,16 +803,16 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const frameCount = framed.length;
     controls.updateOcr(multiple);
     assert.equal(framed.length, frameCount, "previewing a match leaves the map in place");
-    assert.equal(el("search-count").textContent, "2");
+    assert.equal(el("search-count").textContent, "2 matches");
     key(el("map-search"), "Enter");
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), secondPolygon);
     assert.equal(highlights?.selected, 1, "the overlay emphasizes the navigated result");
-    assert.equal(el("search-count").textContent, "2/2", "the count shows where you are");
+    assert.equal(el("search-count").textContent, "2 / 2", "the count shows where you are");
     assert.match(el("search-status").textContent!, /^Match 2 of 2/);
     controls.updateOcr(multiple, "Detecting map text · 30%");
     assert.equal(highlights?.selected, 1, "OCR progress preserves the overlay selection");
-    assert.equal(el("search-count").textContent, "2/2", "progress keeps the current match");
+    assert.equal(el("search-count").textContent, "2 / 2", "progress keeps the current match");
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), polygon, "next wraps to the first match");
     const previous = new window.Event("keydown", { cancelable: true });
@@ -852,9 +827,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // On a touch screen the count steps on once the keyboard is away.
     click("search-count");
     assert.deepEqual(framed.at(-1), polygon, "the count is a Next button");
-    assert.equal(el("search-count").textContent, "1/2");
+    assert.equal(el("search-count").textContent, "1 / 2");
     assert.equal(el("search-count").getAttribute("aria-label"), "Match 1 of 2. Next match");
-    assert.equal(sheet.hidden, false);
+    assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
@@ -864,7 +839,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(highlights?.matches.length, 0);
     assert.equal(highlights?.active, true);
     assert.match(el("search-status").textContent!, /No matching/);
-    assert.equal(el("search-count").textContent, "No match");
+    assert.equal(el("search-count").textContent, "No matches");
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
     input("map-search", "");
@@ -874,6 +849,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     stage.dispatchEvent(new window.Event("click", { bubbles: true }));
+    t.mock.timers.tick(200);
+    assert.equal(highlights?.active, true, "map clicks do not cancel a pending query");
+    input("map-search", "unknown");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    click("search-close");
     assert.equal(highlights?.active, false, "closing search restores the map");
     assert.equal(dock.hidden, false);
     t.mock.timers.tick(200);
@@ -899,7 +879,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     t.mock.timers.tick(100);
     assert.equal(highlights?.matches.length, 30);
     assert.equal(highlights?.active, true, "saved places highlight while OCR is pending and Places is hidden");
-    assert.equal(el("search-count").textContent, "30", "the badge counts every matching location");
+    assert.equal(el("search-count").textContent, "30 matches", "the badge counts every matching location");
     assert.equal(el("search-count").getAttribute("aria-label"), "30 results");
     key(el("map-search"), "Enter");
     assert.deepEqual(jumps.at(-1), landmarks[0]!.point);

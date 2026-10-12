@@ -89,6 +89,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   click("share-places");
   assert.equal(el("share-main").hidden, true);
   assert.equal(el("share-picker-title").textContent, "Places");
+  assert.equal(el("share-dialog").getAttribute("aria-labelledby"), "share-picker-title");
   assert.deepEqual(inputs.map((input) => input.closest("label")!.hidden), [false, true]);
   assert.equal(el("share-all").getAttribute("aria-pressed"), "true");
   click("share-none");
@@ -96,6 +97,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.equal(el("share-title").textContent, "Share map");
   assert.equal(escape("share-dialog"), false, "Escape steps back instead of closing");
   assert.equal(el("share-main").hidden, false);
+  assert.equal(el("share-dialog").getAttribute("aria-labelledby"), "share-title");
   assert.equal(el("share-places-count").textContent, "None");
   assert.equal(el<HTMLButtonElement>("share-send").disabled, true);
   el<HTMLInputElement>("share-image").checked = true;
@@ -135,6 +137,20 @@ test("share dialog with no annotations offers the image only", async () => {
   assert.equal(el<HTMLButtonElement>("share-send").disabled, false);
   click("share-cancel");
   assert.equal(el<HTMLDialogElement>("share-dialog").open, false);
+});
+
+test("the picker header cross closes sharing and reopening returns to the summary", async () => {
+  const { ui, el, map, state, click } = await setup();
+  await ui.openExport(map, state);
+  click("share-routes");
+  assert.equal(el("share-dialog").getAttribute("aria-labelledby"), "share-picker-title");
+  click("share-picker-close");
+  assert.equal(el<HTMLDialogElement>("share-dialog").open, false);
+  await ui.openExport(map, state);
+  assert.equal(el("share-main").hidden, false);
+  assert.equal(el("share-picker").hidden, true);
+  assert.equal(el("share-dialog").getAttribute("aria-labelledby"), "share-title");
+  click("share-cancel");
 });
 
 test("import dialog merges into a matching map by default and warns before replacing", async () => {

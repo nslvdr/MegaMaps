@@ -106,7 +106,7 @@ test("route outlines and pins follow the camera and drop out while off screen", 
     const line = screen.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("");
     const dots = screen.map(p => `M${p.x.toFixed(1)},${p.y.toFixed(1)}h0`).join("");
     const paths = [...svg.querySelectorAll(".route > path")].map(path => path.getAttribute("d"));
-    assert.deepEqual(paths, [line, line, line, dots, dots], "casing, line and flow share one outline");
+    assert.deepEqual(paths, [line, line, dots, dots], "route casing, line and points follow the camera");
     const p = worldToScreen(camera, state.markers[0]!.point);
     assert.equal(pin().getAttribute("transform"), `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
     assert.equal(pin().style.display, "");

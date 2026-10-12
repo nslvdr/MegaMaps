@@ -1,4 +1,4 @@
-import { showDialog } from "./dialog";
+import { dialogHeader, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { markerKinds, routeColor, type NavigationState } from "../viewer/navigation";
 import { tileKey } from "../types";
@@ -11,17 +11,17 @@ import { icons } from "./icons";
 import { placeIcon } from "./place-icon";
 
 export const sharingMarkup = `
-<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main"><h2 id="share-title">Share map</h2><p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">Preparing share…</p>
+<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main">${dialogHeader("share-title", "Share map", icons.share, "share-cancel")}<p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">Preparing share…</p>
 <div id="share-content" hidden><div class="share-summary"><button id="share-places" class="share-row" data-kind="marker"><span class="share-row-icon share-place">${icons.pin}</span><span class="share-row-label">Places</span><span id="share-places-count" class="share-row-value"></span>${icons.arrow}</button><button id="share-routes" class="share-row" data-kind="route"><span class="share-row-icon share-route">${icons.route}</span><span class="share-row-label">Routes</span><span id="share-routes-count" class="share-row-value"></span>${icons.arrow}</button>
 <label class="share-row"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">Map image<small>Your friend won’t need the original</small></span><input id="share-image" class="switch" type="checkbox" role="switch"></label></div><p id="share-size" class="share-size" role="status" aria-live="polite"></p></div>
-<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button><button id="share-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></div>
-<div id="share-picker" hidden><button id="share-back" class="share-back">${icons.arrow}<span>Share map</span></button><h2 id="share-picker-title"></h2><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>All</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>None</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
+<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button></div></div>
+<div id="share-picker" hidden>${dialogHeader("share-picker-title", "", icons.pin, "share-picker-close")}<button id="share-back" class="share-back">${icons.arrow}<span>Share map</span></button><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>All</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>None</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
 <div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>Done</span></button></div></div></dialog>
-<dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title"><h2 id="receive-title">Import shared map</h2><p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
+<dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title">${dialogHeader("receive-title", "Import shared map", icons.download, "receive-cancel")}<p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
 <div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">Add to</h3><div id="receive-destinations" class="share-summary" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
 <div id="receive-mode-field" hidden><h3 id="receive-mode-title" class="share-heading">Your places and routes</h3><div class="share-segments" role="radiogroup" aria-labelledby="receive-mode-title"><label><input type="radio" name="receive-mode" value="merge" checked>${icons.merge}<span>Merge</span></label><label class="share-segment-danger"><input type="radio" name="receive-mode" value="replace">${icons.rotateRight}<span>Replace</span></label></div></div>
 <p id="receive-note" class="dialog-note"></p><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label></div>
-<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>Import</span></button><button id="receive-cancel" class="quiet">${icons.close}<span>Cancel</span></button></div></dialog>`;
+<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>Import</span></button></div></dialog>`;
 
 export interface ShareDestination { mapId?: string; image?: File; mode: ImportMode }
 export interface ShareImportResult { map: MapRecord; added: number; skipped: number; removed?: number }
@@ -61,7 +61,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   let picking: "marker" | "route" | undefined;
   const exportBusy = (busy: boolean) => {
     exporting = busy;
-    for (const id of ["share-cancel", "share-send", "share-all", "share-none", "share-back", "share-done"])
+    for (const id of ["share-cancel", "share-picker-close", "share-send", "share-all", "share-none", "share-back", "share-done"])
       el<HTMLButtonElement>(id).disabled = busy || (id === "share-send" && !file);
     for (const [id, kind] of [["share-places", "marker"], ["share-routes", "route"]] as const)
       el<HTMLButtonElement>(id).disabled = busy || !kindInputs(kind).length;
@@ -106,10 +106,12 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   // Places and routes are picked on their own page so the summary never scrolls.
   const showPicker = (kind?: "marker" | "route") => {
     picking = kind;
+    sendDialog.setAttribute("aria-labelledby", kind ? "share-picker-title" : "share-title");
     el("share-main").hidden = !!kind;
     el("share-picker").hidden = !kind;
     if (kind) {
       el("share-picker-title").textContent = kind === "marker" ? "Places" : "Routes";
+      el("share-picker-title-icon").innerHTML = kind === "marker" ? icons.pin : icons.route;
       for (const label of items.children) (label as HTMLElement).hidden = label.querySelector("input")?.dataset.kind !== kind;
     }
     updateFile();
@@ -143,7 +145,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("share-error", error);
     } finally { exportBusy(false); }
   });
-  el("share-cancel").addEventListener("click", () => sendDialog.close());
+  for (const id of ["share-cancel", "share-picker-close"])
+    el(id).addEventListener("click", () => sendDialog.close());
   el("share-places").addEventListener("click", () => showPicker("marker"));
   el("share-routes").addEventListener("click", () => showPicker("route"));
   for (const id of ["share-back", "share-done"]) el(id).addEventListener("click", () => showPicker());
@@ -342,6 +345,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       prepared = undefined;
       file = undefined;
       picking = undefined;
+      sendDialog.setAttribute("aria-labelledby", "share-title");
       items.replaceChildren();
       el("share-main").hidden = false;
       el("share-picker").hidden = true;

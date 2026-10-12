@@ -1,9 +1,9 @@
-import { showDialog } from "./dialog";
+import { dialogHeader, showDialog } from "./dialog";
 import type { AppUpdate, DownloadProgress } from "../app-update";
 import { formatBytes } from "./format";
 import { icons } from "./icons";
 
-export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body"><div class="dialog-icon" id="update-icon"></div><h2 id="update-title"></h2><p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button><button class="quiet" id="update-dismiss"></button></div></dialog>`;
+export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body">${dialogHeader("update-title", "", icons.rotateRight, "update-dismiss")}<p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button></div></dialog>`;
 
 /** What the app is doing once the user has agreed to update. */
 export type UpdateStep =
@@ -28,7 +28,7 @@ const button = (icon: string, label: string) => `${icon}<span>${label}</span>`;
 // Check first, ask before downloading, then show each step until the app restarts.
 export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActions) {
   const part = <T extends HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!;
-  const icon = part("update-icon"), title = part("update-title"), body = part("update-body");
+  const icon = part("update-title-icon"), title = part("update-title"), body = part("update-body");
   const facts = part("update-facts"), progress = part("update-progress"), note = part("update-note");
   const track = progress.querySelector<HTMLElement>(".progress-track")!;
   const fill = part("update-fill"), step = part("update-step"), percent = part("update-percent");
@@ -64,9 +64,10 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
       confirm.innerHTML = button(options.confirm[0], options.confirm[1]);
       onConfirm = options.confirm[2];
     }
-    dismiss.hidden = !options.dismiss;
-    dismiss.innerHTML = button(icons.close, options.dismiss ?? "");
-    actionRow.hidden = !options.confirm && !options.dismiss;
+    dismiss.disabled = busy;
+    dismiss.setAttribute("aria-label", options.dismiss ?? "Close");
+    dismiss.title = options.dismiss ?? "Close";
+    actionRow.hidden = !options.confirm;
   }
 
   /** Fraction undefined shows an indeterminate bar. */
@@ -203,7 +204,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
   }
 
   confirm.addEventListener("click", () => onConfirm());
-  dismiss.addEventListener("click", () => dialog.close());
+  dismiss.addEventListener("click", () => { if (!busy) dialog.close(); });
   dialog.addEventListener("cancel", (event) => {
     if (busy) event.preventDefault();
   });

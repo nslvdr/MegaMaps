@@ -156,8 +156,6 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       /translate\(195(\.0)?,422(\.0)?\)/,
     );
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
-    viewer.rotateTo(0); // Default map rotation lock also blocks explicit controls.
-    assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
     viewer.fit();
     step(performance.now() + 100);
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
@@ -306,6 +304,22 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.deepEqual(state.view, away, "no cut");
     step(performance.now() + 300);
     assert.notDeepEqual(state.view, away);
+    // Selecting a landmark zooms to native detail and keeps it above the open card.
+    viewer.fit(false);
+    viewer.jumpTo(place.point, 1);
+    const revealed = viewer.reveal(place.point, 400);
+    step(performance.now() + 300);
+    assert.equal(scale(), 1);
+    assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
+    assert.ok(Math.abs(screen(place.point).x - revealed.x) < 1e-7);
+    assert.ok(Math.abs(screen(place.point).y - revealed.y) < 1e-7);
+    assert.ok(revealed.y <= 360, "the landmark stays clear of the card");
+    press("+");
+    step(performance.now() + 300);
+    const closer = scale();
+    viewer.jumpTo(place.point, 1);
+    step(performance.now() + 300);
+    assert.equal(scale(), closer, "selecting a place never zooms out from a closer view");
     // Where pins crowd together, a tap opens the closest one, not the oldest.
     step(performance.now() + 600);
     const pin = screen(place.point);
