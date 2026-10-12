@@ -34,7 +34,8 @@ export function needsOcr(index: OcrIndex | undefined) {
   return !index || index.version !== OCR_VERSION;
 }
 
-// Phrase matches reveal just the matching words, including partial-word queries.
+// Phrase matches highlight just the matching words, including partial-word
+// queries, but carry the whole line so the callout reads in context.
 export function searchOcr(
   index: OcrIndex | undefined,
   query: string,
@@ -51,6 +52,7 @@ export function searchOcr(
       return { word, text, start, end: cursor - 1 };
     });
     const text = spans.map((span) => span.text).join(" ");
+    const label = line.words.map((word) => word.text).join(" ");
     let offset = text.indexOf(needle);
     while (offset !== -1) {
       const words = spans.filter(
@@ -58,7 +60,7 @@ export function searchOcr(
       );
       if (words.length)
         matches.push({
-          text: words.map(({ word }) => word.text).join(" "),
+          text: label,
           polygons: words.map(({ word }) => word.polygon),
         });
       offset = text.indexOf(needle, offset + needle.length);
