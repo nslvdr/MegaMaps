@@ -86,6 +86,9 @@ export class Viewer {
   private animation = 0;
   // Where the running animation ends, so quick key presses add up.
   private destination?: Camera;
+  /** The compass's map rotation, eased toward a little every frame. */
+  private heading?: number;
+  private lastTurn = 0;
   private base?: ImageBitmap;
   private disposed = false;
   private cache: TileCache;
@@ -123,7 +126,7 @@ export class Viewer {
       animate: (camera) => this.animate(camera),
       stopAnimation: () => this.stopAnimation(),
       locked: () => this.navigation.touchLocked,
-      rotationLocked: () => this.navigation.rotationLocked,
+      rotationLocked: () => this.navigation.rotationMode !== "free",
       editing: () => this.tool !== "browse",
       tap: (point) => this.tap(point),
       grab: (screen) => this.grab(screen),
@@ -686,6 +689,33 @@ export class Viewer {
     };
     this.animation = requestAnimationFrame(tick);
   }
+  /** Turns the map toward `rotation` (radians) from now on; undefined stops. */
+  orient(rotation?: number) {
+    this.heading = rotation;
+    this.invalidate();
+  }
+  // Sensor readings jitter, so the map follows them smoothly instead of
+  // jumping. Glides to a place or zoom finish first; their path is fixed.
+  private turn(now: number) {
+    if (this.heading === undefined || this.destination) {
+      this.lastTurn = 0;
+      return;
+    }
+    const rotation = this.camera.rotation ?? 0,
+      delta = Math.atan2(Math.sin(this.heading - rotation), Math.cos(this.heading - rotation));
+    const elapsed = this.lastTurn ? Math.min(100, now - this.lastTurn) : 16;
+    this.lastTurn = now;
+    if (Math.abs(delta) < 0.001) {
+      this.lastTurn = 0;
+      return;
+    }
+    // About 150 ms to cover most of a turn: steady, yet keeps up with walking.
+    const next = Math.abs(delta) < 0.003 ? this.heading : rotation + delta * (1 - Math.exp(-elapsed / 150));
+    this.setCamera(transformAt(this.camera, this.camera.scale, next, {
+      x: this.width / 2,
+      y: this.visible().height / 2,
+    }));
+  }
   private invalidate() {
     if (!this.frame && !this.disposed)
       this.frame = requestAnimationFrame((now) => {
@@ -694,6 +724,7 @@ export class Viewer {
       });
   }
   private draw(now: number) {
+    this.turn(now);
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // Margins and unloaded areas become pure black after the display filter.

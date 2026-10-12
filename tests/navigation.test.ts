@@ -13,6 +13,7 @@ import {
 import {
   defaultNavigation,
   captureView,
+  normalizeNavigation,
   restoreView,
 } from "../src/viewer/navigation";
 import { pyramid } from "../src/processing/pyramid";
@@ -109,7 +110,8 @@ test("notes, routes and settings persist; deletion blocks late writes", async ()
   await saveMap(record);
   const state = defaultNavigation("nav");
   state.inverted = true;
-  state.rotationLocked = false;
+  state.rotationMode = "compass";
+  state.northOffset = -23;
   state.touchLocked = true;
   state.dimming = 0.4;
   state.view = { center: { x: 2000, y: 1000 }, scale: 0.7, rotation: 1.2 };
@@ -155,6 +157,17 @@ test("notes, routes and settings persist; deletion blocks late writes", async ()
   );
   await setLastMap(null);
   assert.equal(await lastMap(), null);
+});
+
+test("a saved rotation lock becomes a rotation mode", () => {
+  // Saves from before Auto rotation have neither field.
+  const { rotationMode: _, northOffset: __, ...old } = defaultNavigation("lock");
+  for (const [rotationLocked, mode] of [[false, "free"], [true, "locked"], [undefined, "locked"]] as const) {
+    const loaded = normalizeNavigation({ ...old, rotationLocked });
+    assert.equal(loaded.rotationMode, mode);
+    assert.equal(loaded.northOffset, 0);
+    assert.equal("rotationLocked" in loaded, false);
+  }
 });
 
 test("legacy bookmarks become landmarks on load and survive queued saves", async () => {

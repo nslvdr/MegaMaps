@@ -5,6 +5,7 @@ import {
   DEFAULT_DIMMING,
   brightnessPercent,
   markerKinds,
+  type RotationMode,
 } from "../viewer/navigation";
 import { placeIcon } from "./place-icon";
 
@@ -14,6 +15,8 @@ const rowIcon = (icon: string, tint = "") =>
 // The whole icon tile toggles its layer through a native, keyboard-accessible input.
 const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
+const rotationChoice = (mode: RotationMode, label: string, icon: string) =>
+  `<label class="layer-toggle"><input type="radio" name="rotation-mode" id="rotation-${mode}" value="${mode}">${icon}<span>${label}</span></label>`;
 const brightnessChoices = BRIGHTNESS_LEVELS.map(
   (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
@@ -28,7 +31,7 @@ const kindPicks = Object.entries(markerKinds)
 const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? "⌘Z" : "Ctrl+Z";
 
 // Map-first layout: almost nothing floats over the map.
-//   top corners   – Back on the left; View and rotation Lock on the right
+//   top corners   – Back on the left; Rotation and View on the right, both panels
 //   bottom pill   – Saved · Search · Add; Saved and Add open panels like View.
 //                   Placing, drawing or moving swaps the pill for a task card
 //                   with the same header (icon, title, X) and full-size actions
@@ -38,7 +41,7 @@ export const viewerMarkup = `
 <div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><div class="map-crosshair" aria-hidden="true">${icons.crosshair}</div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
 <button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="Map view controls">
-  <button id="rotation-lock" class="glass status-chip" aria-label="Unlock rotation" title="Unlock rotation" aria-pressed="true">${icons.rotationLock}</button>
+  <button id="open-rotation" class="glass status-chip" data-sheet="rotation" aria-label="Rotation" title="Rotation" aria-controls="sheet" aria-expanded="false">${icons.rotationLock}</button>
   <button id="open-display" class="glass status-chip" data-sheet="display" aria-label="View settings" title="View settings" aria-controls="sheet" aria-expanded="false">${icons.sun}</button>
 </div>
 <div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div>
@@ -73,6 +76,17 @@ export const viewerMarkup = `
         ${layerToggle("labels", "Names", icons.text)}
       </div>
       <button id="spotlight" class="panel-action spotlight-action" title="Dim the map for a moment and pulse every route and place, even hidden ones">${icons.sparkle}<span>Highlight saved</span></button>
+    </div>
+    <div id="sheet-rotation" data-panel="rotation" data-title="Rotation" hidden>
+      <div class="layer-toggles rotation-modes" role="radiogroup" aria-label="Rotation" aria-describedby="rotation-help">
+        ${rotationChoice("free", "Normal", icons.rotateRight)}
+        ${rotationChoice("compass", "Auto", icons.compass)}
+        ${rotationChoice("locked", "Locked", icons.rotationLock)}
+      </div>
+      <p id="rotation-help" class="field-help" role="status"></p>
+      <div id="north-field" class="panel-card" hidden>
+        <div class="panel-row stacked">${rowIcon(icons.north)}<label class="row-text" for="north-offset"><strong>Map north</strong><small id="north-help">Degrees clockwise from the top of the map</small></label><div class="north-adjust"><button type="button" id="north-less" aria-label="5° counterclockwise" title="5° counterclockwise">${icons.minus}</button><span class="north-value"><input id="north-offset" type="number" inputmode="numeric" min="-180" max="180" step="1" aria-describedby="north-help" enterkeyhint="done"><span aria-hidden="true">°</span></span><button type="button" id="north-more" aria-label="5° clockwise" title="5° clockwise">${icons.plus}</button></div></div>
+      </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>
       <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>Routes</span><small id="saved-routes-count"></small></h3>

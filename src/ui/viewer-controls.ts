@@ -20,7 +20,9 @@ import {
   type Tool,
   type MapMarker,
   type PlannedRoute,
+  type RotationMode,
 } from "../viewer/navigation";
+import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
 import { icons } from "./icons";
 import { nextName, plural } from "./format";
 import { placeIcon } from "./place-icon";
@@ -32,11 +34,25 @@ import {
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
 import { stepFocus, typeahead } from "./step-focus";
-const sheets = ["display", "saved", "add"] as const;
+const sheets = ["display", "rotation", "saved", "add"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
+const rotationModes: Record<RotationMode, { icon: string; label: string; help: string }> = {
+  free: { icon: icons.rotateRight, label: "Normal", help: "Twist with two fingers to turn the map." },
+  compass: { icon: icons.compass, label: "Auto", help: "The map turns with your phone, so it lines up with the world around you." },
+  locked: { icon: icons.rotationLock, label: "Locked", help: "The map keeps its current angle." },
+};
+/** Auto mode's compass: off, starting, turning the map, or not reaching it. */
+type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
+const COMPASS_WAIT_MS = 3000;
+const NORTH_STEP = 5;
+/** Whole degrees from -180 up to 180. */
+const wrapDegrees = (degrees: number) => {
+  const wrapped = ((Math.round(degrees) + 180) % 360 + 360) % 360 - 180;
+  return wrapped === -180 ? 180 : wrapped;
+};
 const darkMessages: Record<DarkMode["kind"], string> = {
   inverted: "Colors inverted on pure black",
   deepened: "Background deepened to black",
@@ -49,7 +65,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
+    Partial<Pick<Viewer, "orient" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
@@ -112,6 +128,12 @@ export class ViewerControls {
   /** Object URLs for the open card, revoked when it closes. */
   private photoURLs = new Map<string, Promise<string | undefined>>();
   private photoViewer?: PhotoViewer;
+  private compass: CompassStatus = "off";
+  /** Where the top of the phone points, in degrees from north. */
+  private heading?: number;
+  private stopWatching?: () => void;
+  /** Bumped on every start and stop, so a late permission answer is ignored. */
+  private compassRun = 0;
   constructor(
     private root: HTMLElement,
     private map: MapRecord,
@@ -133,6 +155,8 @@ export class ViewerControls {
     this.bind();
     this.sheet(undefined);
     this.render();
+    // Browsers that ask first only answer a tap, so this may wait for one.
+    if (state.rotationMode === "compass") void this.startCompass(false);
   }
   private el<T extends HTMLElement = HTMLElement>(id: string) {
     return this.root.querySelector<T>(`#${id}`)!;
@@ -254,7 +278,9 @@ export class ViewerControls {
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
     this.el("sheet-title-icon").innerHTML =
-      name === "display" ? icons.sun : name === "add" ? icons.add : icons.saved;
+      name === "display" ? icons.sun
+      : name === "rotation" ? rotationModes[this.state.rotationMode].icon
+      : name === "add" ? icons.add : icons.saved;
     this.el("search-close").hidden = name !== "search";
     this.input("map-search").setAttribute("aria-expanded", String(name === "search"));
     for (const sheet of sheets) {
@@ -762,7 +788,7 @@ export class ViewerControls {
         this.stepSearch(key.shiftKey);
       }
     });
-    for (const sheet of ["display", "saved"] as const)
+    for (const sheet of ["display", "rotation", "saved"] as const)
       this.click(`open-${sheet}`, () =>
         this.sheet(this.openSheet === sheet ? undefined : sheet, true),
       );
@@ -815,15 +841,25 @@ export class ViewerControls {
         this.changed();
       });
     this.click("spotlight", () => this.spotlight());
-    this.click("rotation-lock", () => {
-      this.state.rotationLocked = !this.state.rotationLocked;
-      this.changed();
-      this.toast(
-        this.state.rotationLocked
-          ? "Rotation locked"
-          : "Rotation unlocked · twist with two fingers",
-      );
+    for (const mode of Object.keys(rotationModes) as RotationMode[]) {
+      const input = this.input(`rotation-${mode}`);
+      this.on(input, "change", () => {
+        if (input.checked) this.setRotationMode(mode);
+      });
+    }
+    // Tapping Auto again retries a compass that needs permission or went missing.
+    this.click("rotation-compass", () => {
+      if (this.state.rotationMode === "compass" && (this.compass === "missing" || this.compass === "blocked"))
+        void this.startCompass(true);
     });
+    // Typing turns the map as it goes; the field tidies its number on leaving.
+    this.on(this.input("north-offset"), "input", () => {
+      const degrees = parseFloat(this.input("north-offset").value);
+      if (Number.isFinite(degrees)) this.setNorth(degrees, false);
+    });
+    this.on(this.input("north-offset"), "change", () => this.renderRotation());
+    this.click("north-less", () => this.setNorth(this.state.northOffset - NORTH_STEP));
+    this.click("north-more", () => this.setNorth(this.state.northOffset + NORTH_STEP));
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
@@ -1055,6 +1091,89 @@ export class ViewerControls {
       this.nameAction?.(name);
       this.nameAction = undefined;
     });
+  }
+  private setRotationMode(mode: RotationMode) {
+    this.state.rotationMode = mode;
+    this.changed();
+    if (mode === "compass") void this.startCompass(true);
+    else this.stopCompass();
+  }
+  private setNorth(degrees: number, tidy = true) {
+    this.state.northOffset = wrapDegrees(degrees);
+    this.persistence.changed();
+    this.orient();
+    if (tidy) this.renderRotation();
+  }
+  /** Asks for the compass when `ask` (from a tap), then follows it. */
+  private async startCompass(ask: boolean) {
+    this.stopCompass();
+    const run = this.compassRun;
+    this.compass = "waiting";
+    this.renderRotation();
+    const allowed = !ask || (await allowCompass());
+    if (run !== this.compassRun) return;
+    if (!allowed) {
+      this.compass = "blocked";
+      this.renderRotation();
+      return;
+    }
+    const stop = watchCompass((heading) => {
+      this.heading = heading;
+      this.orient();
+      if (this.compass === "on") return;
+      this.compass = "on";
+      this.renderRotation();
+    });
+    const timer = setTimeout(() => {
+      if (this.compass !== "waiting") return;
+      this.compass = "missing";
+      this.renderRotation();
+      if (!ask && compassNeedsPermission())
+        this.toast("Open Rotation and tap Auto to turn the compass back on");
+    }, COMPASS_WAIT_MS);
+    this.stopWatching = () => {
+      stop();
+      clearTimeout(timer);
+    };
+  }
+  private stopCompass() {
+    this.compassRun++;
+    this.stopWatching?.();
+    this.stopWatching = undefined;
+    this.compass = "off";
+    this.heading = undefined;
+    this.viewer?.orient?.(undefined);
+  }
+  /** The map's north points where the phone says north is. */
+  private orient() {
+    if (this.heading !== undefined)
+      this.viewer?.orient?.((-(this.heading + this.state.northOffset) * Math.PI) / 180);
+  }
+  private renderRotation() {
+    const mode = this.state.rotationMode,
+      { icon, label, help } = rotationModes[mode];
+    const chip = this.el("open-rotation");
+    chip.innerHTML = icon;
+    chip.dataset.mode = mode;
+    chip.setAttribute("aria-label", `Rotation: ${label}`);
+    chip.title = `Rotation: ${label}`;
+    if (this.openSheet === "rotation") this.el("sheet-title-icon").innerHTML = icon;
+    for (const each of Object.keys(rotationModes))
+      this.input(`rotation-${each}`).checked = each === mode;
+    const compassHelp: Partial<Record<CompassStatus, string>> = {
+      waiting: "Looking for the compass…",
+      missing: compassNeedsPermission()
+        ? "Tap Auto to turn on the compass."
+        : "No compass found. Auto needs a phone or tablet.",
+      blocked: "Compass access is off. Allow motion and orientation access for this site, then tap Auto.",
+    };
+    this.el("rotation-help").textContent =
+      (mode === "compass" && compassHelp[this.compass]) || help;
+    this.el("north-field").hidden = mode !== "compass";
+    const north = this.input("north-offset");
+    // Keep a number being typed as it is; it is already applied.
+    if (document.activeElement !== north || parseFloat(north.value) !== this.state.northOffset)
+      north.value = String(this.state.northOffset);
   }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted
@@ -1326,17 +1445,7 @@ export class ViewerControls {
     return this.confirming === key ? "Tap again to delete" : "Delete";
   }
   private render() {
-    const rotationLock = this.el("rotation-lock");
-    rotationLock.setAttribute(
-      "aria-pressed",
-      String(this.state.rotationLocked),
-    );
-    rotationLock.setAttribute(
-      "aria-label",
-      this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
-    );
-    rotationLock.title = this.state.rotationLocked ? "Unlock rotation" : "Lock rotation";
-    rotationLock.innerHTML = this.state.rotationLocked ? icons.rotationLock : icons.rotateRight;
+    this.renderRotation();
     this.input("dark-map").checked = this.state.inverted;
     for (const level of BRIGHTNESS_LEVELS)
       this.input(`brightness-${brightnessPercent(level)}`).checked = this.state.dimming === level;
@@ -1574,6 +1683,7 @@ export class ViewerControls {
     clearTimeout(this.spotlightTimer);
     clearTimeout(this.cardDeleteTimer);
     clearTimeout(this.confirmTimer);
+    this.stopCompass();
     this.el("map-stage").classList.remove("spotlight");
     this.showToast(false);
     const saved = this.flush();
