@@ -22,7 +22,6 @@ import {
   Map,
   MapPin,
   Merge,
-  Minus,
   Moon,
   Move,
   Navigation2,
@@ -111,7 +110,6 @@ export const icons = {
   rotationLock: svg(LockKeyhole),
   compass: svg(Compass),
   north: svg(Navigation2),
-  minus: svg(Minus),
   routeStart: svg(Circle),
   routeEnd: svg(Square),
 };

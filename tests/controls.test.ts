@@ -314,22 +314,28 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
 
-    // Its north can sit anywhere on the map, and changes turn it at once.
+    // Its north can sit anywhere on the map; the wheel turns it as each degree passes.
     assert.equal(el("north-field").hidden, false);
-    assert.equal((el("north-offset") as HTMLInputElement).value, "0");
-    click("north-more");
+    const wheel = el("north-offset");
+    const row = 32, zero = 179;
+    assert.equal(wheel.scrollTop, zero * row, "the wheel opens on 0°");
+    assert.equal(wheel.querySelector(".selected")!.textContent, "0°");
+    wheel.scrollTop = (zero + 5) * row + 10;
+    wheel.dispatchEvent(new window.Event("scroll"));
     assert.equal(state.northOffset, 5);
-    assert.equal((el("north-offset") as HTMLInputElement).value, "5");
+    assert.equal(wheel.scrollTop, (zero + 5) * row + 10, "a scrolling wheel is left where the finger is");
+    assert.equal(wheel.getAttribute("aria-valuenow"), "5");
     assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
-    input("north-offset", "-200");
-    el("north-offset").dispatchEvent(new window.Event("input"));
-    assert.equal(state.northOffset, 160, "a full turn wraps around");
-    change("north-offset");
-    assert.equal((el("north-offset") as HTMLInputElement).value, "160");
+    wheel.scrollTop = 0;
+    wheel.dispatchEvent(new window.Event("scroll"));
+    assert.equal(wheel.querySelector(".selected")!.textContent, "−179°");
+    key(wheel, "ArrowDown");
+    assert.equal(state.northOffset, 180, "a full turn wraps around");
+    assert.equal(wheel.scrollTop, (zero + 180) * row);
     await controls.flush();
     const saved = await loadNavigation("controls");
     assert.equal(saved.rotationMode, "compass");
-    assert.equal(saved.northOffset, 160);
+    assert.equal(saved.northOffset, 180);
 
     // Locked stops following the phone.
     check("rotation-locked", true);

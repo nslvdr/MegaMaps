@@ -1,7 +1,8 @@
 import type { NavigationState } from "../viewer/navigation";
 import type { ShareManifest } from "./format";
 
-/** Imported IDs survive local edits and deletion; new exports only add unseen items. */
+/** Imported IDs survive local edits and deletion; new exports only add unseen items.
+ * A shared north fills in a map that has none, but never undoes local tuning. */
 export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   const seen = new Set(state.importedItems ?? []);
   for (const marker of state.markers) seen.add(`marker:${marker.id}`);
@@ -12,18 +13,21 @@ export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   for (const marker of share.markers) history.add(`marker:${marker.id}`);
   for (const route of share.routes) history.add(`route:${route.id}`);
   return {
-    state: { ...state, markers: [...state.markers, ...structuredClone(markers)],
+    state: { ...state, northOffset: state.northOffset || (share.northOffset ?? 0),
+      markers: [...state.markers, ...structuredClone(markers)],
       routes: [...state.routes, ...structuredClone(routes)], importedItems: [...history] },
     added: markers.length + routes.length,
     skipped: share.markers.length + share.routes.length - markers.length - routes.length,
   };
 }
 
-/** Replace swaps every place and finished route for the shared ones; unfinished drafts stay. */
+/** Replace swaps every place and finished route for the shared ones, and north when the
+ * share has one; unfinished drafts stay. */
 export function replaceAnnotations(state: NavigationState, share: ShareManifest) {
   const removed = state.markers.length + state.routes.filter((route) => !route.draft).length;
   return {
-    state: { ...state, markers: structuredClone(share.markers),
+    state: { ...state, northOffset: share.northOffset ?? state.northOffset,
+      markers: structuredClone(share.markers),
       routes: [...state.routes.filter((route) => route.draft), ...structuredClone(share.routes)],
       annotationRevision: (state.annotationRevision ?? 0) + 1,
       importedItems: [...share.markers.map((item) => `marker:${item.id}`), ...share.routes.map((item) => `route:${item.id}`)] },
@@ -37,6 +41,7 @@ export function replaceAnnotations(state: NavigationState, share: ShareManifest)
 export function preserveUnseenImports(next: NavigationState, stored?: NavigationState): NavigationState {
   if (stored && (stored.annotationRevision ?? 0) > (next.annotationRevision ?? 0)) {
     return { ...next,
+      northOffset: stored.northOffset,
       markers: structuredClone(stored.markers),
       routes: [...next.routes.filter((route) => route.draft), ...structuredClone(stored.routes.filter((route) => !route.draft))],
       importedItems: [...(stored.importedItems ?? [])],

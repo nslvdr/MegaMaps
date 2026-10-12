@@ -5,6 +5,8 @@ import {
   DEFAULT_DIMMING,
   brightnessPercent,
   markerKinds,
+  NORTH_MAX,
+  NORTH_MIN,
   type RotationMode,
 } from "../viewer/navigation";
 import { placeIcon } from "./place-icon";
@@ -17,6 +19,9 @@ const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
 const rotationChoice = (mode: RotationMode, label: string, icon: string) =>
   `<label class="layer-toggle"><input type="radio" name="rotation-mode" id="rotation-${mode}" value="${mode}">${icon}<span>${label}</span></label>`;
+// A wheel of whole degrees, like the iOS Clock picker; the middle one is chosen.
+const northDegrees = Array.from({ length: NORTH_MAX - NORTH_MIN + 1 }, (_, i) =>
+  `<span aria-hidden="true">${String(NORTH_MIN + i).replace("-", "−")}°</span>`).join("");
 const brightnessChoices = BRIGHTNESS_LEVELS.map(
   (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
@@ -85,7 +90,7 @@ export const viewerMarkup = `
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
       <div id="north-field" class="panel-card" hidden>
-        <div class="panel-row stacked">${rowIcon(icons.north)}<label class="row-text" for="north-offset"><strong>Map north</strong><small id="north-help">Degrees clockwise from the top of the map</small></label><div class="north-adjust"><button type="button" id="north-less" aria-label="5° counterclockwise" title="5° counterclockwise">${icons.minus}</button><span class="north-value"><input id="north-offset" type="number" inputmode="numeric" min="-180" max="180" step="1" aria-describedby="north-help" enterkeyhint="done"><span aria-hidden="true">°</span></span><button type="button" id="north-more" aria-label="5° clockwise" title="5° clockwise">${icons.plus}</button></div></div>
+        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">North</strong><small id="north-help">Clockwise from map top</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" tabindex="0" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
       </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>

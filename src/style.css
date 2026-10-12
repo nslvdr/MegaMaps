@@ -1859,6 +1859,8 @@ dialog.place-card::backdrop {
   left: var(--edge-l);
   width: var(--surface-width);
   max-height: calc(100svh - var(--hud-top) - var(--hud-bottom) - var(--dock-h) - 68px);
+  /* Far from the home indicator, so no safe-area room below. */
+  padding-bottom: var(--space-20);
 }
 .sheet .dialog-title-icon {
   --accent: var(--c);
@@ -2044,58 +2046,66 @@ label.panel-row {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* Map north: steps of 5° either side of a field for exact degrees. */
-.north-adjust {
-  flex-basis: 100%;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  gap: var(--space-8);
-  align-items: center;
+/* Rotation help sits right under the modes; North follows when Auto is on. */
+#rotation-help {
+  margin-bottom: 0;
 }
-.north-adjust button {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-round);
-  background: var(--fill);
-  color: var(--c);
+#north-field {
+  margin-top: var(--space-12);
 }
-.north-adjust svg {
-  width: 20px;
-  height: 20px;
-}
-.north-value {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  font-size: var(--font-size-body);
-  font-weight: 600;
-}
-.north-value input {
-  width: 5.5ch;
-  min-height: 44px;
-  padding: 0;
-  border: 1px solid var(--glass-line);
+/* Map north: an iOS Clock-style wheel; the band marks the chosen degree. */
+.north-wheel {
+  position: relative;
+  flex-shrink: 0;
+  width: 84px;
   border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
+}
+.north-wheel::before {
+  content: "";
+  position: absolute;
+  inset: 32px 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+  pointer-events: none;
+}
+/* The mask would hide a focus ring on the track, so the wheel draws it. */
+.north-wheel:has(:focus-visible) {
+  outline: 2px solid var(--c);
+  outline-offset: 2px;
+}
+.north-track {
+  position: relative;
+  height: 96px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  outline: none;
+  mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+}
+.north-track::-webkit-scrollbar {
+  display: none;
+}
+/* One empty row above and below lets the first and last degrees reach the middle. */
+.north-track::before,
+.north-track::after {
+  content: "";
+  display: block;
+  height: 32px;
+}
+.north-track span {
+  display: block;
+  height: 32px;
+  line-height: 32px;
   text-align: center;
+  scroll-snap-align: center;
+  color: var(--muted);
+  font-size: var(--font-size-body);
   font-variant-numeric: tabular-nums;
-  appearance: textfield;
-  -moz-appearance: textfield;
 }
-.north-value input::-webkit-inner-spin-button,
-.north-value input::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.north-value input:focus-visible {
-  outline-color: var(--c);
+.north-track span.selected {
+  color: var(--text);
+  font-weight: 650;
 }
 /* Compact layer tiles keep the full surface tappable and expose native switch state. */
 .layer-toggles {

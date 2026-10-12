@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { legacyMarkerKinds, markerKinds, normalizeMarkerKind, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -24,6 +24,8 @@ export interface ShareManifest {
   routes: PlannedRoute[];
   /** Place and route photos, stored in this order after the manifest and before the map image. */
   photos?: SharePhoto[];
+  /** Where north is on the map, in degrees clockwise from its top; absent means unknown. */
+  northOffset?: number;
 }
 export interface SharedMap {
   manifest: ShareManifest;
@@ -142,11 +144,14 @@ export function validateManifest(value: unknown): ShareManifest {
         !integer(input.bytes, 1, MAX_FILE_BYTES)) invalid();
     image = { name: input.name, type: String(input.type), bytes: input.bytes };
   }
+  const north = value.northOffset;
+  if (north !== undefined && !integer(north, NORTH_MIN, NORTH_MAX)) invalid();
   if (!image && markers.length + routes.length === 0)
     throw new Error("Select at least one place or route, or include the map image.");
   return { format: "megamap", version: 3,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
-    ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}) };
+    ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
+    ...(north !== undefined ? { northOffset: north } : {}) };
 }
 const photoBytes = (manifest: ShareManifest) =>
   (manifest.photos ?? []).reduce((total, photo) => total + photo.bytes, 0);
