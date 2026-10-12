@@ -1889,6 +1889,14 @@ input[type="range"] {
   background: color-mix(in srgb, var(--c) 18%, transparent);
   color: var(--c);
 }
+/* With a mouse, show which row and which pill button a click will hit. */
+@media (hover: hover) {
+  .navigation-jump:hover .row-icon { background: #ffffff1f; }
+  .row-more:hover:not([aria-expanded="true"]) { background: #ffffff12; color: var(--text); }
+  .dock button:hover:not(:disabled, [aria-expanded="true"], [aria-pressed="true"], .active) {
+    background: #ffffff12;
+  }
+}
 /* Mounted beside the panel, outside its scrolling/clipping content. */
 .row-popover {
   position: absolute;
