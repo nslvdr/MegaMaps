@@ -10,7 +10,7 @@
 
 - Use only **Lucide icons**, except for the app logo.
 - Use only **three font sizes**, with **14px as the minimum**.
-- Keep header buttons (Close, Edit, Share) unified; Close is a plain **X** with Edit beside it.
+- Modal header buttons (Close, Edit, Share) share one tinted, outlined circle holding a Lucide icon at one size: **X**, **Pencil**, **Share2**. Edit sits beside Close.
 - No handles on modals. Show a scroll indicator only when content overflows.
 - Scrolling must follow the user's movement smoothly, without jumps or teleporting.
 - Clicking a place opens readable details first; editing requires an explicit Edit action.
