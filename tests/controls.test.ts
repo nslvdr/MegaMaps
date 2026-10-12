@@ -378,6 +378,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("open-add-label").textContent, "Add");
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
     controls.options().onMarker(state.markers[0]!);
+    assert.equal(pulses.at(-1), state.markers[0]!.id, "the place being edited pulses");
     assert.equal(entrance.checked, true);
     assert.equal(
       el("marker-note-field").hidden,

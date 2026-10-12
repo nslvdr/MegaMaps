@@ -455,6 +455,8 @@ export class ViewerControls {
   }
   private editMarker(marker: MapMarker) {
     this.openMarker("Edit place", marker.point, marker);
+    // Under the card's shade every pin looks alike; this one says it's the one.
+    this.viewer?.pulse?.(marker.id);
   }
   private spotlight() {
     const stage = this.el("map-stage");
