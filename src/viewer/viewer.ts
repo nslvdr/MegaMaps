@@ -403,16 +403,20 @@ export class Viewer {
   }
   /** Slides the map up just enough that a pin stays in sight above a card
    * whose top edge is at `edge` (in page coordinates). */
-  reveal(point: Point, edge: number) {
-    if (this.navigation.touchLocked) return;
+  /** Returns where the point settles on screen, in page coordinates. */
+  reveal(point: Point, edge: number): Point {
     const camera = this.destination ?? this.camera;
+    const rect = this.canvas.getBoundingClientRect();
+    const p = worldToScreen(camera, point);
     // The pin and its name stand above the point, so leave room for both.
     const top = 120,
-      bottom = edge - this.canvas.getBoundingClientRect().top - 40,
-      y = worldToScreen(camera, point).y;
-    if (y <= bottom || bottom < top) return;
-    this.interactions.reset();
-    this.animate({ ...camera, y: camera.y + bottom - y });
+      bottom = edge - rect.top - 40;
+    if (!this.navigation.touchLocked && p.y > bottom && bottom >= top) {
+      this.interactions.reset();
+      this.animate({ ...camera, y: camera.y + bottom - p.y });
+      p.y = bottom;
+    }
+    return { x: rect.left + p.x, y: rect.top + p.y };
   }
   // Frame a route or group of places, leaving room for the floating controls.
   fitPoints(points: Point[]) {

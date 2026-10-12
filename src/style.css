@@ -1397,9 +1397,25 @@ button.glass:active:not(:disabled) {
   --dialog-from: 32px;
   margin-bottom: max(10px, env(safe-area-inset-bottom));
 }
-/* Lighter scrim: the spot being marked stays visible above the card. */
+/* Lighter scrim, clear around the spot being marked (set from script), so
+   that pin keeps its colour. Fades by opacity: gradients don't interpolate. */
+dialog.place-card::backdrop {
+  background: radial-gradient(circle at var(--spot-x, 50%) var(--spot-y, -200px),
+    transparent 34px, rgb(0 0 0 / 0.35) 80px);
+  opacity: 0;
+  transition:
+    opacity 0.16s,
+    overlay 0.16s allow-discrete,
+    display 0.16s allow-discrete;
+}
 .place-card[open]::backdrop {
-  background: rgb(0 0 0 / 0.35);
+  opacity: 1;
+  transition-duration: 0.26s;
+}
+@starting-style {
+  .place-card[open]::backdrop {
+    opacity: 0;
+  }
 }
 .place-card h2 {
   margin-bottom: 10px;

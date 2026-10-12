@@ -92,6 +92,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     reveal(point) {
       reveals.push(point);
+      return { x: 40, y: 300 };
     },
   });
   const el = (id: string) => document.getElementById(id)!;
@@ -333,6 +334,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "landmark" }, "the new pin shows where it goes");
     assert.deepEqual(reveals.at(-1), { x: 500, y: 600 }, "the map keeps the spot clear of the card");
+    assert.equal(el("marker-dialog").style.getPropertyValue("--spot-y"), "300px", "and the scrim lights it");
     assert.notEqual(
       document.activeElement,
       el("marker-label"),

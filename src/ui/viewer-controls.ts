@@ -318,8 +318,11 @@ export class ViewerControls {
     if (!marker) this.viewer?.previewPlace?.({ point, kind });
     const card = this.dialog("marker-dialog");
     showDialog(card);
-    // The card covers the bottom of the map; keep the place it's about in sight.
-    this.viewer?.reveal?.(point, card.offsetTop);
+    // The card covers the bottom of the map; keep the place it's about in sight,
+    // lit through the scrim.
+    const spot = this.viewer?.reveal?.(point, card.offsetTop);
+    card.style.setProperty("--spot-x", spot ? `${spot.x}px` : "");
+    card.style.setProperty("--spot-y", spot ? `${spot.y}px` : "");
   }
   private notes(open: boolean) {
     this.el("marker-note-field").hidden = !open;
