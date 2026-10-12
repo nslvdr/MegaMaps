@@ -1242,6 +1242,15 @@ button.glass:active:not(:disabled) {
   width: 19px;
   height: 19px;
 }
+/* Touch targets reach the bar's edges and split the gap between them. */
+.tool-actions button {
+  position: relative;
+}
+.tool-actions button::after {
+  content: "";
+  position: absolute;
+  inset: -4px -3px;
+}
 .tool-undo {
   width: 38px;
   padding: 0;
