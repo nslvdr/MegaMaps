@@ -12,6 +12,7 @@ import { displayName, formatBytes, lastUsed, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
+import { darkMode, measureTone } from "./viewer/appearance";
 import { initLibraryFooter } from "./ui/library-footer";
 import { initKeyboardInset } from "./ui/keyboard-inset";
 import { loadOcr } from "./storage/ocr";
@@ -115,6 +116,25 @@ let importing: AbortController | undefined,
 // Library previews by map id. A map's tiles never change, so returning home
 // reuses them instead of reading storage and flashing placeholders again.
 const thumbnails = new Map<string, string>();
+// A map shown dark is previewed dark too, the way the viewer tones it, rather
+// than as the brightest thing on a black screen.
+const darkFilters = new Map<string, Promise<string>>();
+function darkFilter(id: string, url: string) {
+  let filter = darkFilters.get(id);
+  if (!filter) {
+    filter = fetch(url)
+      .then((response) => response.blob())
+      .then(createImageBitmap)
+      .then((bitmap) => {
+        const tone = measureTone(bitmap);
+        bitmap.close();
+        return darkMode(tone).filter;
+      })
+      .catch(() => "");
+    darkFilters.set(id, filter);
+  }
+  return filter;
+}
 const channel =
   typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel("map-viewer-library")
@@ -382,6 +402,7 @@ async function refresh() {
     if (!maps.some((map) => map.id === id)) {
       URL.revokeObjectURL(url);
       thumbnails.delete(id);
+      darkFilters.delete(id);
     }
   // Behind an open map the grid is unseen; going home renders it afresh.
   if (home.hidden) return;
@@ -404,9 +425,10 @@ async function refresh() {
     );
     const saved = card.querySelector(".map-saved")!;
     // Leaving a map may still be writing its last edits.
-    void pendingViewSave
+    const navigation = pendingViewSave
       .catch(() => {})
-      .then(() => loadNavigation(map.id))
+      .then(() => loadNavigation(map.id));
+    void navigation
       .then(({ markers, routes }) => {
         if (version !== renderVersion) return;
         const items = [
@@ -449,8 +471,12 @@ async function refresh() {
       ]),
     );
     grid.append(card);
-    const showThumbnail = (url: string) => {
+    const showThumbnail = async (url: string) => {
+      const inverted = await navigation.then((state) => state.inverted, () => false);
+      const filter = inverted ? await darkFilter(map.id, url) : "";
+      if (version !== renderVersion) return;
       const img = new Image();
+      img.style.filter = filter;
       img.src = url;
       img.alt = "";
       img.loading = "lazy";
@@ -461,7 +487,7 @@ async function refresh() {
     };
     const cached = thumbnails.get(map.id);
     if (cached) {
-      showThumbnail(cached);
+      void showThumbnail(cached);
       continue;
     }
     void payloadStore(map.backend)
@@ -473,7 +499,7 @@ async function refresh() {
           url = URL.createObjectURL(blob);
           thumbnails.set(map.id, url);
         }
-        if (version === renderVersion) showThumbnail(url);
+        if (version === renderVersion) void showThumbnail(url);
       })
       .catch(() => {
         card.querySelector(".thumbnail-placeholder")!.textContent =
