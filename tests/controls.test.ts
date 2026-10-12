@@ -29,7 +29,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       value: () => dialog.setAttribute("open", ""),
     });
     Object.defineProperty(dialog, "close", {
-      value: () => dialog.removeAttribute("open"),
+      value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      },
     });
   }
   const root = document.querySelector<HTMLElement>("#viewer")!;
@@ -240,13 +244,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("sheet-dismiss");
     assert.equal(sheet.hidden, true);
 
-    // Brightness offers exactly three persistent choices, with 85% selected by default.
+    // Brightness offers five persistent choices, with 85% selected by default.
     assert.equal(state.dimming, 0.85);
     assert.equal((el("brightness-85") as HTMLInputElement).checked, true);
-    for (const percent of [100, 60, 85]) {
+    const brightnessOptions = [100, 85, 75, 65, 55];
+    for (const percent of brightnessOptions) {
       check(`brightness-${percent}`, true);
       assert.equal(state.dimming, percent / 100);
-      for (const option of [100, 85, 60])
+      for (const option of brightnessOptions)
         assert.equal((el(`brightness-${option}`) as HTMLInputElement).checked, option === percent);
       await controls.flush();
       assert.equal((await loadNavigation("controls")).dimming, percent / 100);
@@ -351,9 +356,26 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("open-saved") as HTMLButtonElement).disabled, false);
     assert.equal((el("map-search") as HTMLInputElement).disabled, false);
     controls.options().onMarker(state.markers[0]!);
-    assert.equal(pulses.at(-1), state.markers[0]!.id, "the place being edited pulses");
-    assert.deepEqual(jumps.at(-1), state.markers[0]!.point, "opening a place centers it before revealing it above the card");
+    assert.equal(pulses.at(-1), state.markers[0]!.id, "the place being read pulses");
+    assert.deepEqual(jumps.at(-1), state.markers[0]!.point, "opening a place centers it in the map above its details");
     assert.equal(requestedZooms.at(-1), 1, "opening a place requests native detail zoom");
+    assert.equal(el("marker-form").hidden, true, "a place opens as information, not an editing form");
+    assert.equal(el("marker-dialog-title").textContent, "<Entrance>");
+    assert.equal(el("marker-detail-kind").textContent, "Entrance");
+    assert.equal(el("marker-detail-note").textContent, "Left opening");
+    assert.equal(el("marker-details").querySelector("Entrance"), null, "place information remains literal text");
+    assert.equal(el("marker-edit").nextElementSibling, el("marker-cancel"), "Edit sits beside Close");
+    click("marker-edit");
+    assert.equal(el("marker-form").hidden, false);
+    assert.equal(el("marker-details").hidden, true);
+    input("marker-note", "Unsaved changes");
+    const cancelEdit = new window.Event("cancel", { cancelable: true });
+    el("marker-dialog").dispatchEvent(cancelEdit);
+    assert.equal(cancelEdit.defaultPrevented, true, "Escape returns to reading rather than closing the pane");
+    assert.equal(el("marker-form").hidden, true);
+    assert.equal(el("marker-detail-note").textContent, "Left opening", "canceling leaves the original note intact");
+    assert.equal(state.markers[0]?.note, "Left opening");
+    click("marker-edit");
     assert.equal(entrance.checked, true);
     assert.equal(
       el("marker-note-field").hidden,
@@ -370,6 +392,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(save.defaultPrevented, true);
     assert.equal(state.markers[0]?.note, "Updated note");
     assert.equal(state.markers.length, 1);
+    assert.equal(el("marker-form").hidden, true, "saving returns to readable information");
+    assert.equal(el("marker-detail-note").textContent, "Updated note");
+    click("marker-cancel");
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
     // Saved list renders names as text, never markup.
     assert.match(el("marker-list").textContent!, /<Entrance>/);
     assert.equal(el("saved-places-count").textContent, "1");
@@ -440,7 +466,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(jumps.at(-1), state.markers[0]!.point);
     assert.equal(pulses.at(-1), state.markers[0]!.id, "the place pulses once the map arrives");
     assert.equal(requestedZooms.at(-1), 1, "Saved places request the same detail zoom");
-    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "the keyboard carries on from the map");
+    assert.equal(el("marker-dialog").hasAttribute("open"), true, "Saved places open the same detail view");
+    assert.equal(el("marker-form").hidden, true);
+    assert.ok(focus.mock.calls.at(-1)?.this !== el("map-canvas"), "opening details does not focus the inert map");
+    click("marker-cancel");
     // An application role names the map and hands it the arrow keys from screen readers.
     assert.equal(el("map-canvas").getAttribute("role"), "application");
     assert.match(el("map-canvas").getAttribute("aria-label")!, /^Map: .*Arrows pan/);
@@ -934,9 +963,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const before = order();
     assert.ok(before.length > 1);
     controls.options().onMarker(state.markers[0]!);
+    click("marker-edit");
     submit("marker-form");
     assert.equal(el("toast").textContent, `${before[0]} unchanged`);
     controls.options().onMarker(state.markers[0]!);
+    click("marker-edit");
     input("marker-label", "Upper exit");
     submit("marker-form");
     assert.equal(el("toast").textContent, "Upper exit updated");
@@ -944,6 +975,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
 
     // Move on the card keeps the typed edits, then lifts the pin.
     controls.options().onMarker(state.markers[0]!);
+    click("marker-edit");
     assert.equal(el("marker-move").hidden, false, "an existing place can move from its card");
     input("marker-label", "Upper exit");
     click("marker-move");
@@ -958,11 +990,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // The card's Delete takes two taps, like the Saved menu's.
     const deleteLabel = () => el("marker-delete").querySelector("span")!.textContent;
     controls.options().onMarker(state.markers[0]!);
+    click("marker-edit");
     click("marker-delete");
     assert.equal(state.markers.length, before.length, "one tap only arms Delete");
     assert.equal(deleteLabel(), "Tap again");
     assert.equal(el("marker-delete").classList.contains("armed"), true, "armed Delete fills red");
     controls.options().onMarker(state.markers[0]!);
+    click("marker-edit");
     assert.equal(deleteLabel(), "Delete", "reopening the card disarms it");
     click("marker-delete");
     click("marker-delete");
@@ -979,4 +1013,98 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     await controls.flush();
   }
   assert.equal(stage.classList.contains("spotlight"), false);
+});
+
+test("place details read long notes safely and expand while scrolling", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const card = document.getElementById("marker-dialog")!;
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const map: MapRecord = {
+    id: "place-reading", name: "cave.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  const note = "<img src=x onerror=alert(1)>\n" + "A detailed observation.\n".repeat(150);
+  const marker = {
+    id: "reading-place", point: { x: 500, y: 600 }, label: "<Entrance>",
+    note, kind: "entrance" as const, created: 0,
+  };
+  state.markers = [marker];
+  const original = structuredClone(marker);
+  const centered: { point: Point; animated: boolean | undefined }[] = [];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool() {}, updateNavigation() {}, fitPoints() {},
+    jumpTo(point, _minimumScale, animated) { centered.push({ point, animated }); },
+  });
+  const details = document.getElementById("marker-details")!,
+    noteElement = document.getElementById("marker-detail-note")!,
+    editor = document.getElementById("marker-form")!;
+  let contentHeight = 2000;
+  Object.defineProperty(details.querySelector(".place-detail-content")!, "scrollHeight", {
+    get: () => contentHeight,
+  });
+  Object.defineProperty(details, "clientHeight", { value: 200 });
+  // Linkedom lacks layout; these are the pane's collapsed/maximum CSS heights.
+  Object.defineProperty(globalThis, "getComputedStyle", {
+    value: () => ({ minHeight: "400px", maxHeight: "700px" }), configurable: true,
+  });
+  const scroll = (top: number) => {
+    details.scrollTop = top;
+    details.dispatchEvent(new window.Event("scroll"));
+  };
+  try {
+    controls.options().onMarker(marker);
+    assert.equal(editor.hidden, true);
+    assert.equal(noteElement.textContent, note, "long notes retain every line");
+    assert.equal(noteElement.querySelector("img"), null, "notes cannot inject markup");
+    assert.deepEqual(state.markers[0], original, "reading does not modify the place");
+    assert.equal(details.dataset.expandable, "true");
+    assert.equal(details.getAttribute("tabindex"), "0", "overflowing notes can be scrolled from the keyboard");
+    scroll(20);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "20px", "a small scroll only unfolds that distance");
+    assert.deepEqual(centered.at(-1), { point: marker.point, animated: false }, "the map follows pane movement without a separate glide");
+    scroll(35);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "35px", "growth follows subsequent scroll distance");
+    scroll(300);
+    const centeredAtMaximum = centered.length;
+    scroll(500);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "300px", "the pane stays at its maximum while notes keep scrolling");
+    assert.equal(centered.length, centeredAtMaximum, "ordinary note scrolling does not move the map");
+    scroll(450);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "300px");
+    scroll(240);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "240px", "scrolling back unfolds the pane in reverse");
+    scroll(0);
+    for (const type of ["wheel", "touchmove"]) {
+      const event = new window.Event(type, { cancelable: true });
+      details.dispatchEvent(event);
+      assert.equal(event.defaultPrevented, false, "native input and touch momentum are not intercepted");
+    }
+    contentHeight = 80;
+    marker.note = "";
+    controls.options().onMarker(marker);
+    assert.equal(details.dataset.expandable, "false", "short notes need no extra scroll distance");
+    assert.equal(details.getAttribute("tabindex"), "-1", "short notes do not add an unnecessary tab stop");
+    assert.equal(noteElement.textContent, "No notes yet.");
+    document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
+    assert.equal(card.hasAttribute("open"), false);
+    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "");
+  } finally {
+    await controls.dispose();
+  }
 });

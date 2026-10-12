@@ -12,17 +12,36 @@
   --neon-lock: #ff9a3c;
   --kind-route: #38d6ff;
   --kind-place: #ff9a5c;
-  /* Inputs, panels, and cards / dialogs / sheets. */
+  /* Shared type scale across the library, dialogs, and viewer. */
+  --font-size-small: 14px;
+  --font-size-body: 16px;
+  --font-size-heading: 24px;
+  /* Shared spacing for surfaces, controls, and content. */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --control-padding: var(--space-12) var(--space-16);
+  --row-padding: var(--space-8) var(--space-12);
+  /* Inputs, cards/controls, and primary surfaces. */
   --radius-sm: 12px;
   --radius-md: 18px;
   --radius-lg: 28px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
   --button-h: 50px;
+  --icon-button-size: 44px;
   /* One footprint for the library, dialogs, panels, and their controls. */
-  --edge-l: max(10px, env(safe-area-inset-left));
-  --edge-r: max(10px, env(safe-area-inset-right));
+  --edge-l: max(var(--space-12), env(safe-area-inset-left));
+  --edge-r: max(var(--space-12), env(safe-area-inset-right));
   --surface-max-width: 520px;
   --surface-width: min(var(--surface-max-width), calc(100vw - var(--edge-l) - var(--edge-r)));
   --surface-left: max(var(--edge-l), calc((100vw - var(--surface-max-width) + var(--edge-l) - var(--edge-r)) / 2));
+  --surface-padding: var(--space-20) var(--space-20) max(var(--space-20), env(safe-area-inset-bottom));
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -32,7 +51,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 * {
   box-sizing: border-box;
@@ -92,11 +111,11 @@ svg {
 /* ---------- Library ---------- */
 .home {
   --accent: var(--neon-add);
-  --home-top: calc(20px + env(safe-area-inset-top));
+  --home-top: calc(var(--space-20) + env(safe-area-inset-top));
   width: var(--surface-width);
   /* Center in the usable area, including asymmetric landscape safe areas. */
   margin: 0 auto 0 var(--surface-left);
-  padding: var(--home-top) 0 calc(16px + env(safe-area-inset-bottom));
+  padding: var(--home-top) 0 calc(var(--space-16) + env(safe-area-inset-bottom));
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -117,13 +136,13 @@ svg {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   flex-wrap: wrap;
 }
 .library-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
 }
 .library-logo {
   display: block;
@@ -136,27 +155,27 @@ svg {
   place-items: center;
   color: var(--neon-saved);
   border: 1px solid color-mix(in srgb, var(--neon-saved) 35%, transparent);
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   width: 48px;
   height: 48px;
 }
 .header h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: var(--font-size-heading);
   font-weight: 700;
   letter-spacing: -0.6px;
 }
 .update-app {
-  font-size: 12px;
+  font-size: var(--font-size-small);
   font-weight: 650;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--space-8);
   white-space: nowrap;
   min-height: 44px;
-  padding: 10px 12px;
-  border-radius: 99px;
+  padding: var(--control-padding);
+  border-radius: var(--radius-md);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
 }
@@ -170,21 +189,21 @@ svg {
 }
 .library-actions {
   display: grid;
-  margin: 28px 0;
+  margin: var(--space-24) 0;
 }
 .library-action {
   --c: var(--neon-saved);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 14px 12px;
+  gap: var(--space-12);
+  padding: var(--control-padding);
   min-height: 64px;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: #000;
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 650;
 }
 .library-action.import-trigger {
@@ -214,37 +233,44 @@ svg {
   flex: 1;
 }
 .section-heading {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-12);
 }
 h2 {
-  font-size: 20px;
+  font-size: var(--font-size-heading);
   letter-spacing: -0.4px;
   font-weight: 650;
   margin: 0;
 }
+h3 {
+  font-size: var(--font-size-body);
+  margin: var(--space-16) 0 var(--space-8);
+}
+small {
+  font-size: var(--font-size-small);
+}
 .section-heading h2 {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--space-8);
+  font-size: var(--font-size-small);
   color: var(--neon-saved);
   font-weight: 600;
 }
 .section-heading h2 span {
-  padding: 3px 9px;
-  border-radius: 99px;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--neon-saved) 12%, #000);
   font-variant-numeric: tabular-nums;
 }
 .map-list {
   display: grid;
-  gap: 10px;
+  gap: var(--space-12);
 }
 .map-card {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding-right: 6px;
+  gap: var(--space-4);
+  padding-right: var(--space-8);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
   border-radius: var(--radius-lg);
@@ -253,12 +279,12 @@ h2 {
 .map-open {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-12);
   flex: 1;
   min-width: 0;
   background: none;
   text-align: left;
-  padding: 12px;
+  padding: var(--row-padding);
 }
 /* The card clips the open button's ring to a sliver, so the card shows it. */
 .map-card:has(.map-open:focus-visible) {
@@ -295,7 +321,7 @@ h2 {
   display: grid;
   place-items: center;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-small);
   text-align: center;
 }
 .thumbnail-placeholder svg {
@@ -306,16 +332,16 @@ h2 {
   min-width: 0;
 }
 .map-details h3 {
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
-  margin: 0 0 5px;
+  margin: 0 0 var(--space-4);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .map-saved,
 .map-meta {
-  font-size: 13px;
+  font-size: var(--font-size-small);
   color: var(--muted);
   margin: 0;
 }
@@ -327,8 +353,8 @@ h2 {
   color: var(--muted);
 }
 .map-meta {
-  margin-top: 3px;
-  font-size: 12px;
+  margin-top: var(--space-4);
+  font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
 }
 .map-meta span {
@@ -340,7 +366,7 @@ h2 {
   flex-shrink: 0;
   background: none;
   color: var(--muted);
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   width: 44px;
   height: 44px;
 }
@@ -363,7 +389,7 @@ h2 {
 .empty {
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
   border-radius: var(--radius-lg);
-  padding: 36px 20px;
+  padding: var(--space-32) var(--space-20);
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s, background-color 0.2s;
@@ -375,8 +401,8 @@ h2 {
 }
 .empty .empty-drop {
   display: none;
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: var(--space-12);
+  font-size: var(--font-size-small);
 }
 @media (hover: hover) and (pointer: fine) {
   .empty .empty-drop {
@@ -384,30 +410,30 @@ h2 {
   }
 }
 .empty-icon {
-  margin: 0 auto 20px;
+  margin: 0 auto var(--space-20);
   width: 64px;
   height: 64px;
 }
 .empty h3 {
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-8);
 }
 .empty p {
-  font-size: 14px;
+  font-size: var(--font-size-small);
   line-height: 1.6;
   color: var(--muted);
   margin: 0;
 }
 .library-footer {
-  margin-top: 28px;
+  margin-top: var(--space-24);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding-top: 14px;
+  gap: var(--space-16);
+  padding-top: var(--space-16);
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--font-size-small);
   line-height: 1.6;
   color: var(--muted);
 }
@@ -426,8 +452,8 @@ h2 {
   display: inline-block;
   width: 5px;
   height: 5px;
-  margin-right: 6px;
-  border-radius: 50%;
+  margin-right: var(--space-8);
+  border-radius: var(--radius-round);
   background: var(--muted);
   vertical-align: middle;
 }
@@ -440,8 +466,8 @@ h2 {
 @media (max-width: 360px) {
   .library-action {
     flex-direction: column;
-    gap: 6px;
-    font-size: 13px;
+    gap: var(--space-8);
+    font-size: var(--font-size-small);
   }
 }
 
@@ -457,11 +483,11 @@ dialog {
   left: var(--edge-l);
   right: var(--edge-r);
   max-height: calc(
-    100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
+    100dvh - var(--space-24) - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
       var(--keyboard-inset, 0px)
   );
   margin: auto;
-  padding: 22px 20px 20px;
+  padding: var(--surface-padding);
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--bg);
@@ -485,6 +511,21 @@ dialog[open] {
   transform: none;
   transition-duration: 0.26s;
   transition-timing-function: var(--ease-out);
+}
+/* Native scroll indicators appear only when modal or panel content overflows. */
+:is(dialog, .sheet-content, .place-details, .share-items) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+:is(dialog, .sheet-content, .place-details, .share-items)::-webkit-scrollbar {
+  width: 6px;
+}
+:is(dialog, .sheet-content, .place-details, .share-items)::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: var(--radius-pill);
+}
+:is(dialog, .sheet-content, .place-details, .share-items)::-webkit-scrollbar-track {
+  background: transparent;
 }
 @starting-style {
   dialog[open] {
@@ -514,7 +555,7 @@ dialog[open]::backdrop {
     --dialog-from: 32px;
     /* With the keyboard up, sit just above it rather than under it. */
     margin-bottom: max(
-      10px + var(--keyboard-inset, 0px),
+      var(--space-12) + var(--keyboard-inset, 0px),
       env(safe-area-inset-bottom)
     );
   }
@@ -532,7 +573,7 @@ dialog[open]::backdrop {
 .delete-map {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   color: var(--text);
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -542,7 +583,7 @@ dialog[open]::backdrop {
   height: 44px;
   flex-shrink: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .delete-thumb img {
@@ -552,9 +593,9 @@ dialog[open]::backdrop {
   object-fit: cover;
 }
 dialog h2 {
-  font-size: 20px;
+  font-size: var(--font-size-heading);
   line-height: 1.3;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-8);
   overflow-wrap: anywhere;
 }
 /* Dialog headings receive opening focus without looking like a selected control. */
@@ -563,25 +604,25 @@ dialog h2[autofocus]:focus {
 }
 dialog p {
   color: var(--muted);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   line-height: 1.6;
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-12);
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
 .dialog-header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--space-16);
+  margin-bottom: var(--space-16);
 }
 .dialog-header h2,
 .sheet-header h2 {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 9px 0;
-  line-height: 26px;
+  padding: 0;
+  line-height: 28px;
 }
 /* Align the icon with the first title line, including titles that wrap. */
 .dialog-title-icon {
@@ -590,7 +631,7 @@ dialog p {
   flex: none;
   width: 24px;
   height: 24px;
-  margin-top: 10px;
+  margin-top: calc((28px - 24px) / 2);
   color: var(--accent);
 }
 .dialog-title-icon svg {
@@ -598,36 +639,43 @@ dialog p {
   width: 24px;
 }
 .dialog-close,
-.sheet-close {
+.sheet-close,
+.sheet-share {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--muted);
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  padding: var(--space-8);
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .dialog-close svg,
-.sheet-close svg {
-  width: 28px;
-  height: 28px;
+.sheet-close svg,
+.sheet-share svg {
+  width: 100%;
+  height: 100%;
 }
 .dialog-close:active:not(:disabled),
-.sheet-close:active:not(:disabled) {
-  color: var(--text);
+.sheet-close:active:not(:disabled),
+.sheet-share:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg));
 }
 @media (hover: hover) {
   .dialog-close:hover:not(:disabled),
-  .sheet-close:hover:not(:disabled) {
-    color: var(--text);
+  .sheet-close:hover:not(:disabled),
+  .sheet-share:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
   }
 }
 dialog .dialog-note {
-  font-size: 13px;
+  font-size: var(--font-size-small);
   line-height: 1.55;
-  margin: 16px 0;
+  margin: var(--space-16) 0;
 }
 dialog .dialog-error {
   color: var(--danger);
@@ -635,8 +683,8 @@ dialog .dialog-error {
 .progress-track {
   height: 6px;
   background: color-mix(in srgb, var(--accent) 16%, #000);
-  border-radius: 6px;
-  margin: 20px 0 12px;
+  border-radius: var(--radius-pill);
+  margin: var(--space-20) 0 var(--space-12);
   overflow: hidden;
 }
 #progress-fill,
@@ -647,10 +695,10 @@ dialog .dialog-error {
 }
 .progress-info {
   display: flex;
-  gap: 10px;
+  gap: var(--space-12);
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--font-size-small);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -659,8 +707,8 @@ dialog .dialog-error {
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
+  gap: var(--space-8);
+  margin-top: var(--space-20);
 }
 .dialog-actions > button {
   flex: 1 1 0;
@@ -675,12 +723,12 @@ dialog .dialog-error {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   min-height: var(--button-h);
-  padding: 12px 18px;
-  border-radius: 99px;
+  padding: var(--control-padding);
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 650;
 }
 .primary,
@@ -759,7 +807,7 @@ dialog > button {
   width: 100%;
 }
 #message-dialog .primary {
-  margin-top: 8px;
+  margin-top: var(--space-8);
 }
 
 /* Updates: explain what changes before downloading, then show each step. */
@@ -778,10 +826,10 @@ dialog > button {
 }
 .update-facts {
   display: grid;
-  gap: 10px;
+  gap: var(--space-12);
   list-style: none;
-  margin: 16px 0 0;
-  padding: 14px 16px;
+  margin: var(--space-16) 0 0;
+  padding: var(--space-16) var(--space-16);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #ffffff08;
@@ -789,19 +837,19 @@ dialog > button {
 .update-facts li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  font-size: 14px;
+  gap: var(--space-12);
+  font-size: var(--font-size-small);
   line-height: 1.45;
 }
 .update-facts svg {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  margin-top: 1px;
+  margin-top: var(--space-2);
   color: var(--accent);
 }
 .update-progress .progress-track {
-  margin-top: 18px;
+  margin-top: var(--space-16);
 }
 .progress-track.indeterminate .progress-fill {
   width: 35%;
@@ -824,8 +872,8 @@ dialog > button {
 dialog form > label {
   display: block;
   color: var(--muted);
-  font-size: 14px;
-  margin: 16px 0;
+  font-size: var(--font-size-small);
+  margin: var(--space-16) 0;
 }
 dialog form > label small {
   opacity: 0.7;
@@ -840,9 +888,9 @@ dialog textarea {
   color: var(--text);
   border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 17px;
-  padding: 12px 14px;
-  margin-top: 6px;
+  font-size: var(--font-size-body);
+  padding: var(--control-padding);
+  margin-top: var(--space-8);
   min-height: 50px;
   transition:
     border-color 0.15s,
@@ -872,17 +920,17 @@ dialog textarea {
   background: #000;
   z-index: 10;
   overscroll-behavior: none;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   user-select: none;
   -webkit-user-select: none;
-  --hud-top: max(10px, calc(env(safe-area-inset-top) + 2px));
+  --hud-top: max(var(--space-12), calc(env(safe-area-inset-top) + var(--space-2)));
   /* Sits just above the home indicator instead of a full safe-area gap, or
      just above the keyboard while typing (search). */
   --hud-bottom: max(
-    12px + var(--keyboard-inset, 0px),
-    calc(env(safe-area-inset-bottom) - 10px)
+    var(--space-12) + var(--keyboard-inset, 0px),
+    calc(env(safe-area-inset-bottom) - var(--space-12))
   );
-  --dock-h: 54px;
+  --dock-h: calc(var(--icon-button-size) + var(--space-8) + 2px);
   /* Solid black controls: neon on pure black, like the dark map itself. */
   --glass: #000;
   --glass-strong: #000;
@@ -985,7 +1033,7 @@ dialog textarea {
 .map-callout > text {
   fill: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 500;
 }
 .map-callout-icon {
@@ -1019,7 +1067,7 @@ button.glass:active:not(:disabled) {
   width: 44px;
   height: 44px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
 }
 .corner-button svg {
   width: 20px;
@@ -1034,7 +1082,7 @@ button.glass:active:not(:disabled) {
   top: var(--hud-top);
   right: var(--edge-r);
   display: flex;
-  gap: 6px;
+  gap: var(--space-8);
 }
 .status-chip {
   display: grid;
@@ -1042,7 +1090,7 @@ button.glass:active:not(:disabled) {
   width: 44px;
   height: 44px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   color: var(--c);
 }
 .status-chip svg {
@@ -1065,10 +1113,10 @@ button.glass:active:not(:disabled) {
   max-width: var(--surface-width);
   width: max-content;
   margin: 0;
-  padding: 10px 18px;
-  border-radius: 99px;
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-pill);
   background: var(--glass-strong);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   text-align: center;
   /* Longer messages wrap to two even lines, not a line and a stray word. */
   text-wrap: balance;
@@ -1083,22 +1131,22 @@ button.glass:active:not(:disabled) {
 .toast:has(.toast-undo:not([hidden])) {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 5px 5px 5px 18px;
+  gap: var(--space-12);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-16);
   text-align: left;
 }
 .toast-undo {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
   flex-shrink: 0;
   height: 34px;
-  padding: 0 14px 0 11px;
-  border-radius: 17px;
+  padding: 0 var(--space-16) 0 var(--space-12);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--neon-add) 14%, #000);
   color: var(--neon-add);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 650;
   pointer-events: auto;
 }
@@ -1140,22 +1188,22 @@ button.glass:active:not(:disabled) {
   bottom: var(--hud-bottom);
   height: var(--dock-h);
   display: flex;
-  gap: 6px;
-  padding: 3px;
-  border-radius: 27px;
+  gap: var(--space-8);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
 }
 .dock > button {
   flex: none;
   min-width: 0;
-  width: calc(var(--dock-h) - 8px);
-  height: calc(var(--dock-h) - 8px);
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
   display: grid;
   place-items: center;
-  padding: 0;
-  border-radius: 50%;
+  padding: var(--space-8);
+  border-radius: var(--radius-round);
   background: none;
   color: #f2f4f6;
-  font-size: 11px;
+  font-size: var(--font-size-small);
   font-weight: 650;
   letter-spacing: 0.01em;
   transition:
@@ -1167,8 +1215,8 @@ button.glass:active:not(:disabled) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent);
 }
 .dock > button svg {
-  width: 65%;
-  height: 65%;
+  width: 100%;
+  height: 100%;
 }
 .dock svg {
   width: 21px;
@@ -1192,10 +1240,10 @@ button.glass:active:not(:disabled) {
   align-items: center;
   align-self: center;
   height: calc(var(--dock-h) - 10px);
-  gap: 8px;
-  padding: 0 10px;
+  gap: var(--space-8);
+  padding: 0 var(--space-12);
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--radius-sm);
   background: #121212;
   transition: border-color 0.15s;
 }
@@ -1223,7 +1271,7 @@ button.glass:active:not(:disabled) {
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 #map-search:focus-visible {
   outline: none;
@@ -1251,16 +1299,16 @@ button.glass:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-12);
   flex: none;
   min-width: 32px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 var(--space-16);
   border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
-  border-radius: 22px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--c) 14%, var(--bg));
   color: var(--c);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1292,7 +1340,7 @@ button.glass:active:not(:disabled) {
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--fill-strong);
   color: var(--muted);
 }
@@ -1316,13 +1364,13 @@ button.glass:active:not(:disabled) {
 .map-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 20px 0 12px;
+  gap: var(--space-8);
+  margin: var(--space-20) 0 var(--space-12);
 }
 .map-options button {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   text-align: left;
 }
 .map-options svg {
@@ -1352,12 +1400,12 @@ button.glass:active:not(:disabled) {
   position: absolute;
   bottom: calc(var(--hud-bottom) + var(--dock-h) + 16px);
   text-align: center;
-  font-size: 14px;
+  font-size: var(--font-size-small);
   line-height: 1.5;
   color: #ffd4c0;
   background: #34201aee;
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-12);
   margin: auto;
   z-index: 6;
   pointer-events: none;
@@ -1404,7 +1452,7 @@ button.glass:active:not(:disabled) {
 }
 .add-bar {
   display: flex;
-  gap: 10px;
+  gap: var(--space-12);
 }
 .add-choice {
   flex: 1;
@@ -1413,10 +1461,10 @@ button.glass:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  border-radius: 27px;
+  gap: var(--space-8);
+  border-radius: var(--radius-md);
   border-color: color-mix(in srgb, var(--c) 35%, transparent);
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 650;
 }
 .add-choice svg {
@@ -1438,24 +1486,24 @@ button.glass:active:not(:disabled) {
   min-height: 46px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px;
-  border-radius: 23px;
+  gap: var(--space-12);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
   border-color: color-mix(in srgb, var(--c) 40%, transparent);
 }
 .tool-hint {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 0 12px;
-  font-size: 14px;
+  padding: 0 var(--space-12);
+  font-size: var(--font-size-small);
   line-height: 18px;
   color: #c9ced4;
 }
 .tool-hint strong {
   color: var(--text);
   font-weight: 650;
-  margin-right: 6px;
+  margin-right: var(--space-8);
 }
 /* Beside Undo and Done the hint is too long for one line; give it its own
    line under the title instead of wrapping mid-sentence. */
@@ -1465,17 +1513,17 @@ button.glass:active:not(:disabled) {
 .tool-actions {
   flex-shrink: 0;
   display: flex;
-  gap: 6px;
+  gap: var(--space-8);
 }
 .tool-actions button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-8);
   height: 38px;
-  border-radius: 19px;
+  border-radius: var(--radius-md);
   background: var(--fill-strong);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 650;
 }
 .tool-actions svg {
@@ -1496,7 +1544,7 @@ button.glass:active:not(:disabled) {
   padding: 0;
 }
 .tool-done {
-  padding: 0 16px 0 12px;
+  padding: 0 var(--space-16) 0 var(--space-12);
 }
 .tool-done:not(:disabled) {
   background: var(--c);
@@ -1506,12 +1554,78 @@ button.glass:active:not(:disabled) {
   opacity: 0.4;
 }
 
-/* New / edit place: a card at the bottom, within thumb reach. Kinds are the
-   map's own pins; the name is prefilled so Save works without typing. */
+/* Place details and editing share a bottom card, within thumb reach. New
+   places use the map's own pins and a prefilled name. */
 .place-card {
   --accent: var(--c);
   --dialog-from: 32px;
-  margin-bottom: max(10px, env(safe-area-inset-bottom));
+  margin-bottom: max(var(--space-12) + var(--keyboard-inset, 0px), env(safe-area-inset-bottom));
+}
+/* Reading a place reserves the lower half; the map centers in the upper half. */
+.viewer {
+  --place-pane-min-height: 50dvh;
+  --place-pane-max-height: max(50dvh, min(85dvh, calc(100dvh - 140px - var(--space-12) - env(safe-area-inset-top))));
+  --place-pane-scroll: 0px;
+  --place-pane-height: clamp(var(--place-pane-min-height), calc(var(--place-pane-min-height) + var(--place-pane-scroll)), var(--place-pane-max-height));
+}
+.viewer:has(.place-card[data-mode="view"][open]) .map-stage {
+  bottom: calc(var(--place-pane-height) + var(--space-12));
+}
+.place-card[data-mode="view"] {
+  top: auto;
+  bottom: var(--space-12);
+  height: var(--place-pane-height);
+  min-height: var(--place-pane-min-height);
+  max-height: var(--place-pane-max-height);
+  margin-block: 0;
+  overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.place-card[data-mode="view"][open] {
+  display: flex;
+  flex-direction: column;
+}
+.place-card[data-mode="view"] > .dialog-header {
+  flex-shrink: 0;
+}
+.place-details {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Pane growth deliberately changes the viewport during native scrolling. */
+  overflow-anchor: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* Native scroll distance first unfolds the pane, then moves through its notes. */
+.place-details[data-expandable="true"] .place-detail-track {
+  min-height: calc(100% + var(--place-pane-max-height) - var(--place-pane-min-height));
+}
+.place-details[data-expandable="true"] .place-detail-track::after {
+  content: "";
+  display: block;
+  height: calc(var(--place-pane-max-height) - var(--place-pane-min-height));
+}
+.place-detail-content {
+  display: flow-root;
+  position: sticky;
+  top: 0;
+}
+dialog .place-detail-kind {
+  font-size: var(--font-size-small);
+}
+.place-details h3 {
+  margin: var(--space-16) 0 var(--space-8);
+}
+dialog .place-detail-note {
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+dialog .place-detail-note.no-note {
+  color: var(--muted);
 }
 /* Lighter scrim, clear around the spot being marked (set from script), so
    that pin keeps its colour. Fades by opacity: gradients don't interpolate. */
@@ -1533,23 +1647,25 @@ dialog.place-card::backdrop {
     opacity: 0;
   }
 }
+.place-card[data-mode="view"]::backdrop {
+  background: rgb(0 0 0 / 0.2);
+}
 .kind-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  margin-inline: -8px;
+  gap: var(--space-8);
 }
 .kind-pick {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-4);
   min-width: 0;
-  padding: 6px 2px 5px;
-  border-radius: var(--radius-md);
+  padding: var(--space-8);
+  border-radius: var(--radius-sm);
   border: 1.5px solid transparent;
-  font-size: 11px;
+  font-size: var(--font-size-small);
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -1590,28 +1706,26 @@ dialog.place-card::backdrop {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-dialog form > label.place-name,
-dialog form > label.place-note {
-  margin: 10px 0 0;
-}
 .add-note {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
   min-height: 44px;
-  margin-top: 4px;
-  padding: 0 4px;
+  margin-top: var(--space-4);
+  padding: 0 var(--space-4);
   background: none;
   color: var(--c);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 .add-note svg {
   width: 18px;
   height: 18px;
 }
-.place-card .dialog-actions {
-  margin-top: 8px;
+@media (max-width: 479px) {
+  .kind-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* ---------- Panels: Saved above the dock, View below the top controls ---------- */
@@ -1635,7 +1749,7 @@ dialog form > label.place-note {
   );
   display: flex;
   flex-direction: column;
-  padding: 14px;
+  padding: var(--surface-padding);
   border-radius: var(--radius-lg);
   background: var(--glass-strong);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
@@ -1653,12 +1767,12 @@ dialog form > label.place-note {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-16);
   flex-shrink: 0;
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-16);
 }
 .sheet-header h2 {
-  font-size: 20px;
+  font-size: var(--font-size-heading);
   color: var(--c);
 }
 /* View opens next to its sun button; Saved keeps its bottom sheet. */
@@ -1675,24 +1789,24 @@ dialog form > label.place-note {
 .sheet-content {
   min-height: 0;
   /* Room inside the scroller for focus rings at its edges; content stays put. */
-  margin: 0 -6px -6px;
-  padding: 0 6px 6px;
+  margin: 0 calc(-1 * var(--space-8)) calc(-1 * var(--space-8));
+  padding: 0 var(--space-8) var(--space-8);
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .sheet h3 {
-  margin: 18px 4px 8px;
-  font-size: 12px;
+  margin: var(--space-16) 0 var(--space-8);
+  font-size: var(--font-size-small);
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
 }
 .viewer .field-help {
-  margin: 8px 4px;
+  margin: var(--space-8) 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-small);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -1708,9 +1822,9 @@ dialog form > label.place-note {
 .row-main {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   min-height: 56px;
-  padding: 8px 14px;
+  padding: var(--row-padding);
 }
 .panel-card > * + * {
   border-top: 1px solid var(--line);
@@ -1720,8 +1834,7 @@ label.panel-row {
 }
 .panel-row.stacked {
   flex-wrap: wrap;
-  row-gap: 2px;
-  padding-bottom: 4px;
+  row-gap: var(--space-8);
 }
 .panel-row[hidden] {
   display: none;
@@ -1732,7 +1845,7 @@ label.panel-row {
   width: 34px;
   height: 34px;
   flex-shrink: 0;
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--c) 16%, transparent);
   color: var(--c);
 }
@@ -1754,16 +1867,16 @@ label.panel-row {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
 }
 .row-text strong {
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .row-text small {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-size-small);
   line-height: 1.4;
   max-height: 2.8em;
   overflow: hidden;
@@ -1774,16 +1887,16 @@ label.panel-row {
 }
 .row-count {
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
 }
 /* Native radios expose one brightness choice, with full-size touch targets. */
 .brightness-options {
   flex-basis: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin: 4px 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
 }
 .brightness-options label {
   position: relative;
@@ -1793,7 +1906,7 @@ label.panel-row {
   border: 1px solid var(--glass-line);
   border-radius: var(--radius-sm);
   background: var(--fill);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1824,7 +1937,7 @@ label.panel-row {
   width: 46px;
   height: 28px;
   margin: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-strong);
   cursor: pointer;
   transition: background-color 0.15s;
@@ -1836,7 +1949,7 @@ label.panel-row {
   left: 3px;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: #fff;
   transition: transform 0.15s;
 }
@@ -1858,7 +1971,7 @@ label.panel-row {
 .layer-toggles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--space-8);
 }
 .layer-toggle {
   position: relative;
@@ -1866,15 +1979,15 @@ label.panel-row {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-4);
   min-width: 0;
   min-height: 62px;
-  padding: 8px 4px;
+  padding: var(--space-8) var(--space-4);
   border: 1px solid var(--glass-line);
-  border-radius: 13px;
+  border-radius: var(--radius-sm);
   background: var(--fill);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-small);
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
@@ -1911,23 +2024,23 @@ label.panel-row {
   top: 5px;
   right: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 .layer-count:empty { display: none; }
 .panel-action {
   width: 100%;
-  margin-top: 14px;
+  margin-top: var(--space-16);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-8);
   min-height: var(--button-h);
   border-radius: var(--radius-md);
   background: var(--fill);
   border: 1px solid var(--line);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 .panel-action svg {
@@ -1946,45 +2059,29 @@ label.panel-row {
 /* Saved: compact inset groups with full-size touch targets. */
 .navigation-list {
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   list-style: none;
-  border-radius: 13px;
+  border-radius: var(--radius-md);
   background: #101214;
 }
 .navigation-row + .navigation-row {
   border-top: 1px solid var(--line);
 }
 .sheet[data-panel="saved"] .section-title {
-  margin: 12px 2px 5px;
-  font-size: 11px;
+  margin: var(--space-16) 0 var(--space-8);
+  font-size: var(--font-size-small);
 }
-.sheet[data-panel="saved"] .sheet-header {
-  margin-bottom: 6px;
-}
+.sheet-close,
 .sheet-share {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  padding: 0;
-  background: none;
-}
-.sheet-share {
-  color: var(--neon-saved);
-  border-radius: 50%;
-}
-.sheet-share svg {
-  width: 20px;
-  height: 20px;
+  --accent: var(--c);
 }
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 }
-.sheet h3.section-title:first-child {
-  margin-top: 4px;
+.sheet-content > [data-panel] > h3:first-child {
+  margin-top: 0;
 }
 .section-title svg {
   width: 16px;
@@ -2000,19 +2097,14 @@ label.panel-row {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
-.row-main {
-  gap: 4px;
-  min-height: 48px;
-  padding: 0;
-}
 .navigation-jump {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 5px 0;
+  gap: var(--space-12);
+  min-height: 44px;
+  padding: 0;
   background: none;
   text-align: left;
 }
@@ -2023,7 +2115,7 @@ label.panel-row {
 .navigation-jump .row-icon {
   width: 28px;
   height: 28px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: #ffffff0a;
 }
 .navigation-jump .row-icon svg {
@@ -2037,11 +2129,11 @@ label.panel-row {
   text-overflow: ellipsis;
 }
 .navigation-jump .row-text strong {
-  font-size: 13px;
+  font-size: var(--font-size-small);
   line-height: 1.3;
 }
 .navigation-jump .row-text small {
-  font-size: 11px;
+  font-size: var(--font-size-small);
 }
 .row-more {
   display: grid;
@@ -2050,7 +2142,7 @@ label.panel-row {
   height: 44px;
   flex-shrink: 0;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: none;
   color: var(--muted);
 }
@@ -2085,7 +2177,7 @@ label.panel-row {
   width: 216px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px;
+  padding: var(--space-8);
   border-radius: var(--radius-md);
   background: #0d0e11;
   border: 1px solid var(--glass-line);
@@ -2103,13 +2195,13 @@ label.panel-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   width: 100%;
   min-height: 46px;
-  padding: 0 16px 0 12px;
+  padding: var(--row-padding);
   border-radius: var(--radius-sm);
   background: none;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   text-align: left;
 }
@@ -2127,9 +2219,9 @@ label.panel-row {
 /* A plain row like the others, not the bordered, centered .danger pill. */
 .popover-item.danger {
   justify-content: flex-start;
-  margin-top: 7px;
+  margin-top: var(--space-8);
   border: 0;
-  padding: 0 16px 0 12px;
+  padding: var(--row-padding);
   background: none;
   color: var(--danger);
 }
@@ -2160,26 +2252,26 @@ label.panel-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12);
   margin: 0;
-  padding: 2px 0 2px 4px;
+  padding: var(--row-padding);
   text-align: left;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   line-height: 1.5;
 }
 /* Starts the Add tool, so it wears Add's colour. */
 .empty-action {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-8);
   min-height: 44px;
-  padding: 0 16px 0 13px;
+  padding: 0 var(--space-16) 0 var(--space-12);
   border: 1px solid color-mix(in srgb, var(--neon-add) 30%, transparent);
-  border-radius: 22px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--neon-add) 10%, #000);
   color: var(--neon-add);
-  font-size: 14px;
+  font-size: var(--font-size-small);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -2252,16 +2344,9 @@ label.panel-row {
 }
 
 @media (max-height: 520px) {
-  .viewer {
-    --dock-h: 44px;
-  }
-  .dock svg {
-    width: 20px;
-    height: 20px;
-  }
   .tool-bar {
     min-height: 40px;
-    padding: 3px;
+    padding: var(--space-4);
   }
   .tool-actions button {
     height: 34px;
@@ -2283,26 +2368,26 @@ label.panel-row {
 }
 
 /* Sharing stays in menus and dialogs, leaving the map controls compact. */
-.library-actions { gap: 10px; flex-wrap: wrap; }
+.library-actions { gap: var(--space-12); flex-wrap: wrap; }
 .sharing-dialog {
   --accent: var(--neon-view);
   --c: var(--accent);
   --fill-strong: rgb(255 255 255 / 0.13);
 }
-.share-map-name { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.share-map-name { display: flex; align-items: center; gap: var(--space-8); font-size: var(--font-size-small); }
 .share-map-name svg { width: 16px; height: 16px; }
 /* Summary: one row per part of the file, so it never scrolls. */
-.share-summary { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; margin-top: 16px; }
+.share-summary { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; margin-top: var(--space-16); }
 .share-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-12);
   width: 100%;
   min-height: 58px;
-  padding: 12px 14px;
+  padding: var(--row-padding);
   background: none;
   text-align: left;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   cursor: pointer;
 }
 .share-row + .share-row { border-top: 1px solid var(--line); }
@@ -2312,13 +2397,13 @@ button.share-row:active:not(:disabled) { transform: none; background: #ffffff0f;
 }
 button.share-row:disabled > svg:last-child { visibility: hidden; }
 /* The summary clips its rows to its rounded box, so a row's ring sits inside. */
-button.share-row:focus-visible { outline-offset: -4px; border-radius: calc(var(--radius-md) - 4px); }
+button.share-row:focus-visible { outline-offset: -4px; border-radius: calc(var(--radius-md) - var(--space-4)); }
 .share-row-icon {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   flex-shrink: 0;
   color: var(--k);
   background: color-mix(in srgb, var(--k) 16%, #000);
@@ -2329,29 +2414,29 @@ button.share-row:focus-visible { outline-offset: -4px; border-radius: calc(var(-
 .share-route { --k: var(--kind-route); }
 .share-image { --k: var(--neon-add); }
 .share-row-label { flex: 1; min-width: 0; }
-.share-row-label small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.share-row-value { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.share-row-label small { display: block; color: var(--muted); font-size: var(--font-size-small); margin-top: var(--space-2); }
+.share-row-value { color: var(--muted); font-size: var(--font-size-small); font-variant-numeric: tabular-nums; }
 .share-row > svg:last-child { width: 18px; height: 18px; color: var(--muted); transform: rotate(180deg); }
-dialog .share-size { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin: 14px 2px 0; font-variant-numeric: tabular-nums; }
+dialog .share-size { display: flex; justify-content: space-between; gap: var(--space-12); font-size: var(--font-size-small); margin: var(--space-16) 0 0; font-variant-numeric: tabular-nums; }
 .share-size:empty { display: none; }
 .share-size b { color: var(--text); font-weight: 600; }
 /* Picker page for places or routes. */
 .share-back {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   min-height: 44px;
-  margin: -10px 0 4px -10px;
-  padding: 6px 10px 6px 4px;
-  border-radius: 99px;
+  margin: 0 0 var(--space-8);
+  padding: var(--space-8) 0;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--accent);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 .share-back svg { width: 20px; height: 20px; }
-.share-selection-actions { display: flex; gap: 8px; margin: 12px 0; }
-.share-selection-actions button { flex: 1; gap: 6px; font-size: 14px; padding: 10px 8px; min-height: 44px; }
+.share-selection-actions { display: flex; gap: var(--space-8); margin: var(--space-16) 0; }
+.share-selection-actions button { flex: 1; gap: var(--space-8); font-size: var(--font-size-small); padding: var(--control-padding); min-height: 44px; }
 .share-selection-actions svg { width: 18px; height: 18px; }
 .share-selection-actions [aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -2367,26 +2452,26 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
 .share-choice {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  gap: var(--space-12);
+  padding: var(--row-padding);
   min-height: 48px;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
-.share-items .share-choice { padding: 10px 14px; min-height: 58px; }
+.share-items .share-choice { padding: var(--row-padding); min-height: 58px; }
 .share-choice input { flex-shrink: 0; width: 22px; height: 22px; accent-color: var(--accent); }
-.share-choice small, .share-field small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.share-choice small, .share-field small { display: block; color: var(--muted); font-size: var(--font-size-small); margin-top: var(--space-4); }
 .share-items .share-choice:not([hidden]) ~ .share-choice:not([hidden]) { border-top: 1px solid var(--line); }
 .share-choice-icon { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; }
 .share-choice-icon svg { width: 26px; height: 26px; }
 .share-choice-text { flex: 1; min-width: 0; }
-.share-field { display: block; margin: 16px 0; font-size: 14px; color: var(--muted); }
+.share-field { display: block; margin: var(--space-16) 0; font-size: var(--font-size-small); color: var(--muted); }
 /* Import: shared files go only onto maps made from the same image. */
 .share-file { --k: var(--neon-view); }
-.share-heading { margin: 18px 2px 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.share-heading { margin: var(--space-16) 0 var(--space-8); font-size: var(--font-size-small); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
 #receive-destinations { margin-top: 0; }
 #receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
-#receive-destinations.single { margin-top: 16px; }
+#receive-destinations.single { margin-top: var(--space-16); }
 #receive-destinations.single .share-row { cursor: default; background: none; }
 #receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .receive-thumbnail {
@@ -2397,7 +2482,7 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
   flex-shrink: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: #0d0e11;
   color: var(--muted);
 }
@@ -2405,17 +2490,17 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
 .receive-thumbnail svg { width: 18px; height: 18px; }
 .receive-new { color: var(--neon-add); background: color-mix(in srgb, var(--neon-add) 12%, #000); border-color: color-mix(in srgb, var(--neon-add) 40%, transparent); }
 .share-row-label small.receive-match { color: var(--neon-add); }
-.share-segments { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 99px; background: #ffffff0a; }
+.share-segments { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-pill); background: #ffffff0a; }
 .share-segments label {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-8);
   min-height: 42px;
   border: 1px solid transparent;
-  border-radius: 99px;
-  font-size: 15px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-body);
   font-weight: 650;
   color: var(--muted);
   cursor: pointer;
@@ -2425,4 +2510,4 @@ dialog .share-size { display: flex; justify-content: space-between; gap: 10px; f
 .share-segments label:has(input:checked) { color: var(--text); background: color-mix(in srgb, var(--c) 18%, #000); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
 .share-segments .share-segment-danger { --c: var(--danger); }
 .share-segments label:has(input:focus-visible) { outline: 2px solid var(--c); outline-offset: 2px; }
-dialog #receive-note { margin: 10px 2px 0; }
+dialog #receive-note { margin: var(--space-16) 0 0; }

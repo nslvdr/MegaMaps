@@ -1,6 +1,11 @@
 import { dialogHeader } from "./dialog";
 import { icons } from "./icons";
-import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, markerKinds } from "../viewer/navigation";
+import {
+  BRIGHTNESS_LEVELS,
+  DEFAULT_DIMMING,
+  brightnessPercent,
+  markerKinds,
+} from "../viewer/navigation";
 import { placeIcon } from "./place-icon";
 
 // View settings use cards; Saved uses compact inset lists with row actions.
@@ -10,7 +15,7 @@ const rowIcon = (icon: string, tint = "") =>
 const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
 const brightnessChoices = BRIGHTNESS_LEVELS.map(
-  (level) => `<label><input type="radio" name="map-brightness" id="brightness-${level * 100}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${level * 100}%</span></label>`,
+  (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
 // Kinds are picked by their map pin, one big target each.
 const kindPicks = Object.entries(markerKinds)
@@ -55,13 +60,13 @@ export const viewerMarkup = `
 </div>
 <button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" tabindex="-1" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
-  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.closeCircle}</button></div>
+  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
       <h3>Map</h3>
       <div class="panel-card">
         <label class="panel-row">${rowIcon(icons.moon)}<span class="row-text"><strong>Dark map</strong><small id="dark-status"></small></span><input type="checkbox" role="switch" class="switch" id="dark-map"></label>
-        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>Brightness</strong></span><div class="brightness-options" role="radiogroup" aria-label="Map brightness">${brightnessChoices}</div></div>
+        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>Brightness</strong><small id="brightness-help">Dim the map so routes and places stand out.</small></span><div class="brightness-options" role="radiogroup" aria-label="Map brightness" aria-describedby="brightness-help">${brightnessChoices}</div></div>
       </div>
       <h3>Show on map</h3>
       <div class="layer-toggles" role="group" aria-label="Show on map">
@@ -80,5 +85,15 @@ export const viewerMarkup = `
   </div>
 </section>
 <p id="viewer-error" class="viewer-error" role="alert" hidden></p>
-<dialog id="marker-dialog" class="place-card" aria-labelledby="marker-dialog-title"><form id="marker-form">${dialogHeader("marker-dialog-title", "New place", icons.pin, "marker-cancel")}<div class="kind-picker" role="radiogroup" aria-label="Kind">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><button type="button" id="marker-add-note" class="add-note">${icons.plus}<span>Add note</span></button><label id="marker-note-field" class="place-note" hidden><span>Note</span><textarea id="marker-note" maxlength="2000" rows="2"></textarea></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>Move</span></button></div></form></dialog>
+<dialog id="marker-dialog" class="place-card" aria-labelledby="marker-dialog-title">
+  <div class="dialog-header"><span id="marker-dialog-title-icon" class="dialog-title-icon" aria-hidden="true">${icons.pin}</span><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-edit" class="dialog-close" aria-label="Edit place" title="Edit place" hidden>${icons.edit}</button><button type="button" id="marker-cancel" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></div>
+  <div id="marker-details" class="place-details" role="region" aria-label="Place details" hidden>
+    <div class="place-detail-track"><div class="place-detail-content">
+      <p id="marker-detail-kind" class="place-detail-kind"></p>
+      <h3>Notes</h3>
+      <p id="marker-detail-note" class="place-detail-note"></p>
+    </div></div>
+  </div>
+  <form id="marker-form"><div class="kind-picker" role="radiogroup" aria-label="Kind">${kindPicks}</div><label class="place-name"><span>Name</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><button type="button" id="marker-add-note" class="add-note">${icons.plus}<span>Add note</span></button><label id="marker-note-field" class="place-note" hidden><span>Note</span><textarea id="marker-note" maxlength="2000" rows="2"></textarea></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>Delete</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>Move</span></button></div></form>
+</dialog>
 <dialog id="name-dialog" aria-labelledby="name-title"><form id="name-form">${dialogHeader("name-title", "", icons.edit, "name-cancel")}<label>Name<input id="name-input" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button></div></form></dialog>`;
