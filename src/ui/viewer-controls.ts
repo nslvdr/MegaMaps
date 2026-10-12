@@ -1128,14 +1128,22 @@ export class ViewerControls {
         ],
       });
     }
-    for (const [container, empty] of [
-      [markers, "No places yet. Use Add › Place."],
-      [routes, "No routes yet. Use Add › Route, then tap along passages."],
+    // An empty list offers the one thing to do next, rather than pointing at Add.
+    for (const [container, empty, label, icon, start] of [
+      [markers, "No places yet.", "Add place", icons.pin, "add-marker"],
+      [routes, "No routes yet.", "Draw route", icons.route, "add-route"],
     ] as const)
-      if (!container.childElementCount && empty) {
+      if (!container.childElementCount) {
         const item = document.createElement("li");
         item.className = "empty-list";
-        item.textContent = empty;
+        const text = document.createElement("span");
+        text.textContent = empty;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "empty-action";
+        button.innerHTML = `${icon}<span>${label}</span>`;
+        button.addEventListener("click", () => this.el(start).click());
+        item.append(text, button);
         container.append(item);
       }
     // Measure only after all rows are back in the list and the panel has its final height.

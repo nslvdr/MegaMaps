@@ -156,6 +156,15 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
         "rotation-lock",
       ],
     );
+    // An empty Saved list offers a button that starts adding that kind of item.
+    const emptyAction = (id: string) =>
+      el(id).querySelector<HTMLButtonElement>(".empty-list .empty-action")!;
+    assert.equal(emptyAction("marker-list").textContent, "Add place");
+    assert.equal(emptyAction("route-list").textContent, "Draw route");
+    emptyAction("marker-list").dispatchEvent(new window.Event("click"));
+    assert.equal(tools.at(-1), "marker");
+    click("open-add");
+    assert.equal(tools.at(-1), "browse");
     const refreshesBeforeOpening = labelRefreshes;
     focus.mock.resetCalls();
     click("open-saved");
