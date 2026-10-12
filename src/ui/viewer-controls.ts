@@ -653,13 +653,19 @@ export class ViewerControls {
         kind: this.markerKind(),
         created: existing?.created ?? Date.now(),
       };
-      this.state.markers = this.state.markers.filter((m) => m.id !== marker.id);
-      this.state.markers.push(marker);
-      if (!existing) this.newMarkerKind = marker.kind;
+      const unchanged = !!existing && existing.label === marker.label &&
+        existing.note === marker.note && existing.kind === marker.kind &&
+        existing.point.x === marker.point.x && existing.point.y === marker.point.y;
+      // An edit keeps the place where it was in the Saved list.
+      if (!existing) {
+        this.state.markers.push(marker);
+        this.newMarkerKind = marker.kind;
+      } else if (!unchanged)
+        this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
       this.dialog("marker-dialog").close();
-      this.changed();
+      if (!unchanged) this.changed();
       this.mode("browse");
-      this.toast(existing ? "Place updated" : `${label} saved`);
+      this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
     });
     this.click("name-cancel", () => this.dialog("name-dialog").close());
     this.on(this.el("name-form"), "submit", (event) => {

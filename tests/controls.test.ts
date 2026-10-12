@@ -900,6 +900,19 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     submit("marker-form");
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
     assert.equal(state.markers.at(-1)?.kind, "entrance");
+
+    // Editing keeps a place's spot in the list and says when nothing changed.
+    const order = () => state.markers.map((marker) => marker.label);
+    const before = order();
+    assert.ok(before.length > 1);
+    controls.options().onMarker(state.markers[0]!);
+    submit("marker-form");
+    assert.equal(el("toast").textContent, `${before[0]} unchanged`);
+    controls.options().onMarker(state.markers[0]!);
+    input("marker-label", "Upper exit");
+    submit("marker-form");
+    assert.equal(el("toast").textContent, "Upper exit updated");
+    assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
   } finally {
     controls.dispose();
     await controls.flush();
