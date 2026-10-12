@@ -28,9 +28,9 @@ import {
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
 import { stepFocus, typeahead } from "./step-focus";
-const sheets = ["display", "saved", "search"] as const;
+const sheets = ["display", "saved"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
-type Sheet = (typeof sheets)[number];
+type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -43,11 +43,10 @@ const darkMessages: Record<DarkMode["kind"], string> = {
 export class ViewerControls {
   private viewer?: Pick<
     Viewer,
-    "setTool" | "updateNavigation" | "rotateTo" | "jumpTo" | "fitPoints"
+    "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
     Partial<Pick<Viewer, "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing">>;
   private ocr?: OcrIndex;
-  private shownRotation?: number;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
   private searchPosition = -1;
@@ -143,7 +142,7 @@ export class ViewerControls {
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
       labelObstacles: () => {
         const stage = this.el("map-stage").getBoundingClientRect();
-        return ["back", "dock", "sheet", "add-bar", "tool-bar"].flatMap(id => {
+        return ["back", "display-chips", "dock", "search-count", "sheet", "add-bar", "tool-bar"].flatMap(id => {
           const element = this.el(id);
           if (element.hidden) return [];
           const rect = element.getBoundingClientRect();
@@ -155,7 +154,6 @@ export class ViewerControls {
       },
       onView: () => {
         this.persistence.changed();
-        this.renderView();
       },
       onTap: (point) => this.onTap(point),
       onMarker: (marker) => this.editMarker(marker),
@@ -228,13 +226,15 @@ export class ViewerControls {
     this.openSheet = name;
     // Row menus start closed each time a panel opens.
     if (name !== previous) this.closeRowMenu();
-    this.el("sheet").hidden = !name;
-    // Tints the panel with its pill button's neon color.
+    this.el("sheet").hidden = !name || name === "search";
+    // Tints each panel with its control's neon color.
     this.el("sheet").dataset.panel = name ?? "";
-    this.el("sheet").style.transform = "";
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
+    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.list;
+    this.el("search-close").hidden = name !== "search";
+    this.input("map-search").setAttribute("aria-expanded", String(name === "search"));
     for (const sheet of sheets) {
       const panel = this.el(`sheet-${sheet}`);
       panel.hidden = sheet !== name;
@@ -249,7 +249,7 @@ export class ViewerControls {
     this.renderTool();
     if (!name && returnFocus && previous) this.el(`open-${previous}`).focus();
   }
-  /** "/" opens Search ready to type: a keyboard is already at hand, unlike a tap. */
+  /** Opens Search ready to type through its field or the slash shortcut. */
   openSearch() {
     if (this.tool !== "browse" || this.root.querySelector("dialog[open]")) return false;
     this.sheet("search");
@@ -465,6 +465,7 @@ export class ViewerControls {
     this.mode("browse");
   }
   private editMarker(marker: MapMarker) {
+    this.viewer?.jumpTo(marker.point, 1);
     this.openMarker("Edit place", marker.point, marker);
     // Under the card's shade every pin looks alike; this one says it's the one.
     this.viewer?.pulse?.(marker.id);
@@ -489,17 +490,21 @@ export class ViewerControls {
     }, SPOTLIGHT_MS);
   }
   private bind() {
-    this.on(this.root, "click", event => {
-      const target = event.target as Element;
-      if (this.openSheet === "search" && !target.closest(".search-field, #open-search"))
-        this.sheet(undefined);
-    });
+    // Exploring the map dismisses the keyboard but preserves the query and matches.
     this.on(this.el("map-canvas"), "pointerdown", () => {
       if (this.openSheet === "search") this.input("map-search").blur();
     });
     this.on(this.input("map-search"), "input", () => this.queueSearch());
+    // The persistent field opens Search through an explicit tap or keyboard focus.
+    this.on(this.input("map-search"), "focus", () => {
+      if (this.openSheet !== "search") this.openSearch();
+    });
+    this.on(this.el("open-search"), "click", (event) => {
+      if ((event.target as Element).closest("button")) return;
+      if (this.openSheet !== "search") this.openSearch();
+    });
     this.click("search-count", () => this.stepSearch());
-    // Tapping the map also closes Search; this says so where the eye already is.
+    // Close clears the query and its map highlights while keeping the field available.
     this.click("search-close", () => this.sheet(undefined, true));
     this.click("toast-undo", () => this.toastUndo?.());
     this.on(this.input("map-search"), "keydown", (event) => {
@@ -515,7 +520,6 @@ export class ViewerControls {
       );
     this.click("close-sheet", () => this.sheet(undefined, true));
     this.click("sheet-dismiss", () => this.sheet(undefined, true));
-    this.bindSheetDrag();
     const typeToJump = typeahead((item) => item.closest(".navigation-row")?.querySelector("strong")?.textContent ?? "");
     this.on(this.root, "keydown", (event) => {
       const key = event as KeyboardEvent, target = key.target as Element;
@@ -572,15 +576,6 @@ export class ViewerControls {
           : "Rotation unlocked · twist with two fingers",
       );
     });
-    this.on(this.input("rotation-angle"), "input", () => {
-      const angle = this.input("rotation-angle");
-      // North sits at both ends of the slider; a near miss snaps to it.
-      const degrees = Number(angle.value);
-      if (degrees <= 4 || degrees >= 356) angle.value = "0";
-      this.viewer?.rotateTo((Number(angle.value) * Math.PI) / 180);
-    });
-    this.click("rotate-left", () => this.rotateStep(-1));
-    this.click("rotate-right", () => this.rotateStep(1));
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${level * 100}`);
       this.on(input, "change", () => {
@@ -739,63 +734,10 @@ export class ViewerControls {
       this.nameAction = undefined;
     });
   }
-  // Swipe the sheet header down to dismiss it, like native bottom sheets.
-  private bindSheetDrag() {
-    const sheet = this.el("sheet");
-    let start: number | undefined, offset = 0;
-    for (const handle of [this.el("sheet-grabber"), this.el("sheet-title")]) {
-      this.on(handle, "pointerdown", (event) => {
-        const pointer = event as PointerEvent;
-        start = pointer.clientY;
-        offset = 0;
-        handle.setPointerCapture?.(pointer.pointerId);
-        sheet.classList.add("dragging");
-      });
-      this.on(handle, "pointermove", (event) => {
-        if (start === undefined) return;
-        offset = Math.max(0, (event as PointerEvent).clientY - start);
-        sheet.style.transform = `translateY(${offset}px)`;
-        this.viewer?.refreshLabels?.();
-      });
-      for (const type of ["pointerup", "pointercancel"])
-        this.on(handle, type, () => {
-          if (start === undefined) return;
-          start = undefined;
-          sheet.classList.remove("dragging");
-          if (offset > 70) this.sheet(undefined, true);
-          else {
-            sheet.style.transform = "";
-            this.viewer?.refreshLabels?.();
-          }
-        });
-    }
-  }
-  private renderView() {
-    const rotation =
-      ((Math.round(((this.state.view?.rotation ?? 0) * 180) / Math.PI) % 360) +
-        360) %
-      360;
-    // Runs on every camera move: untouched DOM keeps panning free of layout work.
-    if (rotation === this.shownRotation) return;
-    this.shownRotation = rotation;
-    this.input("rotation-angle").value = String(rotation);
-    this.el("rotation-value").textContent = `${rotation}°`;
-  }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted
       ? darkMessages[this.darkKind]
       : "Off: original colors";
-  }
-  /** Steps land on the 15° grid, so a few presses always reach north again.
-   * False while rotation is locked. */
-  rotateStep(direction: 1 | -1) {
-    if (this.state.rotationLocked || !this.viewer) return false;
-    const steps = ((this.state.view?.rotation ?? 0) * 12) / Math.PI;
-    const next = direction > 0
-      ? Math.floor(steps + 1e-6) + 1
-      : Math.ceil(steps - 1e-6) - 1;
-    this.viewer.rotateTo((next * Math.PI) / 12);
-    return true;
   }
   /** Keyboard undo while drawing a route; false when there is nothing to undo. */
   undo() {
@@ -822,22 +764,23 @@ export class ViewerControls {
     this.root.dataset.tool = this.tool;
     const editing = this.tool !== "browse",
       sheetOpen = !!this.openSheet;
-    // Search replaces the pill; the other panels and placing tools sit above it.
-    this.el("dock").hidden = this.openSheet === "search";
     this.el("add-bar").hidden = !this.choosing;
     const add = this.el("open-add");
     add.setAttribute("aria-expanded", String(this.choosing));
     add.classList.toggle("active", editing || this.choosing);
-    this.el("open-add-label").textContent = editing
+    const addLabel = editing
       ? this.confirming === "cancel-route"
         ? "Discard?"
         : "Cancel"
       : this.choosing
         ? "Close"
         : "Add";
+    add.setAttribute("aria-label", addLabel);
+    add.title = addLabel;
     // One task at a time: the panels wait until placing is over.
     for (const sheet of sheets)
       this.el<HTMLButtonElement>(`open-${sheet}`).disabled = editing;
+    this.input("map-search").disabled = editing;
     this.el("tool-bar").hidden = !editing || sheetOpen;
     const route = this.route();
     const count = route?.points.length ?? 0;
@@ -1068,6 +1011,7 @@ export class ViewerControls {
       "aria-label",
       this.state.rotationLocked ? "Unlock rotation" : "Lock rotation",
     );
+    rotationLock.title = this.state.rotationLocked ? "Unlock rotation" : "Lock rotation";
     this.input("dark-map").checked = this.state.inverted;
     for (const level of BRIGHTNESS_LEVELS)
       this.input(`brightness-${level * 100}`).checked = this.state.dimming === level;
@@ -1084,7 +1028,6 @@ export class ViewerControls {
     this.el("saved-routes-count").textContent = String(counts.routes);
     this.el("saved-places-count").textContent = String(counts.places);
     // Fine rotation only appears once twisting is unlocked.
-    this.el("rotation-controls").hidden = this.state.rotationLocked;
     const focusedMenuIndex = this.rowPopover
       ? [...this.rowPopover.querySelectorAll("button")].findIndex(
           (button) => button === document.activeElement,
@@ -1104,7 +1047,7 @@ export class ViewerControls {
         label: marker.label,
         detail: `${kind.label}${marker.note ? " · " + marker.note : ""}`,
         icon: placeIcon(marker.kind),
-        jump: () => this.viewer?.jumpTo(marker.point),
+        jump: () => this.viewer?.jumpTo(marker.point, 1),
         rename: () => this.editMarker(marker),
         actions: [
           {
@@ -1211,7 +1154,6 @@ export class ViewerControls {
         .querySelectorAll<HTMLButtonElement>(".row-popover button")
         [focusedMenuIndex]?.focus({ preventScroll: true });
     this.restoreSavedFocus();
-    this.renderView();
     this.renderTool();
   }
   refreshMetadata() {
@@ -1274,7 +1216,8 @@ export class ViewerControls {
     // once Enter has put the keyboard away; it then shows where you are.
     const badge = this.el<HTMLButtonElement>("search-count");
     // A bare grey 0 is easy to miss; a miss says so in words.
-    badge.textContent = stepping ? `${this.searchPosition + 1}/${count}` : count ? String(count) : "No match";
+    badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
+      : count ? `${count} ${count === 1 ? "match" : "matches"}` : "No matches";
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);

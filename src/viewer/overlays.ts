@@ -148,7 +148,6 @@ export class NavigationOverlay {
         class: "route-line",
         ...(route.draft && !active ? { "stroke-dasharray": "10 8" } : {}),
       });
-      path(layer, route.points, { class: "route-flow" });
       path(
         layer,
         route.points,

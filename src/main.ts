@@ -1,4 +1,4 @@
-import { showDialog } from "./ui/dialog";
+import { dialogHeader, showDialog } from "./ui/dialog";
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
 import { listMaps, markOpened, renameMap } from "./storage/database";
@@ -36,14 +36,14 @@ app.innerHTML = `
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
-  <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">Import</h2><p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div><div class="dialog-actions"><button class="quiet" id="import-cancel">${icons.close}<span>Cancel</span></button></div></dialog>
-  <dialog id="progress-dialog" aria-labelledby="progress-title"><div class="dialog-icon">${icons.map}</div><h2 id="progress-title">Preparing map</h2><p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p><div class="dialog-actions"><button class="secondary" id="cancel-import">${icons.close}<span>Cancel import</span></button></div></dialog>
-  <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body"><h2 id="message-title"></h2><p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this map?</h2><p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button><button class="quiet" id="delete-cancel">${icons.close}<span>Keep map</span></button></div></dialog>
+  <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", "Import", icons.download, "import-cancel")}<p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div></dialog>
+  <dialog id="progress-dialog" aria-labelledby="progress-title">${dialogHeader("progress-title", "Preparing map", icons.map, "cancel-import", "Cancel import")}<p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p></dialog>
+  <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", "Delete this map?", icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
-  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title"><h2 id="advanced-map-title">Advanced settings</h2><p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>Stop detection</span></button></div><button class="secondary" id="advanced-map-close">${icons.close}<span>Close</span></button></dialog>
+  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title">${dialogHeader("advanced-map-title", "Advanced settings", icons.tools, "advanced-map-close")}<p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>Stop detection</span></button></div></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -181,8 +181,10 @@ const sharing = initSharing(app, {
     const controller = new AbortController();
     importing = controller;
     element("progress-title").textContent = "Importing shared map";
+    element("progress-title-icon").innerHTML = icons.download;
     element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
-    element("cancel-import").querySelector("span")!.textContent = "Cancel import";
+    element("cancel-import").setAttribute("aria-label", "Cancel import");
+    element("cancel-import").title = "Cancel import";
     element("import-name").textContent = displayName(share.manifest.map.name);
     showProgress(0, "Checking shared map…");
     showDialog(progressDialog);
@@ -590,9 +592,11 @@ function importImage(file: File) {
   importing = new AbortController();
   const controller = importing;
   element("progress-title").textContent = "Preparing map";
+  element("progress-title-icon").innerHTML = icons.map;
   element("progress-note").textContent =
     "Keep Mega Maps open while your map is prepared.";
-  element("cancel-import").querySelector("span")!.textContent = "Cancel import";
+  element("cancel-import").setAttribute("aria-label", "Cancel import");
+  element("cancel-import").title = "Cancel import";
   element("import-name").textContent = file.name;
   showProgress(0, "Reading image metadata…");
   showDialog(progressDialog);
@@ -603,9 +607,11 @@ function importImage(file: File) {
       controller.signal,
     );
     element("progress-title").textContent = "Detecting map text";
+    element("progress-title-icon").innerHTML = icons.search;
     element("progress-note").textContent =
       "Your map is saved. Keep the app open to finish search detection, or stop and do it later.";
-    element("cancel-import").querySelector("span")!.textContent = "Stop detection";
+    element("cancel-import").setAttribute("aria-label", "Stop detection");
+    element("cancel-import").title = "Stop detection";
     try {
       await runOcr(map, controller, (progress) =>
         showProgress(80 + progress.fraction * 20, progress.message));
@@ -650,7 +656,8 @@ progressDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   importing?.abort();
 });
-element("message-close").addEventListener("click", () => messageDialog.close());
+for (const id of ["message-close", "message-dismiss"])
+  element(id).addEventListener("click", () => messageDialog.close());
 element("update-app").addEventListener("click", () => {
   if (updates.busy) updates.open();
   else if (importing || ocrJob)
@@ -701,7 +708,6 @@ document.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
   if (event.key === "/" && controls?.openSearch()) event.preventDefault();
-  if (event.key === "[" || event.key === "]") controls?.rotateStep(event.key === "]" ? 1 : -1);
   // Enter on a button presses it; only from the map does it step through matches.
   const free = event.target === document.body || (event.target as HTMLElement).id === "map-canvas";
   if (event.key === "Enter" && free && controls?.stepSearch(event.shiftKey))

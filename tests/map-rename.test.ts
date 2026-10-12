@@ -52,6 +52,8 @@ test("rename dialog cancels without saving, rejects blank names and waits for on
     return new Promise<void>((resolve) => { finish = resolve; });
   });
   ui.open({ id: "first", name: "First map" });
+  assert.ok(ui.dialog.querySelector(".dialog-header #rename-map-cancel"));
+  assert.equal(ui.dialog.querySelector(".dialog-actions #rename-map-cancel"), null);
   assert.equal(ui.input.value, "First map");
   ui.input.value = "Discard this";
   ui.cancel();
@@ -69,6 +71,7 @@ test("rename dialog cancels without saving, rejects blank names and waits for on
   assert.deepEqual(calls, [["second", "Survey <2026>"]]);
   assert.equal(ui.dialog.open, true);
   assert.equal(ui.input.disabled, true);
+  assert.equal(ui.dialog.querySelector<HTMLButtonElement>("#rename-map-cancel")!.disabled, true, "the header cross is blocked while saving");
   assert.equal(ui.escape(), false, "Escape is blocked during persistence");
   finish();
   await settle();

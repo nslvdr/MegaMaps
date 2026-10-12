@@ -45,6 +45,8 @@ test("an available update is described and only downloaded once the user agrees"
   const app = setup({ find: async () => available, install: async () => { installs++; return true; } });
   app.updates.open();
   assert.equal(app.dialog.dataset.state, "checking");
+  assert.ok(app.dialog.querySelector(".dialog-header #update-dismiss"), "the cross lives beside the title");
+  assert.equal(app.dialog.querySelector("#update-actions #update-dismiss"), null);
   assert.ok(app.visible("update-progress"));
   await settle();
   assert.equal(app.dialog.dataset.state, "available");
@@ -75,6 +77,9 @@ test("agreeing shows download, install and save progress, then restarts", async 
   assert.equal(app.text("update-percent"), "45%");
   app.escape();
   assert.equal(app.dialog.open, true, "the download cannot be dismissed halfway");
+  assert.equal(app.dialog.querySelector<HTMLButtonElement>("#update-dismiss")!.disabled, true);
+  app.dismiss();
+  assert.equal(app.dialog.open, true, "the header cross also waits for installation to finish");
   report({ step: "download", loaded: available.size, total: available.size });
   assert.equal(app.text("update-step"), "Installing update…");
   report({ step: "download", loaded: 1, total: available.size });

@@ -8,13 +8,13 @@ export const icons = {
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   share: svg('<path d="M12 16V3m-4 4 4-4 4 4M5 12v8h14v-8"/>'),
   close: svg('<path d="m6 6 12 12M18 6 6 18"/>'),
+  closeCircle: svg('<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>'),
   invert: svg(
     '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/>',
   ),
   tools: svg(
     '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor"/><circle cx="15" cy="17" r="3" fill="currentColor"/>',
   ),
-  rotateLeft: svg('<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>'),
   rotateRight: svg('<path d="M21 10a9 9 0 1 0-2 8M21 4v6h-6"/>'),
   arrow: svg('<path d="m15 5-7 7 7 7"/>'),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>'),

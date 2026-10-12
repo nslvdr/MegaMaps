@@ -385,30 +385,15 @@ export class Viewer {
       y: this.camera.y + y,
     });
   }
-  // `deliberate` lets an explicit "north up" reset bypass the twist lock.
-  rotateTo(rotation: number, deliberate = false) {
-    if (
-      this.navigation.touchLocked ||
-      (this.navigation.rotationLocked && !deliberate)
-    )
-      return;
-    this.interactions.reset();
-    this.setCamera(
-      transformAt(this.camera, this.camera.scale, rotation, {
-        x: this.width / 2,
-        y: this.height / 2,
-      }),
-    );
-  }
-  // Glides rather than cuts, so it's clear where on the map the place is.
-  jumpTo(point: Point) {
+  // Glides to a place; detail views can request a minimum zoom without zooming out.
+  jumpTo(point: Point, minimumScale = 0.2) {
     if (this.navigation.touchLocked) return;
     this.interactions.reset();
     this.animate(
       cameraAt(
         point,
         this.viewport(),
-        Math.max(this.camera.scale, 0.2),
+        Math.max(this.camera.scale, minimumScale),
         this.camera.rotation ?? 0,
       ),
     );
