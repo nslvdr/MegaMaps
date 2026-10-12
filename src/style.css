@@ -654,6 +654,13 @@ dialog .dialog-error {
     background: color-mix(in srgb, var(--danger) 16%, #000);
   }
 }
+/* Armed for a second tap: filled, so it can't be mistaken for the first. */
+.danger.armed,
+.danger.armed:is(:hover, :active):not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #1a0703;
+}
 dialog > button {
   width: 100%;
 }

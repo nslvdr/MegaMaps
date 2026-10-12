@@ -72,6 +72,8 @@ export class ViewerControls {
   private nameAction?: (name: string) => void;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private spotlightTimer?: ReturnType<typeof setTimeout>;
+  private cardDeleteArmed = false;
+  private cardDeleteTimer?: ReturnType<typeof setTimeout>;
   private confirmTimer?: ReturnType<typeof setTimeout>;
   private confirming?: string;
   private rowMenu?: string;
@@ -287,6 +289,7 @@ export class ViewerControls {
     this.setMarkerKind(kind);
     this.el<HTMLTextAreaElement>("marker-note").value = marker?.note ?? "";
     this.el("marker-delete").hidden = !marker;
+    this.armCardDelete(false);
     // Notes stay tucked away unless there already is one.
     this.notes(!!marker?.note);
     // A new place shows where it will go while it is named.
@@ -607,7 +610,13 @@ export class ViewerControls {
       this.notes(true);
       this.el("marker-note").focus();
     });
+    // Two taps here too, as in the Saved menu: the first arms Delete briefly.
     this.click("marker-delete", () => {
+      if (!this.cardDeleteArmed) {
+        this.armCardDelete(true);
+        return;
+      }
+      this.armCardDelete(false);
       const deleted = this.state.markers.find((m) => m.id === this.editingMarker);
       this.state.markers = this.state.markers.filter(
         (m) => m.id !== this.editingMarker,
@@ -980,6 +989,16 @@ export class ViewerControls {
       updateLabel();
     };
   }
+  private armCardDelete(armed: boolean) {
+    this.cardDeleteArmed = armed;
+    clearTimeout(this.cardDeleteTimer);
+    if (armed) this.cardDeleteTimer = setTimeout(() => this.armCardDelete(false), 3000);
+    // The card's buttons share a row, so the armed label stays short and the
+    // button fills red instead.
+    const button = this.el("marker-delete");
+    button.classList.toggle("armed", armed);
+    button.querySelector("span")!.textContent = armed ? "Tap again" : "Delete";
+  }
   private deleteLabel(key: string) {
     return this.confirming === key ? "Tap again to delete" : "Delete";
   }
@@ -1213,6 +1232,7 @@ export class ViewerControls {
     clearTimeout(this.searchTimer);
     clearTimeout(this.toastTimer);
     clearTimeout(this.spotlightTimer);
+    clearTimeout(this.cardDeleteTimer);
     clearTimeout(this.confirmTimer);
     this.el("map-stage").classList.remove("spotlight");
     this.el("toast").hidden = true;

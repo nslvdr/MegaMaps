@@ -913,6 +913,20 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     submit("marker-form");
     assert.equal(el("toast").textContent, "Upper exit updated");
     assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
+
+    // The card's Delete takes two taps, like the Saved menu's.
+    const deleteLabel = () => el("marker-delete").querySelector("span")!.textContent;
+    controls.options().onMarker(state.markers[0]!);
+    click("marker-delete");
+    assert.equal(state.markers.length, before.length, "one tap only arms Delete");
+    assert.equal(deleteLabel(), "Tap again");
+    assert.equal(el("marker-delete").classList.contains("armed"), true, "armed Delete fills red");
+    controls.options().onMarker(state.markers[0]!);
+    assert.equal(deleteLabel(), "Delete", "reopening the card disarms it");
+    click("marker-delete");
+    click("marker-delete");
+    assert.equal(state.markers.length, before.length - 1);
+    assert.equal(el("toast").textContent, "Upper exit deleted");
   } finally {
     controls.dispose();
     await controls.flush();
