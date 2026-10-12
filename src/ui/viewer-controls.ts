@@ -29,7 +29,7 @@ import {
 } from "../ocr/index";
 import { searchMap, type MapSearchMatch } from "../viewer/map-search";
 import { stepFocus, typeahead } from "./step-focus";
-const sheets = ["display", "saved"] as const;
+const sheets = ["display", "saved", "add"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
@@ -86,8 +86,6 @@ export class ViewerControls {
   private rowMenu?: string;
   private rowMenuAnchor?: HTMLElement;
   private rowPopover?: HTMLElement;
-  /** Add was tapped: Place / Route float above the pill until one is picked. */
-  private choosing = false;
   private openSheet?: Sheet;
   // Deleting or renaming rebuilds the Saved rows, which would drop keyboard
   // focus to the page. It returns to the same row, or after a delete to the
@@ -145,7 +143,7 @@ export class ViewerControls {
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
       labelObstacles: () => {
         const stage = this.el("map-stage").getBoundingClientRect();
-        return ["back", "display-chips", "dock", "search-count", "sheet", "add-bar", "tool-bar"].flatMap(id => {
+        return ["back", "display-chips", "dock", "search-count", "sheet", "tool-bar"].flatMap(id => {
           const element = this.el(id);
           if (element.hidden) return [];
           const rect = element.getBoundingClientRect();
@@ -164,7 +162,6 @@ export class ViewerControls {
       onLongPress: (point) => {
         if (this.tool !== "browse") return;
         navigator.vibrate?.(12);
-        if (this.choosing) this.choose(false);
         this.openMarker("New place", point);
       },
       onDragStart: () => {
@@ -225,7 +222,6 @@ export class ViewerControls {
       this.input("map-search").value = "";
       this.renderSearch();
     }
-    this.choosing = false;
     this.openSheet = name;
     // Row menus start closed each time a panel opens.
     if (name !== previous) this.closeRowMenu();
@@ -235,7 +231,8 @@ export class ViewerControls {
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
-    this.el("sheet-title-icon").innerHTML = name === "display" ? icons.sun : icons.saved;
+    this.el("sheet-title-icon").innerHTML =
+      name === "display" ? icons.sun : name === "add" ? icons.add : icons.saved;
     this.el("search-close").hidden = name !== "search";
     this.input("map-search").setAttribute("aria-expanded", String(name === "search"));
     for (const sheet of sheets) {
@@ -265,12 +262,6 @@ export class ViewerControls {
     if (this.openSheet !== "search") return false;
     this.focusSearch(back ? -1 : this.searchPosition < 0 ? 0 : 1);
     return true;
-  }
-  private choose(open: boolean) {
-    this.sheet(undefined);
-    this.choosing = open;
-    this.renderTool();
-    if (!open) this.el("open-add").focus();
   }
   private mode(tool: Tool) {
     this.tool = tool;
@@ -418,11 +409,6 @@ export class ViewerControls {
         this.renderTool();
       }, 3000);
       this.renderTool();
-      this.toast(
-        start.points.length
-          ? `Tap × again to undo your changes to ${route.name}`
-          : `Tap × again to discard ${route.name}`,
-      );
       return;
     }
     clearTimeout(this.confirmTimer);
@@ -562,7 +548,7 @@ export class ViewerControls {
         this.stepSearch(key.shiftKey);
       }
     });
-    for (const sheet of sheets)
+    for (const sheet of ["display", "saved"] as const)
       this.click(`open-${sheet}`, () =>
         this.sheet(this.openSheet === sheet ? undefined : sheet, true),
       );
@@ -655,12 +641,22 @@ export class ViewerControls {
     this.on(window, "pagehide", () => {
       void this.flush();
     });
-    // Add switches to X to close the choices or cancel the tool.
-    this.click("open-add", () => {
+    this.click("open-add", () =>
+      this.sheet(this.openSheet === "add" ? undefined : "add", true),
+    );
+    // The task card's X cancels: a route is dropped, a moved place goes back.
+    this.click("tool-cancel", () => {
       if (this.tool === "route") this.cancelRoute();
       else if (this.tool === "move") this.finishMove(false);
-      else if (this.tool !== "browse") this.mode("browse");
-      else this.choose(!this.choosing);
+      else this.mode("browse");
+    });
+    this.click("tool-rename", () => {
+      const route = this.route();
+      if (route)
+        this.name("Rename route", route.name, (name) => {
+          route.name = name;
+          this.changed();
+        });
     });
     this.click("add-marker", () => this.mode("marker"));
     this.click("share-saved", () => this.onShare?.());
@@ -827,7 +823,6 @@ export class ViewerControls {
     if (this.rowMenu) {
       this.closeRowMenu(true);
     } else if (this.openSheet) this.sheet(undefined, true);
-    else if (this.choosing) this.choose(false);
     else if (this.tool === "route") this.finishRoute();
     else if (this.tool === "move") this.finishMove(true);
     else if (this.tool !== "browse") this.mode("browse");
@@ -839,46 +834,45 @@ export class ViewerControls {
     this.root.dataset.tool = this.tool;
     const editing = this.tool !== "browse",
       sheetOpen = !!this.openSheet;
-    this.el("add-bar").hidden = !this.choosing;
-    const add = this.el("open-add");
-    add.setAttribute("aria-expanded", String(this.choosing));
-    add.classList.toggle("active", editing || this.choosing);
-    add.innerHTML = editing || this.choosing ? icons.close : icons.add;
-    const addLabel = editing
-      ? this.confirming === "cancel-route"
-        ? "Discard?"
-        : "Cancel"
-      : this.choosing
-        ? "Close"
-        : "Add";
-    add.setAttribute("aria-label", addLabel);
-    add.title = addLabel;
-    // One task at a time: the panels wait until placing is over.
+    // One task at a time: its card takes the pill's place until it's over.
     for (const sheet of sheets)
       this.el<HTMLButtonElement>(`open-${sheet}`).disabled = editing;
     this.input("map-search").disabled = editing;
+    this.el("dock").hidden = editing;
     this.el("tool-bar").hidden = !editing || sheetOpen;
     const route = this.route();
     const count = route?.points.length ?? 0;
-    const texts: Record<Tool, [string, string]> = {
-      browse: ["", ""],
+    const discarding = this.confirming === "cancel-route";
+    const texts: Record<Tool, [string, string, string]> = {
+      browse: ["", "", ""],
       move: [
+        icons.move,
         this.movingPlace()?.label ?? "Place",
         "Drag the pin, or tap where it goes",
       ],
-      marker: ["New place", "Tap the map where it goes"],
+      marker: [icons.pin, "New place", "Tap the map where it goes"],
       route: [
-        count
-          ? `${route?.name ?? "Route"} · ${plural(count, "point")}`
-          : (route?.name ?? "Route"),
-        // Done waits for a second point, so the hint asks for it.
-        count > 1 ? "Tap to add, drag points to adjust"
-          : count ? "Tap where it goes next" : "Tap where the route starts",
+        icons.route,
+        route?.name ?? "Route",
+        discarding
+          ? this.routeStart?.points.length
+            ? "Tap × again to undo your changes"
+            : "Tap × again to discard this route"
+          // Done waits for a second point, so the hint asks for it.
+          : count > 1 ? `${plural(count, "point")} · Tap to add, drag to adjust`
+          : count ? "1 point · Tap where it goes next" : "Tap where the route starts",
       ],
     };
-    const [title, message] = texts[this.tool];
+    const [icon, title, message] = texts[this.tool];
+    this.el("tool-icon").innerHTML = icon;
     this.el("tool-title").textContent = title;
     this.el("tool-message").textContent = message;
+    this.el("tool-rename").hidden = this.tool !== "route";
+    const cancel = this.el("tool-cancel");
+    cancel.classList.toggle("armed", discarding);
+    const cancelLabel = discarding ? "Discard?" : "Cancel";
+    cancel.setAttribute("aria-label", cancelLabel);
+    cancel.title = cancelLabel;
     this.el("tool-actions").hidden = this.tool !== "route" && this.tool !== "move";
     this.el("route-undo").hidden = this.tool !== "route";
     this.el<HTMLButtonElement>("route-undo").disabled =

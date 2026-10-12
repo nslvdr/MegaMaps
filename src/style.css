@@ -1065,7 +1065,7 @@ dialog textarea {
 .search-field > svg {
   color: var(--c);
 }
-.viewer .glass button:not(.tool-done, .add-choice, #open-add, .search-count):active:not(:disabled) {
+.viewer .glass button:not(#open-saved, #open-add, .search-count):active:not(:disabled) {
   background-color: var(--fill-strong);
 }
 button.glass:active:not(:disabled) {
@@ -1188,7 +1188,6 @@ button.glass:active:not(:disabled) {
 
 /* Bottom pill: Saved, a flexible search field, and a solid Add action. */
 .dock,
-.add-bar,
 .tool-bar,
 .sheet,
 .viewer-error {
@@ -1224,10 +1223,6 @@ button.glass:active:not(:disabled) {
   transition:
     background-color 0.15s,
     box-shadow 0.15s;
-}
-#open-saved {
-  background: color-mix(in srgb, var(--c) 12%, #000);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent);
 }
 .dock > button svg {
   width: 100%;
@@ -1397,7 +1392,7 @@ button.glass:active:not(:disabled) {
   height: 20px;
 }
 #open-add,
-.add-bar,
+.sheet[data-panel="add"],
 .tool-bar,
 .place-card {
   --c: var(--neon-add);
@@ -1409,7 +1404,6 @@ button.glass:active:not(:disabled) {
 #rotation-lock[aria-pressed="true"] {
   --c: var(--neon-lock);
 }
-.dock > button[aria-expanded="true"]:not(#open-add),
 #rotation-lock[aria-pressed="true"] {
   background: color-mix(in srgb, var(--c) 22%, #000);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent);
@@ -1431,142 +1425,100 @@ button.glass:active:not(:disabled) {
 }
 
 /* ---------- Add, placing and drawing ---------- */
-/* The pill stays put. Add switches to X (close / cancel) and whatever Add
-   needs floats just above the pill: first Place / Route, then the tap hint. */
+/* Saved and Add are solid neon buttons; each opens its panel above the pill.
+   Placing, drawing or moving swaps the pill for a card with the panels'
+   header (icon, title, X), a hint and full-size actions. */
+#open-saved,
 #open-add {
-  background: var(--neon-add);
+  background: var(--c);
   color: #000;
 }
+#open-saved svg,
 #open-add svg {
   color: currentColor;
   filter: none;
 }
-#open-add:active:not(.active) {
-  background: color-mix(in srgb, var(--neon-add) 75%, #fff);
-}
-#open-add.active {
-  background: color-mix(in srgb, var(--c) 22%, #000);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent);
-  color: var(--c);
+#open-saved:active:not(:disabled),
+#open-add:active:not(:disabled) {
+  background: color-mix(in srgb, var(--c) 75%, #fff);
 }
 .dock button:disabled {
   opacity: 0.35;
 }
-.add-bar,
 .tool-bar {
   position: absolute;
   z-index: 5;
-  bottom: calc(var(--hud-bottom) + var(--dock-h) + 10px);
-  animation: float-up 0.18s ease-out;
+  bottom: var(--hud-bottom);
+  padding: var(--surface-padding);
+  border-radius: var(--radius-lg);
+  background: var(--glass-strong);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+  animation: sheet-in 0.24s var(--ease-out);
+  --accent: var(--c);
 }
-@keyframes float-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
+.tool-bar .sheet-header {
+  margin-bottom: var(--space-8);
 }
-.add-bar {
-  display: flex;
+.tool-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+}
+/* Undo and Done share one row, Done on the thumb side. */
+.tool-actions {
+  flex-wrap: nowrap;
+  margin-top: var(--space-16);
+}
+.tool-actions > :first-child {
+  flex-basis: 0;
+}
+.add-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-12);
 }
 .add-choice {
-  flex: 1;
   min-width: 0;
-  height: 54px;
+  min-height: 88px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-8);
   border-radius: var(--radius-md);
-  border-color: color-mix(in srgb, var(--c) 35%, transparent);
+  background: color-mix(in srgb, var(--k) 6%, #000);
+  border: 1px solid color-mix(in srgb, var(--k) 35%, transparent);
   font-size: var(--font-size-body);
   font-weight: 650;
 }
 .add-choice svg {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   stroke-width: 2;
+  color: var(--k);
 }
-.add-choice.places svg {
-  color: var(--kind-place);
+.add-choice.places {
+  --k: var(--kind-place);
 }
-.add-choice.routes svg {
-  color: var(--kind-route);
+.add-choice.routes {
+  --k: var(--kind-route);
 }
-.add-choice:active {
-  background: color-mix(in srgb, var(--c) 22%, #000);
+.add-choice:active:not(:disabled) {
+  background: color-mix(in srgb, var(--k) 18%, #000);
 }
-/* A slim line of instruction; routes add Undo and Done at its end. */
-.tool-bar {
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  border-color: color-mix(in srgb, var(--c) 40%, transparent);
+@media (hover: hover) {
+  .add-choice:hover {
+    background: color-mix(in srgb, var(--k) 12%, #000);
+    border-color: color-mix(in srgb, var(--k) 55%, transparent);
+  }
 }
-.tool-hint {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: 0 var(--space-12);
-  font-size: var(--font-size-small);
-  line-height: 18px;
-  color: #c9ced4;
-}
-.tool-hint strong {
-  color: var(--text);
-  font-weight: 650;
-  margin-right: var(--space-8);
-}
-/* Beside Undo and Done the hint is too long for one line; give it its own
-   line under the title instead of wrapping mid-sentence. */
-.tool-bar:has(.tool-actions:not([hidden])) .tool-hint span {
-  display: block;
-}
-.tool-actions {
-  flex-shrink: 0;
-  display: flex;
-  gap: var(--space-8);
-}
-.tool-actions button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-8);
-  height: 38px;
-  border-radius: var(--radius-md);
-  background: var(--fill-strong);
-  font-size: var(--font-size-body);
-  font-weight: 650;
-}
-.tool-actions svg {
-  width: 19px;
-  height: 19px;
-}
-/* Touch targets reach the bar's edges and split the gap between them. */
-.tool-actions button {
-  position: relative;
-}
-.tool-actions button::after {
-  content: "";
-  position: absolute;
-  inset: -4px -3px;
-}
-.tool-undo {
-  width: 38px;
-  padding: 0;
-}
-.tool-done {
-  padding: 0 var(--space-16) 0 var(--space-12);
-}
-.tool-done:not(:disabled) {
-  background: var(--c);
-  color: #0f1a00;
-}
-.tool-actions button:disabled {
-  opacity: 0.4;
+/* Armed for a second tap, like Delete: filled red so it reads as final. */
+.tool-bar .dialog-close.armed {
+  --accent: var(--danger);
+  background: var(--danger);
+  color: #1a0703;
 }
 
 /* Place details and editing share a bottom card, within thumb reach. New
@@ -1667,7 +1619,8 @@ dialog.place-card::backdrop {
 }
 .kind-picker {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Ten kinds: five a row with room, otherwise as many as fit. */
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   gap: var(--space-8);
 }
 .kind-pick {
@@ -1736,11 +1689,6 @@ dialog.place-card::backdrop {
 .add-note svg {
   width: 18px;
   height: 18px;
-}
-@media (max-width: 479px) {
-  .kind-picker {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* ---------- Panels: Saved above the dock, View below the top controls ---------- */
@@ -2175,11 +2123,9 @@ label.panel-row {
 @media (hover: hover) {
   .navigation-jump:hover .row-icon { background: #ffffff1f; }
   .row-more:hover:not([aria-expanded="true"]) { background: #ffffff12; color: var(--text); }
-  .dock > button:hover:not(#open-add, :disabled, [aria-expanded="true"], .active) {
-    background: #ffffff12;
-  }
-  #open-add:hover:not(.active) {
-    background: color-mix(in srgb, var(--neon-add) 85%, #fff);
+  #open-saved:hover:not(:disabled),
+  #open-add:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--c) 85%, #fff);
   }
   .status-chip:hover:not(:disabled),
   .corner-button:hover:not(:disabled) {
@@ -2362,17 +2308,16 @@ label.panel-row {
 
 @media (max-height: 520px) {
   .tool-bar {
-    min-height: 40px;
-    padding: var(--space-4);
+    padding: var(--space-12) var(--space-16);
+  }
+  .tool-actions {
+    margin-top: var(--space-8);
   }
   .tool-actions button {
-    height: 34px;
-  }
-  .tool-undo {
-    width: 34px;
+    min-height: 40px;
   }
   .add-choice {
-    height: 42px;
+    min-height: 64px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

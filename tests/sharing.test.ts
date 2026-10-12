@@ -58,6 +58,10 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   const legacy = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "bookmark" }] };
   const decoded = await readShare(rawFile(legacy));
   assert.deepEqual(decoded.manifest.markers, [{ ...manifest.markers[0]!, kind: "landmark" }]);
+  for (const kind of ["junction", "note"]) {
+    const retired = { ...manifest, markers: [{ ...manifest.markers[0]!, kind }] };
+    assert.equal((await readShare(rawFile(retired))).manifest.markers[0]!.kind, "landmark", `retired ${kind} places become landmarks`);
+  }
   assert.deepEqual((await readShare(encodeShare(decoded.manifest))).manifest, decoded.manifest);
 
   const destination = { ...record("legacy-bookmark-import"), fingerprint: manifest.map.fingerprint };

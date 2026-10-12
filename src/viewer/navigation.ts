@@ -10,7 +10,7 @@ export interface MapMarker {
   point: Point;
   label: string;
   note: string;
-  kind: "entrance" | "junction" | "landmark" | "note";
+  kind: keyof typeof markerKinds;
   created: number;
 }
 /** Saved by older versions; now loaded as places. */
@@ -79,7 +79,9 @@ export function defaultNavigation(mapId: string): NavigationState {
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
 // A draft with no points only survives when the page went away mid-draw; drop it.
-type StoredMarker = Omit<MapMarker, "kind"> & { kind: MapMarker["kind"] | "bookmark" };
+// Kinds that were folded into Landmark; old saves and shared files still use them.
+export const legacyMarkerKinds = ["bookmark", "junction", "note"] as const;
+type StoredMarker = Omit<MapMarker, "kind"> & { kind: MapMarker["kind"] | (typeof legacyMarkerKinds)[number] };
 type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   mapId: string;
   markers?: StoredMarker[];
@@ -88,7 +90,7 @@ type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
 };
 /** Keep saved points and shared files compatible with the merged landmark type. */
 export const normalizeMarkerKind = (kind: StoredMarker["kind"]): MapMarker["kind"] =>
-  kind === "bookmark" ? "landmark" : kind;
+  Object.hasOwn(markerKinds, kind) ? kind as MapMarker["kind"] : "landmark";
 export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const defaults = defaultNavigation(stored.mapId);
   const current: StoredNavigation = { ...stored };
@@ -126,9 +128,16 @@ export const routeColor = (state: NavigationState, id: string) =>
 export const markerKinds = {
   landmark: { label: "Landmark", color: "#ff9a5c" },
   entrance: { label: "Entrance", color: "#7dff8a" },
-  junction: { label: "Junction", color: "#ffd23f" },
-  note: { label: "Note", color: "#e3e3e3" },
-} as const satisfies Record<MapMarker["kind"], { label: string; color: string }>;
+  shaft: { label: "Shaft", color: "#b18cff" },
+  stairs: { label: "Stairs", color: "#ffd23f" },
+  squeeze: { label: "Squeeze", color: "#3ef0c8" },
+  "dead-end": { label: "Dead end", color: "#9aa4b2" },
+  unstable: { label: "Unstable", color: "#ff4d4d" },
+  flooded: { label: "Flooded", color: "#5aa9ff" },
+  machinery: { label: "Machinery", color: "#d9a86c" },
+  graffiti: { label: "Graffiti", color: "#ff5fa2" },
+  "new-room": { label: "New room", color: "#e3e3e3" },
+} as const satisfies Record<string, { label: string; color: string }>;
 export function captureView(camera: Camera, viewport: Size): SavedView {
   return {
     center: screenToWorld(camera, {
