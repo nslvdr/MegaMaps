@@ -119,6 +119,8 @@ const thumbnails = new Map<string, string>();
 // A map shown dark is previewed dark too, the way the viewer tones it, rather
 // than as the brightest thing on a black screen.
 const darkFilters = new Map<string, Promise<string>>();
+// The filter each card's preview was last shown with, for the delete dialog.
+const shownFilters = new Map<string, string>();
 function darkFilter(id: string, url: string) {
   let filter = darkFilters.get(id);
   if (!filter) {
@@ -346,10 +348,12 @@ function confirmDelete(map: MapRecord) {
   deleting = map;
   // The thumbnail shows which map goes, not just its name.
   const thumbnail = thumbnails.get(map.id);
-  element("delete-name").replaceChildren(
-    ...(thumbnail ? [Object.assign(document.createElement("img"), { src: thumbnail, alt: "", draggable: false })] : []),
-    displayName(map.name),
-  );
+  const img = thumbnail && Object.assign(document.createElement("img"), { src: thumbnail, alt: "", draggable: false });
+  if (img) img.style.filter = shownFilters.get(map.id) ?? "";
+  // Framed from outside, so a dark preview's filter leaves the border alone.
+  const frame = img && Object.assign(document.createElement("span"), { className: "delete-thumb" });
+  if (frame && img) frame.append(img);
+  element("delete-name").replaceChildren(...(frame ? [frame] : []), displayName(map.name));
   const note = element("delete-note");
   note.textContent = "This removes the map and its saved routes and places from this device.";
   showDialog(deleteDialog);
@@ -403,6 +407,7 @@ async function refresh() {
       URL.revokeObjectURL(url);
       thumbnails.delete(id);
       darkFilters.delete(id);
+      shownFilters.delete(id);
     }
   // Behind an open map the grid is unseen; going home renders it afresh.
   if (home.hidden) return;
@@ -475,6 +480,7 @@ async function refresh() {
       const inverted = await navigation.then((state) => state.inverted, () => false);
       const filter = inverted ? await darkFilter(map.id, url) : "";
       if (version !== renderVersion) return;
+      shownFilters.set(map.id, filter);
       const img = new Image();
       img.style.filter = filter;
       img.src = url;
