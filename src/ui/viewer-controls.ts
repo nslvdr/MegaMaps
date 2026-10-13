@@ -1210,7 +1210,10 @@ export class ViewerControls {
     options: {
       key: string;
       label: string;
-      detail: string;
+      description?: string;
+      /** Shown before the photo count, e.g. a route's points. */
+      meta?: string;
+      photos?: string[];
       icon: string;
       jump: () => void;
       actions: {
@@ -1230,17 +1233,32 @@ export class ViewerControls {
     button.className = "navigation-jump";
     const icon = document.createElement("i"),
       text = document.createElement("span"),
-      title = document.createElement("strong"),
-      description = document.createElement("small");
+      title = document.createElement("strong");
     icon.className = "row-icon";
     icon.innerHTML = options.icon;
     text.className = "row-text";
     title.textContent = options.label;
     title.title = options.label;
-    description.textContent = options.detail;
-    description.title = options.detail;
     text.append(title);
-    if (options.detail) text.append(description);
+    // One line under the name: a route's points, the photo count, then the description.
+    const photoCount = options.photos?.length ?? 0;
+    if (options.meta || photoCount || options.description) {
+      const detail = document.createElement("small");
+      detail.className = "row-detail";
+      if (options.meta)
+        detail.append(options.meta + (photoCount || options.description ? " · " : ""));
+      if (photoCount) {
+        const photos = document.createElement("span");
+        photos.className = "row-photos";
+        photos.innerHTML = icons.photos;
+        photos.append(String(photoCount));
+        photos.setAttribute("role", "img");
+        photos.setAttribute("aria-label", plural(photoCount, "photo"));
+        detail.append(photos, options.description ? " · " : "");
+      }
+      if (options.description) detail.append(options.description);
+      text.append(detail);
+    }
     button.append(icon, text);
     button.addEventListener("click", () => {
       options.jump();
@@ -1394,7 +1412,8 @@ export class ViewerControls {
       this.row(markers, {
         key: marker.id,
         label: marker.label,
-        detail: marker.description,
+        description: marker.description,
+        photos: marker.photos,
         icon: placeIcon(marker.kind),
         jump: () => this.showDetails(marker),
         actions: [
@@ -1431,7 +1450,9 @@ export class ViewerControls {
       this.row(routes, {
         key: route.id,
         label: route.name,
-        detail: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
+        description: route.description,
+        meta: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
+        photos: route.photos,
         icon: this.routeIcon(route),
         jump: () => this.showDetails(route),
         actions: [
@@ -1459,22 +1480,15 @@ export class ViewerControls {
         ],
       });
     }
-    // An empty list offers the one thing to do next, rather than pointing at Add.
-    for (const [container, empty, label, icon, start] of [
-      [markers, "No places yet.", "Add place", icons.pin, "add-marker"],
-      [routes, "No routes yet.", "Draw route", icons.route, "add-route"],
+    // An empty list points at Add in the bar below.
+    for (const [container, empty] of [
+      [markers, "No places yet."],
+      [routes, "No routes yet."],
     ] as const)
       if (!container.childElementCount) {
         const item = document.createElement("li");
         item.className = "empty-list";
-        const text = document.createElement("span");
-        text.textContent = empty;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "empty-action";
-        button.innerHTML = `${icon}<span>${label}</span>`;
-        button.addEventListener("click", () => this.el(start).click());
-        item.append(text, button);
+        item.innerHTML = `${empty} Tap <span class="empty-add">${icons.add}Add</span> below.`;
         container.append(item);
       }
     // Measure only after all rows are back in the list and the panel has its final height.
