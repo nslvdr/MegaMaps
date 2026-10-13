@@ -34,6 +34,21 @@ export function needsOcr(index: OcrIndex | undefined) {
   return !index || index.version !== OCR_VERSION;
 }
 
+const digit = /\p{N}/u;
+/** Where normalized text holds the needle. Words match from any part, but a
+ * number only whole: "25" finds 25, never 125 or 250. */
+export function findText(text: string, needle: string) {
+  const offsets: number[] = [];
+  let offset = text.indexOf(needle);
+  while (offset !== -1) {
+    const cutsNumber = (digit.test(needle[0]!) && digit.test(text[offset - 1] ?? "")) ||
+      (digit.test(needle.at(-1)!) && digit.test(text[offset + needle.length] ?? ""));
+    if (!cutsNumber) offsets.push(offset);
+    offset = text.indexOf(needle, offset + (cutsNumber ? 1 : needle.length));
+  }
+  return offsets;
+}
+
 // Phrase matches highlight just the matching words, including partial-word
 // queries, but carry the whole line so the callout reads in context.
 export function searchOcr(
@@ -53,8 +68,7 @@ export function searchOcr(
     });
     const text = spans.map((span) => span.text).join(" ");
     const label = line.words.map((word) => word.text).join(" ");
-    let offset = text.indexOf(needle);
-    while (offset !== -1) {
+    for (const offset of findText(text, needle)) {
       const words = spans.filter(
         (span) => span.start < offset + needle.length && span.end > offset,
       );
@@ -63,7 +77,6 @@ export function searchOcr(
           text: label,
           polygons: words.map(({ word }) => word.polygon),
         });
-      offset = text.indexOf(needle, offset + needle.length);
     }
   }
   // Overlapping crops and angle passes can see the same label more than once.

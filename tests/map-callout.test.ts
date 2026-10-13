@@ -213,6 +213,13 @@ test("search shows text and saved-place callouts together and restores saved lab
   assert.equal(Number(hole.getAttribute("cx")), point.x);
   assert.equal(Number(hole.getAttribute("cy")), point.y);
   assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
+  // A tap on a result's label answers with that result, and only on the label.
+  const labelCenter = (label: SVGGElement) => {
+    const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+    return { x: x! + Number(label.querySelector("rect")!.getAttribute("width")) / 2, y: y! + 18 };
+  };
+  assert.deepEqual(callouts.map(label => search.labelAt(labelCenter(label))), [0, 1]);
+  assert.equal(search.labelAt({ x: -50, y: -50 }), undefined);
   saved.setLayers({ places: false, labels: false, routes: false });
   draw();
   assert.ok(callouts.every(label => !label.hasAttribute("hidden")), "search results remain visible independently of saved layers");
@@ -222,6 +229,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   draw();
   assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), false);
   assert.equal(searchSvg.hasAttribute("hidden"), true);
+  assert.equal(search.labelAt(labelCenter(callouts[0]!)), undefined, "a closed search answers no taps");
   search.dispose();
   saved.dispose();
 });
@@ -330,4 +338,20 @@ test("large labels draw a taller, wider chip for the same text", () => {
   assert.equal(standard.height, 36);
   assert.equal(large.height, 40);
   assert.ok(large.width > standard.width);
+});
+
+test("a double search result reveals where its pair meets and the saved places in it", () => {
+  const { document } = parseHTML('<html><body><svg></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const search = new SearchOverlay(svg);
+  const pin = { x: 300, y: 120 }, midpoint = { x: 200, y: 110 };
+  search.set([{ text: "25; Puits", midpoint, pins: [pin],
+    polygons: [[{ x: 60, y: 100 }, { x: 110, y: 100 }, { x: 110, y: 120 }, { x: 60, y: 120 }]] }], true);
+  search.draw({ x: 0, y: 0, scale: 1 }, { width: 600, height: 600 });
+  const circles = [...svg.querySelectorAll("mask circle")].map(circle =>
+    ({ x: Number(circle.getAttribute("cx")), y: Number(circle.getAttribute("cy")) }));
+  assert.deepEqual(circles, [midpoint, pin]);
+  assert.equal(svg.querySelectorAll("mask polygon").length, 1);
+  search.dispose();
 });

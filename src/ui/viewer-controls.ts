@@ -35,7 +35,7 @@ import {
   ocrLabelAt,
   type OcrIndex,
 } from "../ocr/index";
-import { searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
 const sheets = ["display", "rotation", "saved", "add"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
@@ -204,6 +204,8 @@ export class ViewerControls {
       onMarker: (marker) => this.showDetails(marker),
       onRoute: (route) => this.showDetails(route),
       onEmptyTap: () => this.closePlaceDetails(),
+      // A result's label flies to that result, like stepping to it.
+      onSearchResult: (index) => this.showMatch(index),
       // Long-press drops a place without going through Add.
       onLongPress: (point) => {
         if (this.tool !== "browse") return;
@@ -1543,11 +1545,12 @@ export class ViewerControls {
     const showing = this.viewer?.showing;
     const first = this.searchMatches[0];
     if (!first || !showing) return;
-    const points = (match: MapSearchMatch) =>
-      match.marker ? [match.marker.point] : match.polygons.flat();
-    if (this.searchMatches.some((match) => showing.call(this.viewer, points(match)))) return;
-    if (first.marker) this.viewer?.jumpTo(first.marker.point);
-    else this.viewer?.fitPoints(points(first));
+    if (this.searchMatches.some((match) => showing.call(this.viewer, matchPoints(match)))) return;
+    this.frameMatch(first);
+  }
+  private frameMatch(match: MapSearchMatch) {
+    if (match.marker) this.viewer?.jumpTo(match.marker.point);
+    else this.viewer?.fitPoints(matchPoints(match));
   }
   private renderSearch(statusOnly = false) {
     if (!statusOnly) {
@@ -1591,15 +1594,17 @@ export class ViewerControls {
       delta = 0;
     }
     const count = this.searchMatches.length;
-    if (!count) return;
-    this.searchPosition = (Math.max(0, this.searchPosition) + delta + count) % count;
-    const match = this.searchMatches[this.searchPosition]!;
+    if (count) this.showMatch((Math.max(0, this.searchPosition) + delta + count) % count);
+  }
+  private showMatch(position: number) {
+    const match = this.searchMatches[position];
+    if (!match) return;
+    this.searchPosition = position;
     // The on-screen keyboard goes away so the match is in view.
     this.input("map-search").blur();
-    this.viewer?.setSearch?.(this.searchMatches, true, this.searchPosition);
+    this.viewer?.setSearch?.(this.searchMatches, true, position);
     this.renderSearch(true);
-    if (match.marker) this.viewer?.jumpTo(match.marker.point);
-    else this.viewer?.fitPoints(match.polygons.flat());
+    this.frameMatch(match);
   }
   async flush() {
     await this.persistence.flush();

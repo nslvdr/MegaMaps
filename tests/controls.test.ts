@@ -889,6 +889,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").textContent, "2 / 2");
     assert.equal(el("search-count").getAttribute("aria-label"), "Match 2 of 2. Next match");
     assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
+    // Tapping a result's label on the map flies there and keeps every match.
+    controls.options().onSearchResult?.(0);
+    assert.deepEqual(framed.at(-1), polygon);
+    assert.equal(highlights?.selected, 0);
+    assert.equal(highlights?.matches.length, 2);
+    assert.equal(el("search-count").textContent, "1 / 2");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.matches.length, 2, "typing keeps the previous search until the debounce settles");
@@ -901,6 +907,19 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").textContent, "No matches");
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
+    // A double search keeps the results of both searches that meet.
+    input("map-search", "north; south");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(200);
+    assert.equal(el("search-count").textContent, "No matches");
+    const southPolygon = polygon.map(({ x, y }) => ({ x, y: y + 30 }));
+    controls.updateOcr({ ...multiple, lines: [...multiple.lines,
+      { text: "South", confidence: 90, words: [{ text: "South", polygon: southPolygon }] }] });
+    assert.equal(el("search-count").textContent, "1 match");
+    assert.deepEqual(highlights?.matches[0]?.midpoint, { x: 140, y: 225 });
+    click("search-count");
+    assert.deepEqual(framed.at(-1), [...polygon, ...southPolygon, { x: 140, y: 225 }], "both results come into view");
+    controls.updateOcr(multiple);
     input("map-search", "");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.active, false);
