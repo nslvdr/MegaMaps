@@ -180,9 +180,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       ["open-saved", "open-search", "open-add"],
     );
     assert.equal(el("map-search").parentElement, el("open-search"));
-    // An empty Saved list points at Add in the bar instead of offering its own button.
-    for (const id of ["marker-list", "route-list"]) {
-      assert.match(el(id).querySelector(".empty-list")!.textContent!, /Tap Add below/);
+    // Empty Saved lists show their status without offering their own button.
+    for (const [id, message] of [
+      ["marker-list", "No places yet."],
+      ["route-list", "No routes yet."],
+    ] as const) {
+      assert.equal(el(id).querySelector(".empty-list")!.textContent, message);
       assert.equal(el(id).querySelector("button"), null);
     }
     const refreshesBeforeOpening = labelRefreshes;
