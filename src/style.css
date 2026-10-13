@@ -2401,18 +2401,6 @@ label.panel-row {
   font-size: var(--font-size-small);
   line-height: 1.5;
 }
-/* Names Add in the bar, in Add's colour; it isn't a button itself. */
-.empty-add {
-  color: var(--neon-add);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.empty-add svg {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-4);
-  vertical-align: -3px;
-}
 
 /* ---------- Overlay symbols ---------- */
 /* Editing: the route's points grow into draggable handles; a place being

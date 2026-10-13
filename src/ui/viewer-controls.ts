@@ -1480,7 +1480,7 @@ export class ViewerControls {
         ],
       });
     }
-    // An empty list points at Add in the bar below.
+    // Empty lists keep a short status message.
     for (const [container, empty] of [
       [markers, "No places yet."],
       [routes, "No routes yet."],
@@ -1488,7 +1488,7 @@ export class ViewerControls {
       if (!container.childElementCount) {
         const item = document.createElement("li");
         item.className = "empty-list";
-        item.innerHTML = `${empty} Tap <span class="empty-add">${icons.add}Add</span> below.`;
+        item.textContent = empty;
         container.append(item);
       }
     // Measure only after all rows are back in the list and the panel has its final height.
