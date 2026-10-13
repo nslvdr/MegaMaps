@@ -908,7 +908,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
     // Two alleys at once look for where they cross.
-    input("map-search", "north & south");
+    input("map-search", "north; south");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
     assert.equal(el("search-count").textContent, "No crossing");

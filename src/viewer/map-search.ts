@@ -6,26 +6,25 @@ import type { MapMarker } from "./navigation";
 export type MapSearchMatch = OcrMatch & { marker?: MapMarker; crossing?: Point };
 
 // Keep every location, including repeated names, and search saved places before OCR is ready.
-// A query naming two alleys that matches nothing as a whole looks for their crossing.
+// Two alleys split by a semicolon look for their crossing instead.
 export function searchMap(index: OcrIndex | undefined, markers: MapMarker[], query: string): MapSearchMatch[] {
+  const terms = crossingTerms(query);
+  if (terms) {
+    const crossing = findCrossing(index, terms);
+    return crossing ? [crossing] : [];
+  }
   const normalized = normalizeText(query);
   if (!normalized) return [];
   const places = markers.filter(marker =>
     normalizeText(`${marker.label} ${marker.description}`).includes(normalized),
   ).map(marker => ({ text: marker.label, polygons: [], marker }));
-  const matches = [...places, ...searchOcr(index, query)];
-  const terms = matches.length ? undefined : crossingTerms(query);
-  const crossing = terms && findCrossing(index, terms);
-  return crossing ? [crossing] : matches;
+  return [...places, ...searchOcr(index, query)];
 }
 
-/** "Allée 25 et 55", "25 & 55" or "Allée 25 / Allée 55": a bare second name borrows the first's words. */
+/** "Allée 25; Allée 55": the two alleys whose crossing is wanted. */
 export function crossingTerms(query: string): [string, string] | undefined {
-  const parts = query.split(/\s+(?:et|and)\s+|[&/]/i).map(normalizeText);
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return undefined;
-  const [first, second] = parts as [string, string];
-  const words = first.split(" ");
-  return [first, words.length > 1 && !second.includes(" ") ? [...words.slice(0, -1), second].join(" ") : second];
+  const parts = query.split(";").map(normalizeText);
+  return parts.length === 2 && parts[0] && parts[1] ? [parts[0], parts[1]] : undefined;
 }
 
 const box = (match: OcrMatch) => {

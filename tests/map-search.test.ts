@@ -36,11 +36,11 @@ test("combined search never limits matches and uses the latest edited place data
 });
 
 test("two alley names find where their labels meet", () => {
-  assert.deepEqual(crossingTerms("Allée 25 et 55"), ["allee 25", "allee 55"]);
-  assert.deepEqual(crossingTerms("25 & 55"), ["25", "55"]);
-  assert.deepEqual(crossingTerms("Allée 25 / Allée 55"), ["allee 25", "allee 55"]);
-  assert.equal(crossingTerms("Allée 25"), undefined);
-  assert.equal(crossingTerms("Allée 25 et "), undefined, "half-typed queries stay plain searches");
+  assert.deepEqual(crossingTerms("Allée 25 ; Allée 55"), ["allee 25", "allee 55"]);
+  assert.deepEqual(crossingTerms("25;55"), ["25", "55"]);
+  assert.equal(crossingTerms("Allée 25 et 55"), undefined, "only a semicolon splits a query");
+  assert.equal(crossingTerms("Allée 25;"), undefined, "half-typed queries stay plain searches");
+  assert.equal(crossingTerms("25;55;75"), undefined);
   const word = (text: string, x: number, y: number) =>
     ({ text, confidence: 99, words: text.split(" ").map((part, i) => ({ text: part,
       polygon: [{ x: x + i * 60, y }, { x: x + i * 60 + 50, y }, { x: x + i * 60 + 50, y: y + 20 }, { x: x + i * 60, y: y + 20 }] })) });
@@ -48,10 +48,10 @@ test("two alley names find where their labels meet", () => {
     word("Allée 25", 0, 0), word("Allée 125", 0, 40), word("Allée 55", 2000, 0),
     word("Allée 25", 1000, 1000), word("Allée 55", 1000, 1050),
   ] };
-  const [crossing] = searchMap(alleys, [], "Allée 25 et 55");
+  const [crossing] = searchMap(alleys, [], "Allée 25; Allée 55");
   assert.deepEqual(crossing!.crossing, { x: 1055, y: 1035 }, "the closest pair of labels, ignoring Allée 125");
   assert.equal(crossing!.text, "Allée 25 × Allée 55");
   assert.equal(crossing!.polygons.length, 4);
-  assert.deepEqual(searchMap(alleys, [], "Allée 125 et 55"), [], "labels far apart do not cross");
+  assert.deepEqual(searchMap(alleys, [], "Allée 125; Allée 55"), [], "labels far apart do not cross");
   assert.equal(searchMap(alleys, [], "25").length, 3, "a single name still finds every partial match");
 });
