@@ -1,4 +1,4 @@
-import { worldToScreen, type Camera, type Size } from "./camera";
+import { worldToScreen, type Camera, type Point, type Size } from "./camera";
 import type { MapSearchMatch } from "./map-search";
 import { markerKinds } from "./navigation";
 import { icons, markerCalloutIcon } from "../ui/icons";
@@ -7,10 +7,11 @@ import { CalloutLayout } from "./callout-layout";
 
 const NS = "http://www.w3.org/2000/svg";
 
-// Project place symbols at a fixed screen size and detected text at its map size.
+// Project place symbols and crossings at a fixed screen size and detected text at its map size.
 const project = (match: MapSearchMatch, camera: Camera) => {
   const polygons = match.polygons.map(polygon => polygon.map(point => worldToScreen(camera, point)));
-  const point = match.marker && worldToScreen(camera, match.marker.point);
+  const at = match.marker?.point ?? match.crossing;
+  const point = at && worldToScreen(camera, at);
   const points = point ? [{ x: point.x - 12, y: point.y - 12 }, { x: point.x + 12, y: point.y + 12 }] : polygons.flat();
   if (!points.length) return undefined;
   const xs = points.map(point => point.x), ys = points.map(point => point.y);
@@ -60,7 +61,7 @@ export class SearchOverlay {
       return polygon;
     }));
     this.placeHoles = matches.map(match => {
-      if (!match.marker) return undefined;
+      if (!match.marker && !match.crossing) return undefined;
       const hole = document.createElementNS(NS, "circle");
       hole.setAttribute("fill", "black");
       hole.setAttribute("r", "18");
@@ -75,7 +76,8 @@ export class SearchOverlay {
       group.setAttribute("class", "search-highlight");
       const connector = document.createElementNS(NS, "line");
       connector.setAttribute("class", "search-match-connector");
-      const callout = new MapCallout(match.marker ? markerCalloutIcon(match.marker.kind) : icons.text,
+      const callout = new MapCallout(match.marker ? markerCalloutIcon(match.marker.kind)
+        : match.crossing ? icons.crossing : icons.text,
         match.marker ? markerKinds[match.marker.kind].color : undefined);
       callout.setText(match.text);
       this.callouts.push(callout);
@@ -83,6 +85,13 @@ export class SearchOverlay {
       highlights.append(group);
       return group;
     });
+  }
+  /** The match whose label covers this screen point, if any. */
+  labelAt(screen: Point) {
+    if (!this.active) return undefined;
+    const index = this.callouts.findIndex(({ bounds }) => bounds && screen.x >= bounds.left &&
+      screen.x <= bounds.right && screen.y >= bounds.top && screen.y <= bounds.bottom);
+    return index < 0 ? undefined : index;
   }
   // Protect every target from both search and saved labels, regardless of selection.
   reserve(camera: Camera, layout: CalloutLayout) {

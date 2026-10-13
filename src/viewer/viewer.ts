@@ -51,6 +51,8 @@ export interface ViewerOptions {
   onRoute?(route: PlannedRoute): void;
   /** A browsing tap that hit no place, label or route. */
   onEmptyTap?(): void;
+  /** A search result's label was tapped, by its place among the matches. */
+  onSearchResult?(index: number): void;
   /** Long press on the map while browsing, in image coordinates. */
   onLongPress?(point: Point): void;
   /** A route point or the moving place was picked up (before it changes). */
@@ -452,6 +454,12 @@ export class Viewer {
     }
   }
   private tap(screen: Point) {
+    // Search labels float above everything else on the map, so they answer first.
+    const result = this.tool === "browse" ? this.searchOverlay?.labelAt(screen) : undefined;
+    if (result !== undefined && this.options?.onSearchResult) {
+      this.options.onSearchResult(result);
+      return true;
+    }
     const point = screenToWorld(this.camera, screen);
     if (!insideImage(point, this.map)) {
       if (this.tool !== "browse") return true;
@@ -489,7 +497,8 @@ export class Viewer {
   private cursorAt(screen: Point) {
     if (this.navigation.touchLocked || !insideImage(screenToWorld(this.camera, screen), this.map)) return "";
     if (this.tool === "browse")
-      return this.nearestPlace(screen) || this.overlay?.labelAt(screen) || this.nearestRoute(screen)
+      return this.searchOverlay?.labelAt(screen) !== undefined || this.nearestPlace(screen) ||
+        this.overlay?.labelAt(screen) || this.nearestRoute(screen)
         ? "pointer" : "";
     return this.grabbable(screen) ? "grab" : "crosshair";
   }

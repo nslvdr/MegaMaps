@@ -213,6 +213,13 @@ test("search shows text and saved-place callouts together and restores saved lab
   assert.equal(Number(hole.getAttribute("cx")), point.x);
   assert.equal(Number(hole.getAttribute("cy")), point.y);
   assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
+  // A tap on a result's label answers with that result, and only on the label.
+  const labelCenter = (label: SVGGElement) => {
+    const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+    return { x: x! + Number(label.querySelector("rect")!.getAttribute("width")) / 2, y: y! + 18 };
+  };
+  assert.deepEqual(callouts.map(label => search.labelAt(labelCenter(label))), [0, 1]);
+  assert.equal(search.labelAt({ x: -50, y: -50 }), undefined);
   saved.setLayers({ places: false, labels: false, routes: false });
   draw();
   assert.ok(callouts.every(label => !label.hasAttribute("hidden")), "search results remain visible independently of saved layers");
@@ -222,6 +229,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   draw();
   assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), false);
   assert.equal(searchSvg.hasAttribute("hidden"), true);
+  assert.equal(search.labelAt(labelCenter(callouts[0]!)), undefined, "a closed search answers no taps");
   search.dispose();
   saved.dispose();
 });

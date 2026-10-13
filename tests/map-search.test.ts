@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { searchMap } from "../src/viewer/map-search";
+import { crossingTerms, searchMap } from "../src/viewer/map-search";
 import type { MapMarker } from "../src/viewer/navigation";
 import type { OcrIndex } from "../src/ocr/index";
 
@@ -33,4 +33,25 @@ test("combined search never limits matches and uses the latest edited place data
   const edited = { ...places[0]!, label: "South church", description: "", point: { x: 999, y: 999 } };
   assert.equal(searchMap(index, [edited], "eglise").length, 0);
   assert.deepEqual(searchMap(undefined, [edited], "south")[0]!.marker?.point, edited.point);
+});
+
+test("two alley names find where their labels meet", () => {
+  assert.deepEqual(crossingTerms("Allée 25 et 55"), ["allee 25", "allee 55"]);
+  assert.deepEqual(crossingTerms("25 & 55"), ["25", "55"]);
+  assert.deepEqual(crossingTerms("Allée 25 / Allée 55"), ["allee 25", "allee 55"]);
+  assert.equal(crossingTerms("Allée 25"), undefined);
+  assert.equal(crossingTerms("Allée 25 et "), undefined, "half-typed queries stay plain searches");
+  const word = (text: string, x: number, y: number) =>
+    ({ text, confidence: 99, words: text.split(" ").map((part, i) => ({ text: part,
+      polygon: [{ x: x + i * 60, y }, { x: x + i * 60 + 50, y }, { x: x + i * 60 + 50, y: y + 20 }, { x: x + i * 60, y: y + 20 }] })) });
+  const alleys: OcrIndex = { mapId: "alleys", version: 1, completedAt: 1, lines: [
+    word("Allée 25", 0, 0), word("Allée 125", 0, 40), word("Allée 55", 2000, 0),
+    word("Allée 25", 1000, 1000), word("Allée 55", 1000, 1050),
+  ] };
+  const [crossing] = searchMap(alleys, [], "Allée 25 et 55");
+  assert.deepEqual(crossing!.crossing, { x: 1055, y: 1035 }, "the closest pair of labels, ignoring Allée 125");
+  assert.equal(crossing!.text, "Allée 25 × Allée 55");
+  assert.equal(crossing!.polygons.length, 4);
+  assert.deepEqual(searchMap(alleys, [], "Allée 125 et 55"), [], "labels far apart do not cross");
+  assert.equal(searchMap(alleys, [], "25").length, 3, "a single name still finds every partial match");
 });

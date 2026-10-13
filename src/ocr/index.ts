@@ -36,22 +36,25 @@ export function needsOcr(index: OcrIndex | undefined) {
 
 // Phrase matches highlight just the matching words, including partial-word
 // queries, but carry the whole line so the callout reads in context.
+// Whole words keep "25" from matching "125" or "250".
 export function searchOcr(
   index: OcrIndex | undefined,
   query: string,
+  wholeWords = false,
 ): OcrMatch[] {
-  const needle = normalizeText(query);
+  const pad = wholeWords ? " " : "";
+  const needle = normalizeText(query) && `${pad}${normalizeText(query)}${pad}`;
   if (!index || !needle) return [];
   const matches: OcrMatch[] = [];
   for (const line of index.lines) {
-    let cursor = 0;
+    let cursor = pad.length;
     const spans = line.words.map((word) => {
       const text = normalizeText(word.text);
       const start = cursor;
       cursor += text.length + 1;
       return { word, text, start, end: cursor - 1 };
     });
-    const text = spans.map((span) => span.text).join(" ");
+    const text = `${pad}${spans.map((span) => span.text).join(" ")}${pad}`;
     const label = line.words.map((word) => word.text).join(" ");
     let offset = text.indexOf(needle);
     while (offset !== -1) {
@@ -63,7 +66,8 @@ export function searchOcr(
           text: label,
           polygons: words.map(({ word }) => word.polygon),
         });
-      offset = text.indexOf(needle, offset + needle.length);
+      // Adjacent whole words share the space between them.
+      offset = text.indexOf(needle, offset + needle.length - pad.length);
     }
   }
   // Overlapping crops and angle passes can see the same label more than once.
