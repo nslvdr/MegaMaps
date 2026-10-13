@@ -130,7 +130,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       }
       exportBusy(true);
       // The file is prepared before this click, preserving native user activation.
-      await navigator.share({ files: [file], title: prepared && displayName(prepared.map.name) });
+      // Only the file: iOS saves a title or text as a second file beside it.
+      await navigator.share({ files: [file] });
       sendDialog.close();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("share-error", error);

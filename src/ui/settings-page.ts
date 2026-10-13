@@ -141,7 +141,7 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     if (!backup) return;
     showError();
     try {
-      if (await shareOrDownload(backup, t("Mega Maps backup"), page) === "cancelled") return;
+      if (await shareOrDownload(backup, page) === "cancelled") return;
       const now = Date.now();
       await saveSetting("last-backup", now);
       showLastBackup(now, false);

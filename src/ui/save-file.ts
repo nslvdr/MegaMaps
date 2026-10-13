@@ -11,13 +11,14 @@ export function downloadFile(file: File, root: HTMLElement = document.body) {
 }
 
 /** Native file sharing where supported, else a download. Resolves false if the user cancelled. */
-export async function shareOrDownload(file: File, title: string, root?: HTMLElement) {
+export async function shareOrDownload(file: File, root?: HTMLElement) {
   if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
     downloadFile(file, root);
     return "saved";
   }
   try {
-    await navigator.share({ files: [file], title });
+    // Only the file: iOS saves a title or text as a second file beside it.
+    await navigator.share({ files: [file] });
     return "shared";
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
