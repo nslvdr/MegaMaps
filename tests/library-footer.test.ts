@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { checkAppReachability, initLibraryFooter } from "../src/ui/library-footer";
+import { checkAppReachability, initLibraryFooter, libraryFooterMarkup } from "../src/ui/library-footer";
 
 test("live availability requires a fresh response identifying MegaMaps", async () => {
   assert.equal(await checkAppReachability(true, async (url, options) => {
@@ -27,8 +27,8 @@ test("offline and failed requests never report the live app as available", async
   assert.equal(requests, 1);
 });
 
-test("footer reports live and offline availability independently and keeps the loaded release date", async () => {
-  const { window, document } = parseHTML(`<html><head><meta name="app-built-at" content="2026-10-08T10:30:00Z"></head><body><main id="home"><time id="app-updated-at"></time><span id="internet-status"></span><span id="app-availability"></span><span id="offline-availability"></span></main></body></html>`);
+test("footer reports offline use and connection separately and stamps the loaded release as dd/mm hh:mm", async () => {
+  const { window, document } = parseHTML(`<html><head><meta name="app-built-at" content="${new Date(2026, 9, 8, 7, 5).toISOString()}"></head><body><main id="home">${libraryFooterMarkup}</main></body></html>`);
   let cached = true;
   let reachable = true;
   const browser = {
@@ -57,26 +57,25 @@ test("footer reports live and offline availability independently and keeps the l
   try {
     const home = document.querySelector<HTMLElement>("#home")!;
     const refresh = initLibraryFooter(home);
-    const text = (id: string) => document.getElementById(id)!.textContent;
+    const read = () => [
+      document.getElementById("internet-status")!.dataset.state,
+      document.querySelector("#internet-status strong")!.textContent,
+      document.getElementById("offline-availability")!.dataset.state,
+      document.getElementById("offline-availability")!.textContent,
+    ];
     await refresh();
-    assert.equal(text("internet-status"), "No internet");
-    assert.equal(text("app-availability"), "Live app unavailable");
-    assert.equal(text("offline-availability"), "Available offline");
-    assert.equal(document.querySelector<HTMLTimeElement>("time")!.dateTime, "2026-10-08T10:30:00.000Z");
+    assert.deepEqual(read(), ["idle", "Offline", "available", "Works offline"]);
+    assert.equal(document.querySelector("time")!.textContent, "08/10 07:05");
 
     browser.onLine = true;
     cached = false;
     await refresh();
-    assert.equal(text("internet-status"), "Internet connected");
-    assert.equal(text("app-availability"), "Live app available");
-    assert.equal(text("offline-availability"), "Unavailable offline");
+    assert.deepEqual(read(), ["available", "Online", "unavailable", "Not saved offline"]);
 
     reachable = false;
     cached = true;
     await refresh();
-    assert.equal(text("internet-status"), "Internet unconfirmed");
-    assert.equal(text("app-availability"), "Live app unavailable");
-    assert.equal(text("offline-availability"), "Available offline");
+    assert.deepEqual(read(), ["idle", "Offline", "available", "Works offline"]);
 
     // While a map is open the footer is hidden: connection changes wait.
     home.hidden = true;
