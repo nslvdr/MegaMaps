@@ -168,6 +168,9 @@ export const markerKinds = {
   flooded: { label: t("Flooded"), color: "#5aa9ff" },
   graffiti: { label: t("Graffiti"), color: "#ff5fa2" },
   "new-room": { label: t("New room"), color: "#e3e3e3" },
+  tools: { label: t("Tools"), color: "#d9a066" },
+  photo: { label: t("Photo spot"), color: "#b18cff" },
+  ossuary: { label: t("Ossuary"), color: "#e05bff" },
 } as const satisfies Record<string, { label: string; color: string }>;
 /** Three steps of water depth, shallowest first; a place stores the step number. */
 export const waterLevels = { 1: t("Ankle"), 2: t("Knee"), 3: t("Waist+") } as const;

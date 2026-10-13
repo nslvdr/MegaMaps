@@ -22,7 +22,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
     kind: kind as keyof typeof markerKinds,
     label: `<${kind}>`,
     description: "",
-    point: { x: 100 + index * 85, y: 120 + index * 85 },
+    point: { x: 100 + index * 70, y: 120 + index * 70 },
     created: 0,
   }));
   state.routes = [{

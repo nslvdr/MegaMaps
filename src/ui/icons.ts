@@ -4,7 +4,9 @@ import {
   ArchiveRestore,
   ArrowRight,
   Ban,
+  Bone,
   Bookmark,
+  Camera,
   CaseSensitive,
   Check,
   ChevronDown,
@@ -14,6 +16,7 @@ import {
   CircleAlert,
   CirclePlus,
   Compass,
+  Construction,
   Contrast,
   Crosshair,
   DoorOpen,
@@ -84,7 +87,10 @@ export const placeSymbols = {
   unstable: TriangleAlert,
   flooded: Waves,
   graffiti: SprayCan,
-  "new-room": Pickaxe,
+  "new-room": Construction,
+  tools: Pickaxe,
+  photo: Camera,
+  ossuary: Bone,
 } satisfies Record<MapMarker["kind"], typeof X>;
 
 export const markerCalloutIcon = (kind: MapMarker["kind"]) =>
