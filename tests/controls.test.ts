@@ -180,15 +180,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       ["open-saved", "open-search", "open-add"],
     );
     assert.equal(el("map-search").parentElement, el("open-search"));
-    // An empty Saved list offers a button that starts adding that kind of item.
-    const emptyAction = (id: string) =>
-      el(id).querySelector<HTMLButtonElement>(".empty-list .empty-action")!;
-    assert.equal(emptyAction("marker-list").textContent, "Add place");
-    assert.equal(emptyAction("route-list").textContent, "Draw route");
-    emptyAction("marker-list").dispatchEvent(new window.Event("click"));
-    assert.equal(tools.at(-1), "marker");
-    click("tool-cancel");
-    assert.equal(tools.at(-1), "browse");
+    // An empty Saved list points at Add in the bar instead of offering its own button.
+    for (const id of ["marker-list", "route-list"]) {
+      assert.match(el(id).querySelector(".empty-list")!.textContent!, /Tap Add below/);
+      assert.equal(el(id).querySelector("button"), null);
+    }
     const refreshesBeforeOpening = labelRefreshes;
     focus.mock.resetCalls();
     click("open-saved");
@@ -1361,6 +1357,13 @@ test("a route reads and edits like a place: name, description and photos", async
     await controls.flush();
     assert.deepEqual((await loadNavigation(map.id)).routes[0], route,
       "route details survive saving and reopening the map");
+    // Saved shows one line under the name: points, the photo count, then the description.
+    const savedRow = el("route-list").querySelector(".navigation-row")!;
+    const photos = savedRow.querySelector(".row-detail .row-photos")!;
+    assert.equal(photos.getAttribute("aria-label"), "1 photo");
+    assert.equal(photos.textContent, "1");
+    assert.equal(photos.previousSibling?.textContent, "2 points · ");
+    assert.equal(photos.parentElement?.textContent, "2 points · 1 · Low ceiling past the pillar");
 
     click("marker-edit");
     (el("marker-label") as HTMLInputElement).value = "Discarded name";
