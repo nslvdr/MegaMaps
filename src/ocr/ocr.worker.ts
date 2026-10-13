@@ -1,60 +1,56 @@
-import { createWorker, OEM, PSM } from "tesseract.js";
 import type { MapRecord } from "../types";
-import type { OcrReply } from "./detect";
+import type { OcrReply, OcrRequest } from "./detect";
 import { payloadStore } from "../storage/payloads";
-import { scanMap } from "./scan";
-import { createTextDetector } from "./detector";
-import { startOcrEngines } from "./engines";
+import { ocrCrops, scanSection } from "./scan";
+import { OcrTileCache } from "./tiles";
+import { configureRuntime, createTextDetector } from "./detector";
+import { createTextRecognizer } from "./recognizer";
 
 const reply = (message: OcrReply) => self.postMessage(message);
+// The worker is terminated rather than aborted, so its scans never stop early.
+const signal = new AbortController().signal;
 
-// All raster preprocessing stays off the UI thread; the model is local-only.
-self.onmessage = async (event: MessageEvent<MapRecord>) => {
-  try {
-    const assets = new URL("/ocr/", self.location.origin);
-    reply({
-      type: "progress",
-      progress: { fraction: 0, message: "Starting local text detection…" },
-    });
-    const { recognizer: worker, detector } = await startOcrEngines(
-      createWorker("eng", OEM.LSTM_ONLY, {
-        workerPath: new URL("worker.min.js", assets).href,
-        corePath: assets.href,
-        langPath: assets.href,
-        workerBlobURL: false,
-        cacheMethod: "none",
-        errorHandler: (error: unknown) =>
-          reply({ type: "error", message: String(error) }),
-      }),
-      createTextDetector(
-        new URL("pp-ocrv5-mobile-det.onnx", assets).href,
-        assets.href,
+async function start(map: MapRecord) {
+  const assets = new URL("/ocr/", self.location.origin);
+  const asset = (name: string) => new URL(name, assets).href;
+  configureRuntime(assets.href);
+  const dictionary = fetch(asset("latin-dict.txt")).then(async (response) => {
+    if (!response.ok) throw new Error("Text recognizer dictionary is missing.");
+    return (await response.text()).split("\n");
+  });
+  const [detector, recognizer] = await Promise.all([
+    createTextDetector(asset("pp-ocrv5-mobile-det.onnx")),
+    dictionary.then((characters) =>
+      createTextRecognizer(
+        asset("pp-ocrv5-latin-rec.onnx"),
+        asset("pp-lcnet-textline-ori.onnx"),
+        characters,
       ),
+    ),
+  ]);
+  return {
+    engine: { ...recognizer, detect: detector.detect },
+    tiles: new OcrTileCache(map, payloadStore(map.backend), signal),
+    crops: ocrCrops(map.width, map.height),
+  };
+}
+
+let ready: ReturnType<typeof start> | undefined;
+
+// One worker reads one section at a time; the models load with the first.
+self.onmessage = async ({ data: { map, section } }: MessageEvent<OcrRequest>) => {
+  try {
+    ready ??= start(map);
+    const { engine, tiles, crops } = await ready;
+    const lines = await scanSection(
+      map,
+      tiles,
+      crops[section]!,
+      engine,
+      signal,
+      (fraction) => reply({ type: "progress", fraction }),
     );
-    try {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_LINE,
-        user_defined_dpi: "150",
-      });
-      const map = event.data;
-      const index = await scanMap(
-        map,
-        payloadStore(map.backend),
-        detector.detect,
-        async (image) =>
-          (await worker.recognize(image, {}, { blocks: true, text: false }))
-            .data,
-        (progress) => reply({ type: "progress", progress }),
-        new AbortController().signal,
-      );
-      reply({ type: "done", index });
-    } finally {
-      try {
-        await detector.dispose();
-      } finally {
-        await worker.terminate();
-      }
-    }
+    reply({ type: "lines", lines });
   } catch (error) {
     reply({
       type: "error",

@@ -29,6 +29,7 @@ import {
   Plus,
   RotateCw,
   Route,
+  ScanText,
   Search,
   Share2,
   Shrink,
@@ -79,6 +80,7 @@ export const markerCalloutIcon = (kind: MapMarker["kind"]) =>
 
 export const icons = {
   search: svg(Search),
+  scanText: svg(ScanText),
   map: svg(Map),
   plus: svg(Plus),
   add: svg(CirclePlus),

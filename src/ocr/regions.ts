@@ -17,13 +17,6 @@ export function regionPoint(region: TextRegion, x: number, y: number) {
     y: region.center.y + s * x + c * y,
   };
 }
-export const regionPolygon = (region: TextRegion) => [
-  regionPoint(region, -region.width / 2, -region.height / 2),
-  regionPoint(region, region.width / 2, -region.height / 2),
-  regionPoint(region, region.width / 2, region.height / 2),
-  regionPoint(region, -region.width / 2, region.height / 2),
-];
-
 const cross = (o: Point, a: Point, b: Point) =>
   (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 
@@ -47,7 +40,7 @@ function convexHull(points: Point[]) {
 }
 
 // The minimum-area box follows diagonal/vertical text instead of the image axes.
-export function minimumRegion(
+function minimumRegion(
   points: Point[],
   score = 1,
 ): TextRegion | undefined {
@@ -97,14 +90,15 @@ export function probabilityRegions(
   data: Float32Array,
   width: number,
   height: number,
-  sourceWidth: number,
-  sourceHeight: number,
+  // Lower than PaddleOCR's 0.3, so faint small print still forms a region.
+  threshold = 0.2,
+  minimumScore = 0.6,
 ) {
   const visited = new Uint8Array(width * height);
   const queue = new Int32Array(width * height);
   const regions: TextRegion[] = [];
   for (let seed = 0; seed < data.length; seed++) {
-    if (visited[seed] || data[seed]! <= 0.3) continue;
+    if (visited[seed] || data[seed]! <= threshold) continue;
     let head = 0,
       tail = 1,
       sum = 0;
@@ -114,57 +108,43 @@ export function probabilityRegions(
     while (head < tail) {
       const index = queue[head++]!,
         x = index % width,
-        y = Math.floor(index / width);
+        y = (index - x) / width;
       sum += data[index]!;
       let edge = false;
-      for (const [dx, dy] of [
-        [-1, 0],
-        [1, 0],
-        [0, -1],
-        [0, 1],
-      ]) {
-        const nx = x + dx!,
-          ny = y + dy!;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? -1 : k === 1 ? 1 : 0),
+          ny = y + (k === 2 ? -1 : k === 3 ? 1 : 0);
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
           edge = true;
           continue;
         }
         const next = ny * width + nx;
-        if (data[next]! <= 0.3) edge = true;
+        if (data[next]! <= threshold) edge = true;
         else if (!visited[next]) {
           visited[next] = 1;
           queue[tail++] = next;
         }
       }
+      // Pixel corners, so a one-pixel-thin stroke still has an area.
       if (edge)
-        boundary.push({
-          x: (x * sourceWidth) / width,
-          y: (y * sourceHeight) / height,
-        });
+        boundary.push(
+          { x, y },
+          { x: x + 1, y },
+          { x, y: y + 1 },
+          { x: x + 1, y: y + 1 },
+        );
     }
     const score = sum / tail;
-    if (tail < 8 || score < 0.6) continue;
+    if (tail < 6 || score < minimumScore) continue;
     const region = minimumRegion(boundary, score);
-    if (!region || region.height < 3) continue;
+    if (!region || region.height < 2) continue;
     // DB predicts shrunken text interiors. Expand by area/perimeter, as in its unclip step.
     const padding =
       (1.5 * region.width * region.height) /
-        (2 * (region.width + region.height)) +
-      2;
+      (2 * (region.width + region.height));
     region.width += padding * 2;
     region.height += padding * 2;
     regions.push(region);
   }
-  return regions.sort((a, b) => b.score - a.score).slice(0, 1000);
-}
-
-// Suppress the same oriented region from overlapping map sections before recognition.
-export function sameRegion(a: TextRegion, b: TextRegion) {
-  const distance = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y);
-  const direction = Math.abs(Math.cos(a.angle - b.angle));
-  return (
-    direction > 0.97 &&
-    distance < Math.min(a.height, b.height) * 0.6 &&
-    Math.min(a.width, b.width) / Math.max(a.width, b.width) > 0.7
-  );
+  return regions;
 }

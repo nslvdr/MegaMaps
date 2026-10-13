@@ -1,60 +1,64 @@
 import { env, InferenceSession, Tensor } from "onnxruntime-web/wasm";
 import { probabilityRegions } from "./regions";
 
-export const DETECTOR_SIDE = 768;
+export const sessionOptions: InferenceSession.SessionOptions = {
+  executionProviders: ["wasm"],
+  graphOptimizationLevel: "all",
+  // The exported models carry unused initializers that ONNX Runtime warns about.
+  logSeverityLevel: 3,
+};
+
+// Single-threaded WASM works without cross-origin isolation or WebGPU on phones;
+// parallelism comes from running several OCR workers instead.
+export function configureRuntime(runtimePath: string) {
+  env.wasm.numThreads = 1;
+  env.wasm.proxy = false;
+  env.wasm.wasmPaths = runtimePath;
+  env.logLevel = "error";
+}
 
 // Normalize BGR channels exactly as the bundled PP-OCRv5 detector expects.
+// The image sits top-left; padding to the model's 32-pixel stride stays zero.
 export function detectorInput(
   pixels: Uint8ClampedArray,
   width: number,
   height: number,
+  paddedWidth = width,
+  paddedHeight = height,
 ) {
-  const size = width * height,
-    data = new Float32Array(size * 3);
+  const plane = paddedWidth * paddedHeight,
+    data = new Float32Array(plane * 3);
   const means = [0.485, 0.456, 0.406],
     stds = [0.229, 0.224, 0.225];
-  for (let i = 0; i < size; i++)
-    for (let channel = 0; channel < 3; channel++)
-      data[channel * size + i] =
-        (pixels[i * 4 + 2 - channel]! / 255 - means[channel]!) / stds[channel]!;
-  return new Tensor("float32", data, [1, 3, height, width]);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const source = (y * width + x) * 4,
+        target = y * paddedWidth + x;
+      for (let channel = 0; channel < 3; channel++)
+        data[channel * plane + target] =
+          (pixels[source + 2 - channel]! / 255 - means[channel]!) /
+          stds[channel]!;
+    }
+  return new Tensor("float32", data, [1, 3, paddedHeight, paddedWidth]);
 }
 
-// Single-threaded WASM works without cross-origin isolation or WebGPU on phones.
-export async function createTextDetector(
-  model: string | Uint8Array = "/ocr/pp-ocrv5-mobile-det.onnx",
-  runtimePath = "/ocr/",
-) {
-  env.wasm.numThreads = 1;
-  env.wasm.proxy = false;
-  env.wasm.wasmPaths = runtimePath;
-  const options = {
-    executionProviders: ["wasm"],
-    enableCpuMemArena: false,
-    enableMemPattern: false,
-  };
+// Text is found at the map's own resolution: shrinking a section first loses
+// the small print that quarry plans are full of.
+export async function createTextDetector(model: string | Uint8Array) {
   const session =
     typeof model === "string"
-      ? await InferenceSession.create(model, options)
-      : await InferenceSession.create(model, options);
-  const canvas = new OffscreenCanvas(1, 1);
+      ? await InferenceSession.create(model, sessionOptions)
+      : await InferenceSession.create(model, sessionOptions);
   return {
     async detect(source: OffscreenCanvas) {
-      const ratio = Math.min(
-        1,
-        DETECTOR_SIDE / Math.max(source.width, source.height),
-      );
-      canvas.width = Math.max(32, Math.round((source.width * ratio) / 32) * 32);
-      canvas.height = Math.max(
-        32,
-        Math.round((source.height * ratio) / 32) * 32,
-      );
-      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-      ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+      const { width, height } = source;
+      const ctx = source.getContext("2d", { willReadFrequently: true })!;
       const tensor = detectorInput(
-        ctx.getImageData(0, 0, canvas.width, canvas.height).data,
-        canvas.width,
-        canvas.height,
+        ctx.getImageData(0, 0, width, height).data,
+        width,
+        height,
+        Math.ceil(width / 32) * 32,
+        Math.ceil(height / 32) * 32,
       );
       let outputs: InferenceSession.ReturnType | undefined;
       try {
@@ -66,8 +70,6 @@ export async function createTextDetector(
           output.data,
           output.dims[3]!,
           output.dims[2]!,
-          source.width,
-          source.height,
         );
       } finally {
         tensor.dispose();
@@ -76,7 +78,6 @@ export async function createTextDetector(
       }
     },
     async dispose() {
-      canvas.width = canvas.height = 1;
       await session.release();
     },
   };
