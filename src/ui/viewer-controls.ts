@@ -41,7 +41,7 @@ type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const rotationModes: Record<RotationMode, { icon: string; label: string; help: string }> = {
-  free: { icon: icons.rotateRight, label: "Normal", help: "Twist with two fingers to turn the map." },
+  free: { icon: icons.freeRotation, label: "Normal", help: "Twist with two fingers to turn the map." },
   compass: { icon: icons.compass, label: "Auto", help: "The map turns with your phone, so it lines up with the world around you." },
   locked: { icon: icons.rotationLock, label: "Locked", help: "The map keeps its current angle." },
 };
