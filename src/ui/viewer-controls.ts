@@ -348,7 +348,6 @@ export class ViewerControls {
   /** Places and routes share one form: a name, a description and photos. */
   private openForm(
     title: string,
-    icon: string,
     fields: { id?: string; name: string; description?: string; photos?: string[] },
     route?: PlannedRoute,
   ) {
@@ -360,7 +359,6 @@ export class ViewerControls {
     this.el("marker-details").hidden = true;
     this.el("marker-edit").hidden = true;
     this.el("marker-form").hidden = false;
-    this.el("marker-dialog-title-icon").innerHTML = icon;
     this.el("marker-dialog-title").textContent = title;
     this.editingRoute = route?.id;
     // A route's look comes from its line, so only places pick an icon.
@@ -383,8 +381,9 @@ export class ViewerControls {
     this.autoMarkerName = marker
       ? ""
       : this.markerName(kind);
-    this.openForm(title, icons.pin, { ...marker, name: marker?.label ?? this.autoMarkerName });
+    this.openForm(title, { ...marker, name: marker?.label ?? this.autoMarkerName });
     this.setMarkerKind(kind);
+    this.paintPlaceCard(kind);
     this.el("marker-delete").hidden = !marker;
     this.el("marker-move").hidden = !marker;
     // A new place shows where it will go while it is named.
@@ -609,13 +608,22 @@ export class ViewerControls {
     const card = this.dialog("marker-dialog");
     this.editingMarker = undefined;
     this.markerPoint = undefined;
-    this.openForm("Edit route", this.routeIcon(route), route, route);
+    this.openForm("Edit route", route, route);
+    this.paintCard(this.routeIcon(route), routeColor(this.state, route.id));
     this.el("marker-delete").hidden = false;
     this.presentCard(true);
     this.viewer?.cover?.();
     card.style.setProperty("--spot-x", "");
     card.style.setProperty("--spot-y", "");
     this.viewer?.pulse?.(route.id);
+  }
+  /** The card wears its item's icon, and that icon's colour as its accent. */
+  private paintCard(icon: string, color: string) {
+    this.el("marker-dialog-title-icon").innerHTML = icon;
+    this.dialog("marker-dialog").style.setProperty("--c", color);
+  }
+  private paintPlaceCard(kind: MapMarker["kind"]) {
+    this.paintCard(placeIcon(kind), (markerKinds[kind] ?? markerKinds.landmark).color);
   }
   private routeIcon(route: PlannedRoute) {
     return icons.route.replace("<svg ", `<svg style="color:${routeColor(this.state, route.id)}" `);
@@ -640,7 +648,8 @@ export class ViewerControls {
     edit.title = place ? "Edit place" : "Edit route";
     edit.setAttribute("aria-label", edit.title);
     this.el("marker-dialog-title").textContent = "label" in item ? item.label : item.name;
-    this.el("marker-dialog-title-icon").innerHTML = "label" in item ? placeIcon(item.kind) : this.routeIcon(item);
+    if ("label" in item) this.paintPlaceCard(item.kind);
+    else this.paintCard(this.routeIcon(item), routeColor(this.state, item.id));
     const description = this.el("marker-detail-description");
     description.textContent = item.description ?? "";
     description.hidden = !item.description;
@@ -1005,6 +1014,7 @@ export class ViewerControls {
       'input[name="marker-kind"]',
     ))
       this.on(input, "change", () => {
+        this.paintPlaceCard(this.markerKind());
         // Keep auto names in sync with the chosen kind until the user types.
         const label = this.input("marker-label");
         if (this.autoMarkerName && label.value === this.autoMarkerName) {
@@ -1159,7 +1169,6 @@ export class ViewerControls {
       { icon, label, help } = rotationModes[mode];
     const chip = this.el("open-rotation");
     chip.innerHTML = icon;
-    chip.dataset.mode = mode;
     chip.setAttribute("aria-label", `Rotation: ${label}`);
     chip.title = `Rotation: ${label}`;
     if (this.openSheet === "rotation") this.el("sheet-title-icon").innerHTML = icon;

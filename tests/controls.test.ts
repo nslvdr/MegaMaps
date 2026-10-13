@@ -406,6 +406,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     entrance.dispatchEvent(new window.Event("change"));
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
+    assert.equal(el("marker-dialog").style.getPropertyValue("--c"), "#7dff8a", "the card takes the chosen pin's colour");
+    assert.equal(
+      el("marker-dialog-title-icon").querySelector(".place-icon > circle")!.getAttribute("fill"),
+      "#7dff8a",
+      "and its title shows the chosen pin",
+    );
     input("marker-label", "<Entrance>");
     input("marker-description", "Left opening");
     submit("marker-form");

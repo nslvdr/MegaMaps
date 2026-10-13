@@ -1411,18 +1411,10 @@ button.glass:active:not(:disabled) {
 .place-card {
   --c: var(--neon-add);
 }
-/* Rotation is orange while Auto or Locked holds the angle, muted when free. */
+/* Rotation always has a mode, so like View it only lights up while open. */
 #open-rotation,
 .sheet[data-panel="rotation"] {
   --c: var(--neon-lock);
-}
-#open-rotation[data-mode="free"]:not([aria-expanded="true"]) {
-  --c: var(--muted);
-}
-#open-rotation:not([data-mode="free"]) {
-  background: color-mix(in srgb, var(--c) 22%, #000);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent);
-  color: var(--c);
 }
 .viewer-error {
   position: absolute;
