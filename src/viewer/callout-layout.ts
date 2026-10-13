@@ -53,6 +53,17 @@ const edge = (rect: CalloutBounds, toward: Point) => {
     : origin;
 };
 
+// The leader runs between the nearest edges of the label and its target.
+export function leader(bounds: CalloutBounds, target: CalloutBounds) {
+  const to = edge(target, center(bounds));
+  const from = edge(bounds, to);
+  // Attach away from the label's rounded corners.
+  if (Math.abs(from.x - bounds.left) < 1e-6 || Math.abs(from.x - bounds.right) < 1e-6)
+    from.y = Math.max(bounds.top + 12, Math.min(from.y, bounds.bottom - 12));
+  else from.x = Math.max(bounds.left + 12, Math.min(from.x, bounds.right - 12));
+  return { from, to };
+}
+
 // Boundary-only contact is allowed so a leader can end at its own target.
 export function segmentCrossesBounds(from: Point, to: Point, rect: CalloutBounds) {
   // Most rectangles are nowhere near the segment.
@@ -215,12 +226,7 @@ export class CalloutLayout {
           const bounds = { left: x, right, top: y, bottom };
           const padded = expand(bounds, 5);
           if (leaders.some(line => segmentCrossesBounds(line.from, line.to, padded))) continue;
-          const to = edge(target, center(bounds));
-          const from = edge(bounds, to);
-          // Attach away from the label's rounded corners.
-          if (Math.abs(from.x - bounds.left) < 1e-6 || Math.abs(from.x - bounds.right) < 1e-6)
-            from.y = Math.max(bounds.top + 12, Math.min(from.y, bounds.bottom - 12));
-          else from.x = Math.max(bounds.left + 12, Math.min(from.x, bounds.right - 12));
+          const { from, to } = leader(bounds, target);
           if (this.crossed(from, to)) continue;
           const sideX = bounds.left >= target.right ? 1 : bounds.right <= target.left ? -1 : 0;
           const sideY = bounds.top >= target.bottom ? 1 : bounds.bottom <= target.top ? -1 : 0;

@@ -173,7 +173,9 @@ test("OCR storage preserves an old index during a rerun, rename preserves data, 
   assert.equal(await loadOcr(map.id), undefined);
 });
 
-test("search callouts and mask holes track pan, zoom, and rotation independently of display filters", () => {
+test("search callouts and mask holes track pan, zoom, and rotation independently of display filters", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
   const { document } = parseHTML("<html><body><svg></svg></body></html>");
   Object.defineProperty(globalThis, "document", {
     value: document,
@@ -233,10 +235,16 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   assert.equal(svg.querySelector(".search-selected-label text")!.textContent, "<North>");
   assert.ok(!svg.querySelector(".search-selected-label North"), "OCR text is never markup");
   overlay.set(matches, true, 0);
-  overlay.draw({ x: 0, y: 0, scale: 1 }, viewport);
+  // Labels glide to a new spot; these checks are about where they settle.
+  const settle = (camera: { x: number; y: number; scale: number }) => {
+    overlay.draw(camera, viewport);
+    now += 1000;
+    overlay.draw(camera, viewport);
+  };
+  settle({ x: 0, y: 0, scale: 1 });
   assert.equal(labelPosition()[1], 67, "near the top edge, the callout moves below the text");
   assert.equal(connector.getAttribute("y1"), "0", "a lower callout connects through its top edge");
-  overlay.draw({ x: 250, y: 80, scale: 1 }, viewport);
+  settle({ x: 250, y: 80, scale: 1 });
   const calloutWidth = Number(label.querySelector("rect")!.getAttribute("width"));
   assert.ok(labelPosition()[0]! + calloutWidth <= viewport.width - 8,
     "the callout stays inside the screen near the right edge");

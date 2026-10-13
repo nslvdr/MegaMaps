@@ -92,8 +92,10 @@ export class SearchOverlay {
       if (target) layout.addObstacle(target.bounds);
     }
   }
+  /** Draws one frame; returns whether a label is still gliding into place. */
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
-    if (!this.active) return;
+    if (!this.active) return false;
+    let gliding = false;
     const labels = layout ?? new CalloutLayout(viewport);
     if (!layout) this.reserve(camera, labels);
     this.svg.setAttribute("viewBox", `0 0 ${viewport.width} ${viewport.height}`);
@@ -126,7 +128,7 @@ export class SearchOverlay {
         hole.setAttribute("cx", String(target.anchor.x));
         hole.setAttribute("cy", String(target.anchor.y));
       }
-      callout.draw(target.anchor, viewport, target.bounds, labels);
+      if (callout.draw(target.anchor, viewport, target.bounds, labels)) gliding = true;
       // Dense targets still have a visible locator when their callout cannot fit.
       const connector = highlight.querySelector("line")!;
       connector.toggleAttribute("hidden", !callout.element.hasAttribute("hidden"));
@@ -135,6 +137,7 @@ export class SearchOverlay {
       connector.setAttribute("y1", String(target.bounds.top - 10));
       connector.setAttribute("y2", String(target.bounds.top));
     }
+    return gliding;
   }
   dispose() {
     this.svg.replaceChildren();

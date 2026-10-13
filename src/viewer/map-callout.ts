@@ -1,5 +1,5 @@
 import type { Point, Size } from "./camera";
-import { CalloutLayout, type CalloutBounds, type CalloutPlacement } from "./callout-layout";
+import { CalloutLayout, leader, type CalloutBounds, type CalloutPlacement } from "./callout-layout";
 export type { CalloutBounds } from "./callout-layout";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -34,6 +34,13 @@ export class MapCallout {
   private maxWidth = 0;
   private width = 0;
   private placement?: CalloutPlacement;
+  private anchor?: Point;
+  // What the layout moved and the label has yet to cover, relative to its
+  // anchor: it glides to new spots rather than jumping there.
+  private drift = { x: 0, y: 0 };
+  private drawn = 0;
+  private shown?: CalloutBounds;
+  private resumed = false;
 
   constructor(iconMarkup: string, color = "var(--neon-saved)") {
     this.element.setAttribute("class", "map-callout");
@@ -57,7 +64,16 @@ export class MapCallout {
 
   /** Where the chip sits on screen, while it is shown. */
   get bounds() {
-    return this.element.hasAttribute("hidden") ? undefined : this.placement?.bounds;
+    return this.element.hasAttribute("hidden") ? undefined : this.shown;
+  }
+
+  /** Takes over where a callout for the same item was, when overlays rebuild. */
+  follow(previous: MapCallout) {
+    this.placement = previous.placement;
+    this.anchor = previous.anchor;
+    this.drift = previous.drift;
+    this.drawn = previous.drawn;
+    this.resumed = !previous.element.hasAttribute("hidden");
   }
 
   setText(text: string) {
@@ -65,13 +81,16 @@ export class MapCallout {
   }
 
   // One straight segment ends at the target's nearest edge, without a dot.
+  // Returns whether the label is still gliding and needs another frame.
   draw(anchor: Point, viewport: Size, bounds: CalloutBounds = {
     left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y,
-  }, layout = new CalloutLayout(viewport)) {
+  }, layout = new CalloutLayout(viewport)): boolean {
+    const appearing = this.element.hasAttribute("hidden") && !this.resumed;
+    this.resumed = false;
     const outside = bounds.right < 0 || bounds.bottom < 0 ||
       bounds.left > viewport.width || bounds.top > viewport.height;
     this.element.toggleAttribute("hidden", outside);
-    if (outside) return;
+    if (outside) return false;
     const maxWidth = Math.max(60, Math.min(288, viewport.width - 16));
     if (this.fullText !== this.measuredText || maxWidth !== this.maxWidth) {
       this.measuredText = this.fullText;
@@ -88,13 +107,32 @@ export class MapCallout {
     }
     const placement = layout.place({ width: this.width, height: 36 }, bounds, anchor, this.placement);
     this.element.toggleAttribute("hidden", !placement);
-    if (!placement) return;
+    if (!placement) return false;
+    const now = performance.now(), previous = this.placement;
+    const decay = Math.exp(-(now - this.drawn) / 90);
+    let dx = appearing ? 0 : this.drift.x * decay, dy = appearing ? 0 : this.drift.y * decay;
+    // Panning keeps a spot; only a new one is glided to, from where it was shown.
+    if (!appearing && previous && this.anchor && (previous.direction !== placement.direction ||
+        previous.gap !== placement.gap || previous.shift !== placement.shift)) {
+      dx += previous.bounds.left - this.anchor.x - placement.bounds.left + anchor.x;
+      dy += previous.bounds.top - this.anchor.y - placement.bounds.top + anchor.y;
+    }
+    if (Math.hypot(dx, dy) < 0.5) dx = dy = 0;
+    this.drift = { x: dx, y: dy };
+    this.drawn = now;
     this.placement = placement;
-    const { left: x, top: y } = placement.bounds;
+    this.anchor = anchor;
+    const shown = this.shown = dx || dy ? {
+      left: placement.bounds.left + dx, right: placement.bounds.right + dx,
+      top: placement.bounds.top + dy, bottom: placement.bounds.bottom + dy,
+    } : placement.bounds;
+    const { from, to } = shown === placement.bounds ? placement : leader(shown, bounds);
+    const { left: x, top: y } = shown;
     this.element.setAttribute("transform", `translate(${x},${y})`);
-    this.connector.setAttribute("x1", String(placement.from.x - x));
-    this.connector.setAttribute("y1", String(placement.from.y - y));
-    this.connector.setAttribute("x2", String(placement.to.x - x));
-    this.connector.setAttribute("y2", String(placement.to.y - y));
+    this.connector.setAttribute("x1", String(from.x - x));
+    this.connector.setAttribute("y1", String(from.y - y));
+    this.connector.setAttribute("x2", String(to.x - x));
+    this.connector.setAttribute("y2", String(to.y - y));
+    return shown !== placement.bounds;
   }
 }

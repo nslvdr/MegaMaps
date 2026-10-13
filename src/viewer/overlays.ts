@@ -100,6 +100,8 @@ export class NavigationOverlay {
     this.svg.replaceChildren();
     this.points = [];
     this.paths = [];
+    // Labels carry on from where they were, so a rebuild does not make them jump.
+    const previous = new Map(this.callouts.map(item => [item.markerId ?? item.routeId, item.callout]));
     this.callouts = [];
     this.setLayers(state.layers);
     const group = (layer: Layer, className = "") => {
@@ -130,6 +132,8 @@ export class NavigationOverlay {
       const callout = new MapCallout(icon, color);
       callout.element.classList.add("overlay-label");
       callout.setText(text);
+      const before = previous.get(markerId ?? routeId);
+      if (before) callout.follow(before);
       parent.append(callout.element);
       this.callouts.push({ callout, point, padding, layer, priority, markerId, routeId });
     };
@@ -239,9 +243,11 @@ export class NavigationOverlay {
           reservePoint(point, route.id === this.editing ? 10 : 8);
     if (this.preview) reservePoint(this.preview.point, 18);
   }
+  /** Draws one frame; returns whether a label is still gliding into place. */
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
     const labels = layout ?? new CalloutLayout(viewport);
     if (!layout) this.reserve(camera, labels);
+    let gliding = false;
     this.svg.setAttribute(
       "viewBox",
       `0 0 ${viewport.width} ${viewport.height}`,
@@ -297,8 +303,9 @@ export class NavigationOverlay {
         if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
           bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
             top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
-      callout.draw(p, viewport, bounds, labels);
+      if (callout.draw(p, viewport, bounds, labels)) gliding = true;
     }
+    return gliding;
   }
   /** The place or route whose label chip covers this screen point, if any. */
   labelAt(screen: Point): { markerId?: string; routeId?: string } | undefined {
