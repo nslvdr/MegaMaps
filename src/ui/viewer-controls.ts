@@ -62,7 +62,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "orient" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
+    Partial<Pick<Viewer, "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
   private ocr?: OcrIndex;
   private ocrMessage = "Preparing text detection…";
   private searchMatches: MapSearchMatch[] = [];
@@ -270,6 +270,7 @@ export class ViewerControls {
     this.el("sheet-dismiss").hidden = !name || name === "search";
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
+    this.el("reset-rotation").hidden = name !== "rotation" || this.state.rotationMode === "compass";
     this.el("sheet-title-icon").innerHTML =
       name === "display" ? icons.sun
       : name === "rotation" ? rotationModes[this.state.rotationMode].icon
@@ -790,6 +791,7 @@ export class ViewerControls {
         this.sheet(this.openSheet === sheet ? undefined : sheet),
       );
     this.click("close-sheet", () => this.sheet(undefined));
+    this.click("reset-rotation", () => this.viewer?.straighten?.());
     this.click("sheet-dismiss", () => this.sheet(undefined));
     this.on(this.input("dark-map"), "change", () => {
       this.state.inverted = this.input("dark-map").checked;
@@ -1108,7 +1110,11 @@ export class ViewerControls {
     chip.innerHTML = icon;
     chip.setAttribute("aria-label", `Rotation: ${label}`);
     chip.title = `Rotation: ${label}`;
-    if (this.openSheet === "rotation") this.el("sheet-title-icon").innerHTML = icon;
+    if (this.openSheet === "rotation") {
+      this.el("sheet-title-icon").innerHTML = icon;
+      // Auto turns the map with the phone, so a reset would not hold.
+      this.el("reset-rotation").hidden = mode === "compass";
+    }
     for (const each of Object.keys(rotationModes))
       this.input(`rotation-${each}`).checked = each === mode;
     const compassHelp: Partial<Record<CompassStatus, string>> = {

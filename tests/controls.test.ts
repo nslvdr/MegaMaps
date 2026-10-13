@@ -65,6 +65,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   const shares: ({ kind: "marker" | "route"; id: string } | undefined)[] = [];
   const previews: ({ point: Point; kind: string } | undefined)[] = [];
   const orientations: (number | undefined)[] = [];
+  let straightened = 0;
   const pulses: string[] = [];
   const reveals: Point[] = [];
   const requestedZooms: (number | undefined)[] = [];
@@ -92,6 +93,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     },
     orient(rotation) {
       orientations.push(rotation);
+    },
+    straighten() {
+      straightened++;
     },
     previewPlace(place) {
       previews.push(place && { point: place.point, kind: place.kind });
@@ -286,6 +290,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.rotationMode, "free");
     assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Normal");
     assert.match(el("rotation-help").textContent!, /two fingers/);
+    // Reset sits beside Close and turns the map back to 0°.
+    assert.equal(el("reset-rotation").hidden, false);
+    assert.ok(el("reset-rotation").nextElementSibling === el("close-sheet"));
+    click("reset-rotation");
+    assert.equal(straightened, 1);
 
     // Auto asks for the compass, and tapping it again retries a refusal.
     let permission: PermissionState = "denied";
@@ -301,6 +310,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     };
     check("rotation-compass", true);
     assert.equal(state.rotationMode, "compass");
+    assert.equal(el("reset-rotation").hidden, true, "the compass owns the angle in Auto");
     await settle();
     assert.match(el("rotation-help").textContent!, /access is off/);
     heading(90);
@@ -344,7 +354,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(180);
     assert.equal(orientations.length, followed);
     assert.equal(el("north-field").hidden, true);
+    assert.equal(el("reset-rotation").hidden, false);
     click("close-sheet");
+    assert.equal(el("reset-rotation").hidden, true, "reset belongs to the Rotation panel");
 
     // Highlight with nothing saved explains instead of animating.
     click("spotlight");

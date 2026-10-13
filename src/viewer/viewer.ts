@@ -632,6 +632,28 @@ export class Viewer {
     };
     this.animation = requestAnimationFrame(tick);
   }
+  /** Turns the map back to 0°, the short way round, about the visible center. */
+  straighten() {
+    const from = this.camera.rotation ?? 0;
+    if (!from) return;
+    this.stopAnimation();
+    this.interactions?.reset();
+    const center = { x: this.width / 2, y: this.visible().height / 2 },
+      turn = (rotation: number) =>
+        this.setCamera(transformAt(this.camera, this.camera.scale, rotation, center));
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      turn(0);
+      return;
+    }
+    const delta = -Math.atan2(Math.sin(from), Math.cos(from)),
+      startTime = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startTime) / 240);
+      turn(t < 1 ? from + delta * (1 - (1 - t) ** 3) : 0);
+      if (t < 1) this.animation = requestAnimationFrame(tick);
+    };
+    this.animation = requestAnimationFrame(tick);
+  }
   /** Turns the map toward `rotation` (radians) from now on; undefined stops. */
   orient(rotation?: number) {
     this.heading = rotation;
