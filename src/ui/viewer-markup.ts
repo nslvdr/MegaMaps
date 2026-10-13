@@ -9,8 +9,9 @@ import {
   NORTH_MAX,
   NORTH_MIN,
   type RotationMode,
+  waterLevels,
 } from "../viewer/navigation";
-import { placeIcon } from "./place-icon";
+import { placeIcon, waterColors } from "./place-icon";
 
 // View settings use cards; Saved uses compact inset lists with row actions.
 const rowIcon = (icon: string, tint = "") =>
@@ -32,6 +33,11 @@ const kindPicks = Object.entries(markerKinds)
     ([kind, { label }]) =>
       `<label class="kind-pick" title="${label}"><input type="radio" name="marker-kind" value="${kind}" aria-label="${label}">${placeIcon(kind as keyof typeof markerKinds)}</label>`,
   )
+  .join("");
+// Only shown for flooded places; tapping the chosen step again clears it.
+const waterSteps = ([1, 2, 3] as const)
+  .map((level) =>
+    `<button type="button" class="water-step" data-water="${level}" aria-pressed="false" style="--water: ${waterColors[level]}">${placeIcon("flooded", level)}<span>${waterLevels[level]}</span></button>`)
   .join("");
 
 // Map-first layout: almost nothing floats over the map.
@@ -110,10 +116,11 @@ export const viewerMarkup = `
   <div id="marker-details" class="place-details" role="region" aria-label="${t("Place details")}" hidden>
     <div class="place-detail-track"><div class="place-detail-content">
       <div id="marker-detail-photos" class="place-photos" role="group" aria-label="${t("Photos")}" hidden></div>
+      <p id="marker-detail-water" class="place-detail-water" hidden></p>
       <p id="marker-detail-description" class="place-detail-description"></p>
     </div></div>
   </div>
-  <form id="marker-form"><div id="marker-kinds" class="kind-picker" role="radiogroup" aria-label="${t("Icon")}">${kindPicks}</div><label class="place-name"><span>${t("Name")}</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><label class="place-description"><span>${t("Description")}</span><textarea id="marker-description" maxlength="2000" rows="3"></textarea></label><div id="marker-photos-field" class="place-photos-field" hidden><span id="marker-photos-title">${t("Photos")}</span><ul id="marker-photo-list" class="photo-thumbs" aria-labelledby="marker-photos-title"></ul></div><button type="button" id="marker-add-photos" class="place-add">${icons.photo}<span>${t("Add photos")}</span></button><input type="file" id="marker-photo-input" accept="image/*" multiple hidden><div class="dialog-actions"><button type="submit" id="marker-save" class="primary">${icons.check}<span>${t("Save")}</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>${t("Delete")}</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>${t("Move")}</span></button><button type="button" id="route-points" class="quiet" hidden>${icons.route}<span>${t("Edit points")}</span></button></div></form>
+  <form id="marker-form"><div id="marker-kinds" class="kind-picker" role="radiogroup" aria-label="${t("Icon")}">${kindPicks}</div><div id="marker-water" class="water-picker" role="group" aria-labelledby="marker-water-title" hidden><span id="marker-water-title">${t("Water level")}</span><div class="water-steps">${waterSteps}</div></div><label class="place-name"><span>${t("Name")}</span><input id="marker-label" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><label class="place-description"><span>${t("Description")}</span><textarea id="marker-description" maxlength="2000" rows="3"></textarea></label><div id="marker-photos-field" class="place-photos-field" hidden><span id="marker-photos-title">${t("Photos")}</span><ul id="marker-photo-list" class="photo-thumbs" aria-labelledby="marker-photos-title"></ul></div><button type="button" id="marker-add-photos" class="place-add">${icons.photo}<span>${t("Add photos")}</span></button><input type="file" id="marker-photo-input" accept="image/*" multiple hidden><div class="dialog-actions"><button type="submit" id="marker-save" class="primary">${icons.check}<span>${t("Save")}</span></button><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>${t("Delete")}</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>${t("Move")}</span></button><button type="button" id="route-points" class="quiet" hidden>${icons.route}<span>${t("Edit points")}</span></button></div></form>
 </dialog>
 <dialog id="photo-viewer" class="photo-viewer" aria-label="${t("Photos")}"><div class="photo-viewer-stage"><div class="photo-viewer-track"></div></div><button type="button" id="photo-viewer-close" class="dialog-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></dialog>
 <dialog id="name-dialog" aria-labelledby="name-title"><form id="name-form">${dialogHeader("name-title", "", icons.edit, "name-cancel")}<label>${t("Name")}<input id="name-input" required maxlength="100" autocomplete="off" enterkeyhint="done"></label><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>${t("Save")}</span></button></div></form></dialog>`;

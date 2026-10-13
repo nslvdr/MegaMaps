@@ -195,8 +195,8 @@ export class NavigationOverlay {
         icon.setAttribute("stroke-width", "3.6");
       }
     }
-    const placeBody = (body: SVGGElement, kind: MapMarker["kind"]) => {
-      pinIcon(body, placeIcon(kind), 24);
+    const placeBody = (body: SVGGElement, kind: MapMarker["kind"], water?: MapMarker["water"]) => {
+      pinIcon(body, placeIcon(kind, water), 24);
     };
     const places = group("places");
     for (const marker of state.markers) {
@@ -205,7 +205,7 @@ export class NavigationOverlay {
       if (marker.id === this.moving) element.classList.add("moving");
       else if (marker.id === this.found) element.classList.add("found");
       if (marker.id === this.selected) element.classList.add("selected");
-      placeBody(body, marker.kind);
+      placeBody(body, marker.kind, marker.water);
       const raised = marker.id === this.moving || marker.id === this.selected;
       label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, raised ? 18 : 12, "places", raised ? 2 : 0, marker.id);
     }
@@ -236,7 +236,9 @@ export class NavigationOverlay {
     };
     if (this.visible("places"))
       for (const marker of this.state?.markers ?? [])
-        reservePoint(marker.point, marker.id === this.moving || marker.id === this.selected ? 18 : 12);
+        // A water ring widens the pin a little; keep labels off it too.
+        reservePoint(marker.point, (marker.id === this.moving || marker.id === this.selected ? 18 : 12) +
+          (marker.water && marker.kind === "flooded" ? 4 : 0));
     if (this.visible("routes"))
       for (const route of this.state?.routes ?? [])
         for (const point of route.points)

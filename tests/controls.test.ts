@@ -1310,6 +1310,72 @@ test("place photos lead the details as a carousel and are removed from the edit 
   }
 });
 
+test("a flooded place's water level shows beside its pin and is picked in the edit form", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "water-level", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  state.markers = [{
+    id: "sump", point: { x: 500, y: 600 }, label: "Sump", description: "",
+    kind: "flooded", water: 2, created: 0,
+  }];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({ setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {} });
+  const el = (id: string) => document.getElementById(id)!;
+  const step = (level: number) => document.querySelector<HTMLElement>(`.water-step[data-water="${level}"]`)!;
+  const pressed = () => [1, 2, 3].filter((level) => step(level).getAttribute("aria-pressed") === "true");
+  const kind = (value: string) => {
+    const input = document.querySelector<HTMLInputElement>(`input[name="marker-kind"][value="${value}"]`)!;
+    input.checked = true;
+    input.dispatchEvent(new window.Event("change"));
+  };
+  const save = () => el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  try {
+    assert.ok(el("marker-list").querySelector(".water-gauge"), "Saved shows the level beside the pin");
+    controls.options().onMarker(state.markers[0]!);
+    assert.equal(el("marker-details").hidden, false, "the level alone is worth reading");
+    assert.equal(el("marker-detail-water").textContent, "Water level: Knee");
+    assert.ok(el("marker-dialog-title-icon").querySelector(".water-gauge"));
+
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-water").hidden, false);
+    assert.deepEqual(pressed(), [2]);
+    step(2).dispatchEvent(new window.Event("click"));
+    assert.deepEqual(pressed(), [], "tapping the chosen step clears it");
+    step(3).dispatchEvent(new window.Event("click"));
+    save();
+    assert.equal(state.markers[0]!.water, 3);
+
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    kind("entrance");
+    assert.equal(el("marker-water").hidden, true, "only flooded places have a level");
+    save();
+    assert.equal(state.markers[0]!.water, undefined, "a place that is no longer flooded drops its level");
+    assert.equal(el("marker-detail-water").hidden, true);
+    assert.equal(el("marker-list").querySelector(".water-gauge"), null);
+  } finally {
+    await controls.dispose();
+  }
+});
+
 test("a route reads and edits like a place: name, description and photos", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
