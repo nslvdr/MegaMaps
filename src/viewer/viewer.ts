@@ -755,8 +755,9 @@ export class Viewer {
     this.searchOverlay?.reserve(this.camera, labels);
     this.overlay?.reserve(this.camera, labels);
     // The current search result gets space first, then saved items share it.
-    this.searchOverlay?.draw(this.camera, viewport, labels);
-    this.overlay?.draw(this.camera, viewport, labels);
+    const searchGliding = this.searchOverlay?.draw(this.camera, viewport, labels);
+    // Labels finish gliding to a new spot after the map stops.
+    if (this.overlay?.draw(this.camera, viewport, labels) || searchGliding) this.invalidate();
     if (this.lastFrame && now - this.lastFrame < 100) {
       this.frameTimes.push(now - this.lastFrame);
       if (this.frameTimes.length > 120) this.frameTimes.shift();

@@ -5,8 +5,10 @@ import { NavigationOverlay } from "../src/viewer/overlays";
 import { markerCalloutIcon } from "../src/ui/icons";
 import { defaultNavigation, markerKinds, routeColor } from "../src/viewer/navigation";
 import { worldToScreen } from "../src/viewer/camera";
-import { CalloutLayout, boundsOverlap } from "../src/viewer/callout-layout";
+import { CalloutLayout, boundsOverlap, type CalloutBounds } from "../src/viewer/callout-layout";
 import { SearchOverlay } from "../src/viewer/search-overlay";
+import { MapCallout } from "../src/viewer/map-callout";
+import type { Point } from "../src/viewer/camera";
 
 test("saved places and routes have typed callouts that follow their anchors and retain layer/edit controls", () => {
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
@@ -218,4 +220,37 @@ test("search shows text and saved-place callouts together and restores saved lab
   assert.equal(searchSvg.hasAttribute("hidden"), true);
   search.dispose();
   saved.dispose();
+});
+
+test("a label glides to a new spot instead of jumping, and moves with its pin while panning", (t) => {
+  const { document } = parseHTML("<html><body><svg></svg></body></html>");
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const viewport = { width: 400, height: 400 };
+  const callout = new MapCallout(markerCalloutIcon("entrance"));
+  callout.setText("Gate");
+  document.querySelector("svg")!.append(callout.element);
+  const draw = (anchor: Point, obstacles = [] as CalloutBounds[]) => callout.draw(anchor, viewport,
+    { left: anchor.x - 12, right: anchor.x + 12, top: anchor.y - 12, bottom: anchor.y + 12 },
+    new CalloutLayout(viewport, obstacles));
+  const position = () => callout.element.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+  assert.equal(draw({ x: 200, y: 200 }), false, "a label that appears is placed at once");
+  const [x0, y0] = position();
+  now += 16;
+  draw({ x: 210, y: 200 });
+  assert.deepEqual(position(), [x0! + 10, y0], "panning carries it exactly with its pin");
+  // Space above the pin is taken, so the layout moves the label below it.
+  const above = [{ left: 0, right: 400, top: 0, bottom: 185 }];
+  now += 16;
+  assert.equal(draw({ x: 210, y: 200 }, above), true, "it asks for frames while gliding");
+  assert.deepEqual(position(), [x0! + 10, y0], "it starts from where it was shown");
+  now += 60;
+  draw({ x: 210, y: 200 }, above);
+  const [, middle] = position();
+  now += 1000;
+  assert.equal(draw({ x: 210, y: 200 }, above), false, "it settles");
+  const [, y1] = position();
+  assert.ok(y1! > 200, "it ends below the pin");
+  assert.ok(middle! > y0! && middle! < y1!, "it passes between the two spots");
 });
