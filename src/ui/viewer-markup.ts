@@ -63,7 +63,7 @@ export const viewerMarkup = `
 </section>
 <button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
-  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
+  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="reset-rotation" class="sheet-reset" aria-label="Reset rotation to 0°" title="Reset rotation to 0°" hidden>${icons.resetRotation}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-display" data-panel="display" data-title="View" hidden>
       <h3>Map</h3>
