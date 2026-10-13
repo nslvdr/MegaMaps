@@ -30,6 +30,7 @@ import { isShareFile } from "./sharing/format";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
+    <div class="top-edge" aria-hidden="true"></div>
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
     <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>Import</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p><p class="empty-drop">You can also drop or paste one here.</p></div></section>

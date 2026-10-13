@@ -121,16 +121,20 @@ svg {
   display: flex;
   flex-direction: column;
 }
+.top-edge {
+  display: none;
+}
 @media (display-mode: standalone) {
-  /* Keep scrolled library content out of the iPhone's translucent top edge. */
-  .home::before {
-    content: "";
+  /* Keep scrolled library content out of the iPhone's translucent top edge.
+     iOS 26 finds this solid bar by hit-testing, so it must take taps
+     (a pointer-events: none box is skipped and the header's top fades). */
+  .top-edge {
+    display: block;
     position: fixed;
     inset: 0 0 auto;
     height: var(--home-top);
     background: var(--bg);
     z-index: 1;
-    pointer-events: none;
   }
 }
 .header {
