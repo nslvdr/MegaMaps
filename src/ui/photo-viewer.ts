@@ -71,12 +71,6 @@ export class PhotoViewer {
     on(this.stage, "pointerup", (event) => this.up(event, true));
     on(this.stage, "pointercancel", (event) => this.up(event, false));
     on(this.stage, "wheel", (event) => this.wheel(event));
-    on(dialog, "keydown", (event) => {
-      const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
-      if (!step) return;
-      event.preventDefault();
-      this.go(this.index + step);
-    });
     on(dialog, "close", () => this.pointers.clear());
     dialog.ownerDocument.defaultView?.addEventListener("resize", () => this.dialog.open && this.render(), { signal });
   }

@@ -1,5 +1,4 @@
 import { popoverPosition } from "./popover-position";
-import { stepFocus } from "./step-focus";
 
 export type MapMenuItem = {
   label: string;
@@ -13,15 +12,13 @@ export function initMapMenu() {
   let menu: HTMLElement | undefined;
   let anchor: HTMLButtonElement | undefined;
 
-  const close = (returnFocus = false) => {
+  const close = () => {
     if (!menu) return;
-    const previous = anchor;
     menu.remove();
-    previous?.setAttribute("aria-expanded", "false");
-    previous?.removeAttribute("aria-controls");
+    anchor?.setAttribute("aria-expanded", "false");
+    anchor?.removeAttribute("aria-controls");
     menu = undefined;
     anchor = undefined;
-    if (returnFocus) previous?.focus({ preventScroll: true });
   };
 
   const position = () => {
@@ -49,15 +46,8 @@ export function initMapMenu() {
     if (target?.closest?.(".map-menu, .map-more")) return;
     close();
   });
-  document.addEventListener("keydown", (event) => {
-    if (!menu) return;
-    if (event.key === "Escape") close(true);
-    // Arrows walk the items, from the open menu's button too.
-    else if (event.target === anchor || menu.contains(event.target as Node))
-      stepFocus(event, [...menu.querySelectorAll<HTMLElement>(".popover-item")], true);
-  });
-  window.addEventListener("scroll", () => close(), true);
-  window.addEventListener("resize", () => close());
+  window.addEventListener("scroll", close, true);
+  window.addEventListener("resize", close);
 
   const toggle = (button: HTMLButtonElement, label: string, items: MapMenuItem[]) => {
     const wasOpen = anchor === button;
@@ -89,5 +79,5 @@ export function initMapMenu() {
     position();
   };
 
-  return { toggle, close: () => close() };
+  return { toggle, close };
 }

@@ -65,7 +65,7 @@ RSS includes Node, the TypeScript runner, native-canvas, encoding buffers, alloc
 - Touch/rotation locks, editing taps, one-second hold-to-unlock, bookmark editing, draft undo and route completion through Node DOM/event adapters.
 - Real viewer canvas code through a Node DOM/native-canvas adapter: restored rotation, rotation retention during fit animation, inversion/dimming restricted to the canvas, compensated dark margins, legible overlay labels and locked camera controls.
 - Offline verification worker detecting damaged/missing tiles while retaining at most one decoded verification bitmap. Service-worker shell verification detects a missing WASM cache entry without network fallback.
-- Tools-sheet controls through the Node DOM adapter: saved-row ⋯ popover menus (outside tap/Escape), moving places, route-point dragging with undo, snapping and clamping, outside/Close/Escape dismissal, normal toolbar restoration, the Add panel (Place / Route) and the task card that replaces the pill, tap-to-place with a prefilled place card and locked/unlocked transitions. Layout appearance and touch ergonomics still need physical-device review.
+- Tools-sheet controls through the Node DOM adapter: saved-row ⋯ popover menus (outside tap/Back), moving places, route-point dragging with undo, snapping and clamping, outside/Close/Back dismissal, normal toolbar restoration, the Add panel (Place / Route) and the task card that replaces the pill, tap-to-place with a prefilled place card and locked/unlocked transitions. Layout appearance and touch ergonomics still need physical-device review.
 
 ## Physical-device acceptance checklist — pending
 

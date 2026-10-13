@@ -159,63 +159,6 @@ export class Viewer {
       },
       { signal: this.controller.signal },
     );
-    canvas.addEventListener(
-      "keydown",
-      (event) => {
-        if (this.navigation.touchLocked) return;
-        // Browser zoom (⌘+/⌘−) and history keys keep working over the map.
-        if (event.metaKey || event.ctrlKey || event.altKey) return;
-        // While adding or moving, Enter or Space taps the middle of the screen:
-        // the keyboard pans there with the arrows, then puts the point down.
-        if ((event.key === "Enter" || event.key === " ") && this.tool !== "browse") {
-          event.preventDefault();
-          if (!event.repeat) this.tap({ x: this.width / 2, y: this.height / 2 });
-          return;
-        }
-        // Shift crosses half a screen per press, for long trips across the map.
-        // Each press starts from where the last one was heading.
-        const camera = this.destination ?? this.camera,
-          movement = event.shiftKey ? Math.min(this.width, this.height) / 2 : 60;
-        const deltas: Record<string, [number, number]> = {
-          ArrowLeft: [movement, 0],
-          ArrowRight: [-movement, 0],
-          ArrowUp: [0, movement],
-          ArrowDown: [0, -movement],
-        };
-        const delta = deltas[event.key];
-        // Arrows glide like +/−; a held key chains its steps into one smooth pan.
-        if (delta) {
-          event.preventDefault();
-          this.interactions.stop();
-          this.animate({
-            ...camera,
-            x: camera.x + delta[0],
-            y: camera.y + delta[1],
-          });
-        }
-        if (["+", "=", "-", "_"].includes(event.key)) {
-          event.preventDefault();
-          this.interactions.stop();
-          const { min, max } = this.limits();
-          this.animate(
-            zoomAt(
-              camera,
-              Math.max(
-                min,
-                Math.min(
-                  max,
-                  camera.scale *
-                    (event.key === "-" || event.key === "_" ? 1 / 1.5 : 1.5),
-                ),
-              ),
-              this.width / 2,
-              this.height / 2,
-            ),
-          );
-        }
-      },
-      { signal: this.controller.signal },
-    );
     this.observer.observe(canvas);
     const saved = this.navigation.view;
     this.resize();

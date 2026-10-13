@@ -152,7 +152,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   for (const id of ["share-back", "share-done"]) el(id).addEventListener("click", () => showPicker());
   sendDialog.addEventListener("cancel", (event) => {
     if (exporting) event.preventDefault();
-    // Escape on a picker page steps back to the summary.
+    // Back on a picker page steps back to the summary.
     else if (picking) {
       event.preventDefault();
       showPicker();
