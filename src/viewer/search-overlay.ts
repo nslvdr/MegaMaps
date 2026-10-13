@@ -92,7 +92,7 @@ export class SearchOverlay {
       if (target) layout.addObstacle(target.bounds);
     }
   }
-  /** Draws one frame; returns whether a label is still gliding into place. */
+  /** Draws one frame; returns whether a label is still gliding or fading. */
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
     if (!this.active) return false;
     let gliding = false;
@@ -113,13 +113,15 @@ export class SearchOverlay {
       const shown = !!target && target.bounds.right >= -8 && target.bounds.bottom >= -8 &&
         target.bounds.left <= viewport.width + 8 && target.bounds.top <= viewport.height + 8;
       const highlight = this.highlights[index]!, callout = this.callouts[index]!;
+      const connector = highlight.querySelector("line")!;
       if (shown !== this.shown[index]) {
         this.shown[index] = shown;
-        highlight.toggleAttribute("hidden", !shown);
         for (const hole of this.holes[index]!) hole.toggleAttribute("hidden", !shown);
         this.placeHoles[index]?.toggleAttribute("hidden", !shown);
-        if (!shown) callout.element.setAttribute("hidden", "");
+        if (!shown) connector.setAttribute("hidden", "");
       }
+      // A label leaving with its match fades out; one already hidden returns at once.
+      if (target && callout.draw(target.anchor, viewport, target.bounds, labels)) gliding = true;
       if (!shown) continue;
       for (const [polygonIndex, polygon] of target.polygons.entries())
         this.holes[index]![polygonIndex]!.setAttribute("points", polygon.map(p => `${p.x},${p.y}`).join(" "));
@@ -128,10 +130,8 @@ export class SearchOverlay {
         hole.setAttribute("cx", String(target.anchor.x));
         hole.setAttribute("cy", String(target.anchor.y));
       }
-      if (callout.draw(target.anchor, viewport, target.bounds, labels)) gliding = true;
       // Dense targets still have a visible locator when their callout cannot fit.
-      const connector = highlight.querySelector("line")!;
-      connector.toggleAttribute("hidden", !callout.element.hasAttribute("hidden"));
+      connector.toggleAttribute("hidden", !!callout.bounds);
       connector.setAttribute("x1", String(target.anchor.x));
       connector.setAttribute("x2", String(target.anchor.x));
       connector.setAttribute("y1", String(target.bounds.top - 10));

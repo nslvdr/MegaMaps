@@ -243,7 +243,7 @@ export class NavigationOverlay {
           reservePoint(point, route.id === this.editing ? 10 : 8);
     if (this.preview) reservePoint(this.preview.point, 18);
   }
-  /** Draws one frame; returns whether a label is still gliding into place. */
+  /** Draws one frame; returns whether a label is still gliding or fading. */
   draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
     const labels = layout ?? new CalloutLayout(viewport);
     if (!layout) this.reserve(camera, labels);
@@ -285,24 +285,21 @@ export class NavigationOverlay {
     }
     for (const { callout, point, padding, layer, markerId } of this.callouts) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
-        callout.element.setAttribute("hidden", "");
+        callout.hide();
         continue;
       }
       const p = worldToScreen(camera, point);
-      // Anchors reach at most 36px from a pin, so one this far out stays off screen.
-      if (p.x < -40 || p.y < -40 || p.x > viewport.width + 40 || p.y > viewport.height + 40) {
-        callout.element.setAttribute("hidden", "");
-        continue;
-      }
       let bounds = {
         left: p.x - padding, right: p.x + padding,
         top: p.y - padding, bottom: p.y + padding,
       };
       // A route can start on a place: connect outside the combined symbols.
-      for (const anchor of this.anchors)
-        if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
-          bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
-            top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
+      // Anchors reach at most 36px from a pin, so one this far out has none.
+      if (p.x >= -40 && p.y >= -40 && p.x <= viewport.width + 40 && p.y <= viewport.height + 40)
+        for (const anchor of this.anchors)
+          if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
+            bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
+              top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
       if (callout.draw(p, viewport, bounds, labels)) gliding = true;
     }
     return gliding;

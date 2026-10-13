@@ -10,7 +10,9 @@ import { SearchOverlay } from "../src/viewer/search-overlay";
 import { MapCallout } from "../src/viewer/map-callout";
 import type { Point } from "../src/viewer/camera";
 
-test("saved places and routes have typed callouts that follow their anchors and retain layer/edit controls", () => {
+test("saved places and routes have typed callouts that follow their anchors and retain layer/edit controls", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const svg = document.querySelector<SVGSVGElement>("svg")!;
@@ -20,7 +22,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
     kind: kind as keyof typeof markerKinds,
     label: `<${kind}>`,
     description: "",
-    point: { x: 100 + index * 60, y: 120 - index * 10 },
+    point: { x: 100 + index * 85, y: 120 + index * 85 },
     created: 0,
   }));
   state.routes = [{
@@ -30,7 +32,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
   const overlay = new NavigationOverlay(svg);
   overlay.rebuild(state);
   const viewport = { width: 600, height: 600 };
-  const camera = { x: 150, y: 250, scale: 0.5, rotation: Math.PI / 4 };
+  const camera = { x: 150, y: -50, scale: 0.5, rotation: Math.PI / 4 };
   overlay.draw(camera, viewport);
   const callouts = [...svg.querySelectorAll<SVGGElement>(".map-callout")];
   assert.equal(callouts.length, state.markers.length + state.routes.length, "every saved item has a callout");
@@ -91,6 +93,8 @@ test("saved places and routes have typed callouts that follow their anchors and 
   assert.ok(svg.querySelector(".route.editing"));
   assert.ok(svg.querySelector(".moving .pin-body"), "place anchors remain available while moving");
   assert.equal(svg.querySelectorAll(".map-callout").length, state.markers.length + state.routes.length);
+  overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
+  now += 1000;
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   assert.ok([...svg.querySelectorAll(".map-callout")].every(callout => callout.hasAttribute("hidden")),
     "offscreen saved items do not leave detached labels in view");
@@ -222,7 +226,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   saved.dispose();
 });
 
-test("a label glides to a new spot instead of jumping, and moves with its pin while panning", (t) => {
+test("a label glides aside while another is in its way, then back to its normal spot", (t) => {
   const { document } = parseHTML("<html><body><svg></svg></body></html>");
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   let now = 0;
@@ -235,13 +239,13 @@ test("a label glides to a new spot instead of jumping, and moves with its pin wh
     { left: anchor.x - 12, right: anchor.x + 12, top: anchor.y - 12, bottom: anchor.y + 12 },
     new CalloutLayout(viewport, obstacles));
   const position = () => callout.element.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
-  assert.equal(draw({ x: 200, y: 200 }), false, "a label that appears is placed at once");
+  draw({ x: 200, y: 200 });
   const [x0, y0] = position();
   now += 16;
   draw({ x: 210, y: 200 });
   assert.deepEqual(position(), [x0! + 10, y0], "panning carries it exactly with its pin");
-  // Space above the pin is taken, so the layout moves the label below it.
-  const above = [{ left: 0, right: 400, top: 0, bottom: 185 }];
+  // Another label takes the space above the pin, so this one turns below it.
+  const above = [{ left: 160, right: 260, top: 130, bottom: 166 }];
   now += 16;
   assert.equal(draw({ x: 210, y: 200 }, above), true, "it asks for frames while gliding");
   assert.deepEqual(position(), [x0! + 10, y0], "it starts from where it was shown");
@@ -253,4 +257,56 @@ test("a label glides to a new spot instead of jumping, and moves with its pin wh
   const [, y1] = position();
   assert.ok(y1! > 200, "it ends below the pin");
   assert.ok(middle! > y0! && middle! < y1!, "it passes between the two spots");
+  now += 16;
+  draw({ x: 210, y: 200 });
+  now += 1000;
+  draw({ x: 210, y: 200 });
+  assert.deepEqual(position(), [x0! + 10, y0], "once the way clears, it returns above the pin");
+});
+
+test("labels fade in, fade out following their pin off screen or without a free side, and leave no tap target", (t) => {
+  const { document } = parseHTML("<html><body><svg></svg></body></html>");
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const viewport = { width: 400, height: 400 };
+  const callout = new MapCallout(markerCalloutIcon("entrance"));
+  callout.setText("Gate");
+  document.querySelector("svg")!.append(callout.element);
+  const draw = (anchor: Point, obstacles = [] as CalloutBounds[]) => callout.draw(anchor, viewport,
+    { left: anchor.x - 12, right: anchor.x + 12, top: anchor.y - 12, bottom: anchor.y + 12 },
+    new CalloutLayout(viewport, obstacles));
+  const opacity = () => callout.element.hasAttribute("hidden") ? 0 : Number(callout.element.style.opacity || 1);
+  const position = () => callout.element.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+  assert.equal(draw({ x: 200, y: 200 }), true, "it keeps drawing while it fades in");
+  const first = opacity();
+  assert.ok(first > 0 && first < 1, "it appears faintly");
+  now += 1000;
+  assert.equal(draw({ x: 200, y: 200 }), false);
+  assert.equal(opacity(), 1);
+  const [x0, y0] = position();
+  // The pin leaves the screen: the label follows it while fading.
+  now += 60;
+  assert.equal(draw({ x: 200, y: 430 }), true);
+  assert.ok(opacity() > 0 && opacity() < 1, "it fades rather than vanishing");
+  assert.deepEqual(position(), [x0, y0! + 230], "it stays beside its pin");
+  assert.equal(callout.bounds, undefined, "a fading label cannot be tapped");
+  now += 1000;
+  assert.equal(draw({ x: 200, y: 450 }), false);
+  assert.equal(callout.element.hasAttribute("hidden"), true);
+  // With every side taken, only the pin shows.
+  const crowd = [{ left: 0, right: 400, top: 0, bottom: 185 }, { left: 0, right: 400, top: 215, bottom: 400 }];
+  now += 16;
+  draw({ x: 200, y: 200 }, crowd);
+  assert.equal(callout.element.hasAttribute("hidden"), true, "no label without a free side");
+  now += 16;
+  draw({ x: 200, y: 200 });
+  now += 1000;
+  draw({ x: 200, y: 200 });
+  now += 60;
+  draw({ x: 200, y: 200 }, crowd);
+  assert.ok(opacity() > 0 && opacity() < 1, "a label that loses its spot fades out too");
+  now += 1000;
+  draw({ x: 200, y: 200 }, crowd);
+  assert.equal(callout.element.hasAttribute("hidden"), true);
 });

@@ -1,8 +1,9 @@
 import type { Point, Size } from "./camera";
-import { CalloutLayout, leader, type CalloutBounds, type CalloutPlacement } from "./callout-layout";
+import { CalloutLayout, leader, type CalloutBounds } from "./callout-layout";
 export type { CalloutBounds } from "./callout-layout";
 
 const NS = "http://www.w3.org/2000/svg";
+const FADE = 180;
 const node = <K extends keyof SVGElementTagNameMap>(tag: K) =>
   document.createElementNS(NS, tag);
 
@@ -33,14 +34,14 @@ export class MapCallout {
   private measuredText = "";
   private maxWidth = 0;
   private width = 0;
-  private placement?: CalloutPlacement;
-  private anchor?: Point;
-  // What the layout moved and the label has yet to cover, relative to its
-  // anchor: it glides to new spots rather than jumping there.
+  // Where the label's spot sits from its anchor, and what the layout moved
+  // that it has yet to cover: it glides to new spots rather than jumping.
+  private spot = { x: 0, y: 0 };
   private drift = { x: 0, y: 0 };
+  private opacity = 0;
   private drawn = 0;
   private shown?: CalloutBounds;
-  private resumed = false;
+  private placed = false;
 
   constructor(iconMarkup: string, color = "var(--neon-saved)") {
     this.element.setAttribute("class", "map-callout");
@@ -62,18 +63,24 @@ export class MapCallout {
     this.element.setAttribute("hidden", "");
   }
 
-  /** Where the chip sits on screen, while it is shown. */
+  /** Where the chip sits on screen, while it has a spot. */
   get bounds() {
-    return this.element.hasAttribute("hidden") ? undefined : this.shown;
+    return this.placed ? this.shown : undefined;
   }
 
   /** Takes over where a callout for the same item was, when overlays rebuild. */
   follow(previous: MapCallout) {
-    this.placement = previous.placement;
-    this.anchor = previous.anchor;
+    this.spot = previous.spot;
     this.drift = previous.drift;
+    this.opacity = previous.opacity;
     this.drawn = previous.drawn;
-    this.resumed = !previous.element.hasAttribute("hidden");
+  }
+
+  /** Hides at once, for labels the user turned off. */
+  hide() {
+    this.element.setAttribute("hidden", "");
+    this.opacity = 0;
+    this.placed = false;
   }
 
   setText(text: string) {
@@ -81,16 +88,54 @@ export class MapCallout {
   }
 
   // One straight segment ends at the target's nearest edge, without a dot.
-  // Returns whether the label is still gliding and needs another frame.
+  // Labels fade out when they leave the screen or lose their spot, following
+  // their anchor meanwhile, and fade in where they arrive. Returns whether the
+  // label is still moving or fading and needs another frame.
   draw(anchor: Point, viewport: Size, bounds: CalloutBounds = {
     left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y,
   }, layout = new CalloutLayout(viewport)): boolean {
-    const appearing = this.element.hasAttribute("hidden") && !this.resumed;
-    this.resumed = false;
     const outside = bounds.right < 0 || bounds.bottom < 0 ||
       bounds.left > viewport.width || bounds.top > viewport.height;
-    this.element.toggleAttribute("hidden", outside);
-    if (outside) return false;
+    if (outside && !this.opacity) return false;
+    const placement = outside ? undefined : layout.place(this.measure(viewport), bounds, anchor);
+    const now = performance.now(), elapsed = now - this.drawn;
+    const decay = Math.exp(-elapsed / 90);
+    let dx = this.drift.x * decay, dy = this.drift.y * decay;
+    if (placement) {
+      const spot = { x: placement.bounds.left - anchor.x, y: placement.bounds.top - anchor.y };
+      // A label that appears starts at its spot; one already shown glides there.
+      if (this.opacity) {
+        dx += this.spot.x - spot.x;
+        dy += this.spot.y - spot.y;
+      } else dx = dy = 0;
+      this.spot = spot;
+    }
+    if (Math.hypot(dx, dy) < 0.5) dx = dy = 0;
+    // One that appears fades in from its first frame, however long it was hidden.
+    const step = (this.opacity ? elapsed : 16) / FADE;
+    this.opacity = Math.max(0, Math.min(1, this.opacity + (placement ? step : -step)));
+    this.drift = { x: dx, y: dy };
+    this.drawn = now;
+    this.placed = !!placement;
+    if (!this.opacity) {
+      this.hide();
+      return false;
+    }
+    this.element.removeAttribute("hidden");
+    this.element.style.opacity = this.opacity < 1 ? String(this.opacity) : "";
+    const x = anchor.x + this.spot.x + dx, y = anchor.y + this.spot.y + dy;
+    const shown = this.shown = { left: x, right: x + this.width, top: y, bottom: y + 36 };
+    const { from, to } = leader(shown, bounds);
+    this.element.setAttribute("transform", `translate(${x},${y})`);
+    this.connector.setAttribute("x1", String(from.x - x));
+    this.connector.setAttribute("y1", String(from.y - y));
+    this.connector.setAttribute("x2", String(to.x - x));
+    this.connector.setAttribute("y2", String(to.y - y));
+    return !!(dx || dy) || this.opacity < 1;
+  }
+
+  // Fits the text to the screen once per text and screen width.
+  private measure(viewport: Size) {
     const maxWidth = Math.max(60, Math.min(288, viewport.width - 16));
     if (this.fullText !== this.measuredText || maxWidth !== this.maxWidth) {
       this.measuredText = this.fullText;
@@ -105,34 +150,6 @@ export class MapCallout {
       this.width = Math.min(maxWidth, Math.ceil(measure()) + 51);
       this.background.setAttribute("width", String(this.width));
     }
-    const placement = layout.place({ width: this.width, height: 36 }, bounds, anchor, this.placement);
-    this.element.toggleAttribute("hidden", !placement);
-    if (!placement) return false;
-    const now = performance.now(), previous = this.placement;
-    const decay = Math.exp(-(now - this.drawn) / 90);
-    let dx = appearing ? 0 : this.drift.x * decay, dy = appearing ? 0 : this.drift.y * decay;
-    // Panning keeps a spot; only a new one is glided to, from where it was shown.
-    if (!appearing && previous && this.anchor && (previous.direction !== placement.direction ||
-        previous.gap !== placement.gap || previous.shift !== placement.shift)) {
-      dx += previous.bounds.left - this.anchor.x - placement.bounds.left + anchor.x;
-      dy += previous.bounds.top - this.anchor.y - placement.bounds.top + anchor.y;
-    }
-    if (Math.hypot(dx, dy) < 0.5) dx = dy = 0;
-    this.drift = { x: dx, y: dy };
-    this.drawn = now;
-    this.placement = placement;
-    this.anchor = anchor;
-    const shown = this.shown = dx || dy ? {
-      left: placement.bounds.left + dx, right: placement.bounds.right + dx,
-      top: placement.bounds.top + dy, bottom: placement.bounds.bottom + dy,
-    } : placement.bounds;
-    const { from, to } = shown === placement.bounds ? placement : leader(shown, bounds);
-    const { left: x, top: y } = shown;
-    this.element.setAttribute("transform", `translate(${x},${y})`);
-    this.connector.setAttribute("x1", String(from.x - x));
-    this.connector.setAttribute("y1", String(from.y - y));
-    this.connector.setAttribute("x2", String(to.x - x));
-    this.connector.setAttribute("y2", String(to.y - y));
-    return shown !== placement.bounds;
+    return { width: this.width, height: 36 };
   }
 }
