@@ -354,10 +354,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("close-sheet");
     assert.equal(el("reset-rotation").hidden, true, "reset belongs to the Rotation panel");
 
-    // Highlight with nothing saved explains instead of animating.
+    // Highlight with nothing saved is unavailable instead of animating.
+    assert.equal((el("spotlight") as HTMLButtonElement).disabled, true);
     click("spotlight");
     assert.equal(stage.classList.contains("spotlight"), false);
-    assert.match(el("toast").textContent!, /Nothing saved/);
 
     // Places: pick Place, tap the map, save the prefilled card.
     click("open-add");
@@ -961,17 +961,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, false, "Back restores the navbar too");
     state.markers = originalMarkers;
 
-    // Toasts stay up for as long as they take to read.
-    const kept = { markers: state.markers, routes: state.routes };
-    Object.assign(state, { markers: [], routes: [] });
-    click("spotlight");
-    assert.equal(el("toast").textContent, "Nothing saved yet. Use Add to create routes and places.");
-    t.mock.timers.tick(4200);
-    assert.equal(el("toast").hidden, false, "a longer toast stays up longer");
-    t.mock.timers.tick(200);
-    assert.equal(el("toast").hidden, true);
-    Object.assign(state, kept);
-
     // Long-press drops a place.
     controls.options().onLongPress?.({ x: 2000, y: 2100 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
@@ -982,8 +971,19 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(state.markers.at(-1)?.point, { x: 2000, y: 2100 });
     assert.equal(state.markers.at(-1)?.kind, "entrance");
     assert.equal(el("toast").textContent, "Entrance 1 saved");
+    assert.equal(el("toast-bar").dataset.tone, "done");
     t.mock.timers.tick(2300);
     assert.equal(el("toast").hidden, true, "a short one goes soon");
+    // Toasts stay up for as long as they take to read.
+    controls.options().onMarker(state.markers.at(-1)!);
+    click("marker-edit");
+    input("marker-label", "Lower entrance past the flooded quarry hall west");
+    submit("marker-form");
+    assert.equal(el("toast").textContent, "Lower entrance past the flooded quarry hall west updated");
+    t.mock.timers.tick(4200);
+    assert.equal(el("toast").hidden, false, "a longer toast stays up longer");
+    t.mock.timers.tick(200);
+    assert.equal(el("toast").hidden, true);
     t.mock.timers.reset();
 
     // Editing keeps a place's spot in the list and says when nothing changed.
@@ -994,6 +994,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("marker-edit");
     submit("marker-form");
     assert.equal(el("toast").textContent, `${before[0]} unchanged`);
+    assert.equal(el("toast-bar").dataset.tone, "quiet", "nothing changed reads as neutral");
     controls.options().onMarker(state.markers[0]!);
     click("marker-edit");
     input("marker-label", "Upper exit");
@@ -1032,6 +1033,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("toast").textContent, "Upper exit deleted");
     // Undo puts it back where it was in the list.
     assert.equal(el("toast-undo").hidden, false, "a delete offers Undo");
+    assert.equal(el("toast-bar").dataset.tone, "removed");
     click("toast-undo");
     assert.deepEqual(order(), ["Upper exit", ...before.slice(1)]);
     assert.equal(el("toast").textContent, "Upper exit restored");

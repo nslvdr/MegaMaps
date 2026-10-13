@@ -46,7 +46,7 @@ export const viewerMarkup = `
   <button id="open-rotation" class="glass status-chip" data-sheet="rotation" aria-label="Rotation" title="Rotation" aria-controls="sheet" aria-expanded="false">${icons.rotationLock}</button>
   <button id="open-display" class="glass status-chip" data-sheet="display" aria-label="View settings" title="View settings" aria-controls="sheet" aria-expanded="false">${icons.sun}</button>
 </div>
-<div class="toasts"><div id="ocr-progress" class="toast glass ocr-progress" role="progressbar" aria-label="Finding text" aria-valuemin="0" aria-valuemax="100" hidden>${icons.scanText}<span>Finding text</span><span id="ocr-percent" class="ocr-percent">0%</span></div><div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div></div>
+<div class="toasts"><div id="ocr-progress" class="toast glass" data-tone="progress" role="progressbar" aria-label="Finding text" aria-valuemin="0" aria-valuemax="100" hidden>${icons.scanText}<p>Finding text</p><span id="ocr-percent" class="ocr-percent">0%</span></div><div id="toast-bar" class="toast glass" hidden><span id="toast-icon" class="toast-icon" aria-hidden="true"></span><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div></div>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-label="Saved" title="Saved" aria-controls="sheet" aria-expanded="false">${icons.saved}</button>
   <div id="open-search" class="search-field" title="Search">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" aria-controls="search-overlay" aria-expanded="false" placeholder="Search map…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close" hidden>${icons.close}</button></div>
@@ -104,7 +104,6 @@ export const viewerMarkup = `
     </div>
   </div>
 </section>
-<p id="viewer-error" class="viewer-error" role="alert" hidden></p>
 <dialog id="marker-dialog" class="place-card" aria-labelledby="marker-dialog-title">
   <div class="dialog-header"><span id="marker-dialog-title-icon" class="dialog-title-icon" aria-hidden="true">${icons.pin}</span><h2 id="marker-dialog-title">New place</h2><button type="button" id="marker-edit" class="dialog-edit" aria-label="Edit place" title="Edit place" hidden>${icons.edit}</button><button type="button" id="marker-cancel" class="dialog-close" aria-label="Close" title="Close">${icons.close}</button></div>
   <div id="marker-details" class="place-details" role="region" aria-label="Place details" hidden>
