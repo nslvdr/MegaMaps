@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 /** Long edge of a stored place photo: sharp on a phone, a few hundred KB to share. */
 const PHOTO_EDGE = 1600;
 
@@ -7,7 +8,7 @@ const PHOTO_EDGE = 1600;
  */
 export async function preparePhoto(file: Blob) {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => {
-    throw new Error("This photo could not be read. Choose a JPEG, PNG, WebP or HEIC image.");
+    throw new Error(t("This photo could not be read. Choose a JPEG, PNG, WebP or HEIC image."));
   });
   try {
     const scale = Math.min(1, PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));

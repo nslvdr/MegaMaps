@@ -2,6 +2,7 @@ import { dialogHeader, showDialog } from "./dialog";
 import type { AppUpdate, DownloadProgress } from "../app-update";
 import { formatBytes } from "./format";
 import { icons } from "./icons";
+import { locale, t } from "../i18n";
 
 export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body">${dialogHeader("update-title", "", icons.rotateRight, "update-dismiss")}<p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button></div></dialog>`;
 
@@ -22,7 +23,7 @@ export type UpdateActions = {
 };
 
 const releaseDate = (date: Date) =>
-  new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+  new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
 const button = (icon: string, label: string) => `${icon}<span>${label}</span>`;
 
 // Check first, ask before downloading, then show each step until the app restarts.
@@ -65,8 +66,8 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
       onConfirm = options.confirm[2];
     }
     dismiss.disabled = busy;
-    dismiss.setAttribute("aria-label", options.dismiss ?? "Close");
-    dismiss.title = options.dismiss ?? "Close";
+    dismiss.setAttribute("aria-label", options.dismiss ?? t("Close"));
+    dismiss.title = options.dismiss ?? t("Close");
     actionRow.hidden = !options.confirm;
   }
 
@@ -91,11 +92,11 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     busy = false;
     view("error", {
       icon: icons.close,
-      title: "Couldn’t update Mega Maps",
+      title: t("Couldn’t update Mega Maps"),
       body: error instanceof Error ? error.message : String(error),
-      note: "You can keep using this version and try again later. Your maps, places and routes are unchanged.",
-      confirm: [icons.rotateRight, "Try again", () => void check()],
-      dismiss: "Close",
+      note: t("You can keep using this version and try again later. Your maps, places and routes are unchanged."),
+      confirm: [icons.rotateRight, t("Try again"), () => void check()],
+      dismiss: t("Close"),
     });
   }
 
@@ -103,34 +104,34 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     busy = false;
     view("current", {
       icon: icons.check,
-      title: "You’re up to date",
+      title: t("You’re up to date"),
       body: actions.currentRelease
-        ? `You have the latest version of Mega Maps, released ${releaseDate(actions.currentRelease)}.`
-        : "You have the latest version of Mega Maps.",
-      confirm: [icons.check, "Done", () => dialog.close()],
+        ? t("You have the latest version of Mega Maps, released {date}.", { date: releaseDate(actions.currentRelease) })
+        : t("You have the latest version of Mega Maps."),
+      confirm: [icons.check, t("Done"), () => dialog.close()],
     });
   }
 
   function offer(update: AppUpdate) {
     found = update;
-    const released = update.releasedAt ? ` (released ${releaseDate(update.releasedAt)})` : "";
+    const released = update.releasedAt ? t(" (released {date})", { date: releaseDate(update.releasedAt) }) : "";
     view("available", {
       icon: icons.download,
-      title: "Update available",
+      title: t("Update available"),
       body: update.downloaded
-        ? `A new version of Mega Maps${released} has already been downloaded. Restart to start using it.`
-        : `A new version of Mega Maps${released} is ready to download.`,
+        ? t("A new version of Mega Maps{released} has already been downloaded. Restart to start using it.", { released })
+        : t("A new version of Mega Maps{released} is ready to download.", { released }),
       facts: [
-        ...(update.downloaded ? [] : [update.size ? `About ${formatBytes(update.size)} to download` : "A one-time download"]),
-        "Your maps, places and routes stay on this device",
-        "Mega Maps restarts and reopens where you left off",
-        "Works offline again as soon as it restarts",
+        ...(update.downloaded ? [] : [update.size ? t("About {size} to download", { size: formatBytes(update.size) }) : t("A one-time download")]),
+        t("Your maps, places and routes stay on this device"),
+        t("Mega Maps restarts and reopens where you left off"),
+        t("Works offline again as soon as it restarts"),
       ],
-      note: update.downloaded ? undefined : "Keep Mega Maps open while the update downloads.",
+      note: update.downloaded ? undefined : t("Keep Mega Maps open while the update downloads."),
       confirm: update.downloaded
-        ? [icons.rotateRight, "Restart now", () => void install()]
-        : [icons.download, "Update now", () => void install()],
-      dismiss: "Not now",
+        ? [icons.rotateRight, t("Restart now"), () => void install()]
+        : [icons.download, t("Update now"), () => void install()],
+      dismiss: t("Not now"),
     });
   }
 
@@ -139,11 +140,11 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     busy = false;
     view("checking", {
       icon: icons.rotateRight,
-      title: "Checking for updates",
-      body: "Looking for a newer version of Mega Maps…",
-      dismiss: "Cancel",
+      title: t("Checking for updates"),
+      body: t("Looking for a newer version of Mega Maps…"),
+      dismiss: t("Cancel"),
     });
-    bar("Contacting Mega Maps…");
+    bar(t("Contacting Mega Maps…"));
     try {
       const update = await actions.find();
       if (current !== attempt || !dialog.open) return;
@@ -163,9 +164,9 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     let fraction = 0, stage = 0;
     view("installing", {
       icon: found.downloaded ? icons.rotateRight : icons.download,
-      title: found.downloaded ? "Finishing the update" : "Updating Mega Maps",
-      body: "Your maps, places and routes stay on this device.",
-      note: "Keep Mega Maps open. It restarts by itself when the update is ready.",
+      title: found.downloaded ? t("Finishing the update") : t("Updating Mega Maps"),
+      body: t("Your maps, places and routes stay on this device."),
+      note: t("Keep Mega Maps open. It restarts by itself when the update is ready."),
     });
     // Downloading fills most of the bar; installing and saving take the rest.
     const report = (update: UpdateStep) => {
@@ -174,29 +175,29 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
       stage = order.indexOf(update.step);
       if (update.step === "download") {
         const size = update.total || total;
-        if (!size) return bar("Downloading…");
+        if (!size) return bar(t("Downloading…"));
         if (update.loaded >= size) return report({ step: "install" });
-        if (!update.loaded) return bar("Starting download…", fraction);
+        if (!update.loaded) return bar(t("Starting download…"), fraction);
         fraction = Math.max(fraction, (update.loaded / size) * 0.9);
-        bar(`Downloading · ${formatBytes(update.loaded)} of ${formatBytes(size)}`, fraction);
+        bar(t("Downloading · {loaded} of {total}", { loaded: formatBytes(update.loaded), total: formatBytes(size) }), fraction);
       } else if (update.step === "install") {
         fraction = Math.max(fraction, 0.92);
-        bar("Installing update…", fraction);
+        bar(t("Installing update…"), fraction);
       } else {
         fraction = Math.max(fraction, 0.97);
-        bar("Saving your place…", fraction);
+        bar(t("Saving your place…"), fraction);
       }
     };
     if (found.downloaded) report({ step: "install" });
-    else bar("Starting download…", 0);
+    else bar(t("Starting download…"), 0);
     try {
       if (!(await actions.install(report))) return upToDate();
       view("restarting", {
         icon: icons.check,
-        title: "Update installed",
-        body: "Restarting Mega Maps with the new version…",
+        title: t("Update installed"),
+        body: t("Restarting Mega Maps with the new version…"),
       });
-      bar("Restarting…", 1);
+      bar(t("Restarting…"), 1);
       actions.restart();
     } catch (error) {
       failed(error);
@@ -221,7 +222,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     /** Explain why updating isn't possible right now. */
     explain(heading: string, message: string) {
       if (busy) return;
-      view("info", { icon: icons.rotateRight, title: heading, body: message, confirm: [icons.check, "Got it", () => dialog.close()] });
+      view("info", { icon: icons.rotateRight, title: heading, body: message, confirm: [icons.check, t("Got it"), () => dialog.close()] });
       if (!dialog.open) showDialog(dialog);
     },
     get busy() { return busy; },

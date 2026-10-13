@@ -2,7 +2,7 @@ import { dialogHeader, showDialog } from "./ui/dialog";
 import "./style.css";
 import { tileKey, type MapRecord } from "./types";
 import { listMaps, markOpened, renameMap } from "./storage/database";
-import { payloadStore, deleteStoredMap } from "./storage/payloads";
+import { payloadStore, deleteAllData, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
 import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
@@ -24,28 +24,38 @@ import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
 import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
+import { eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "./ui/settings-page";
+import { backupDue, isBackupFile, restoreBackup, type Backup } from "./storage/backup";
+import { loadSetting } from "./storage/settings";
+import { language, locale, t } from "./i18n";
+import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 
+document.documentElement.lang = language;
+document.documentElement.dataset.labels = preference("label-size");
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <div class="top-edge" aria-hidden="true"></div>
-    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>Import</span></button></div>
-    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p><p class="empty-drop">You can also drop or paste one here.</p></div></section>
+    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="settings-open" id="settings-open">${icons.settings}<span class="update-dot" aria-hidden="true"></span><span>${t("Settings")}</span></button></header>
+    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div>
+    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
     ${libraryFooterMarkup}
   </main>
-  <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
+  ${settingsMarkup}
+  <section id="viewer" class="viewer" aria-label="${t("Map viewer")}" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
-  <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", "Import", icons.download, "import-cancel")}<p>What would you like to add?</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">New map<small>JPEG, PNG or WebP image</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">Shared file<small>.megamap with places and routes</small></span>${icons.arrow}</button></div></dialog>
-  <dialog id="progress-dialog" aria-labelledby="progress-title">${dialogHeader("progress-title", "Preparing map", icons.map, "cancel-import", "Cancel import")}<p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">Reading image…</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">Keep Mega Maps open while your map is prepared.</p></dialog>
-  <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>Got it</span></button></dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", "Delete this map?", icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>Delete map</span></button></div></dialog>
+  <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", t("Import"), icons.download, "import-cancel")}<p>${t("What would you like to add?")}</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">${t("New map")}<small>${t("JPEG, PNG or WebP image")}</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">${t("Shared file")}<small>${t(".megamap with places and routes")}</small></span>${icons.arrow}</button></div></dialog>
+  <dialog id="progress-dialog" aria-labelledby="progress-title">${dialogHeader("progress-title", t("Preparing map"), icons.map, "cancel-import", t("Cancel import"))}<p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">${t("Reading image…")}</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">${t("Keep Mega Maps open while your map is prepared.")}</p></dialog>
+  <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>${t("Got it")}</span></button></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", t("Delete this map?"), icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>${t("Delete map")}</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
-  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title">${dialogHeader("advanced-map-title", "Advanced settings", icons.tools, "advanced-map-close")}<p id="advanced-map-name"></p><h3>Text detection</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>Rerun text detection</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>Stop detection</span></button></div></dialog>
+  ${restoreDialogMarkup}
+  ${eraseDialogMarkup}
+  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title">${dialogHeader("advanced-map-title", t("Advanced settings"), icons.tools, "advanced-map-close")}<p id="advanced-map-name"></p><h3>${t("Text detection")}</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">${t("Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.")}</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>${t("Rerun text detection")}</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>${t("Stop detection")}</span></button></div></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -69,7 +79,30 @@ let ocrJob:
     }
   | undefined;
 const ocrErrors = new Map<string, string>();
-const refreshFooter = initLibraryFooter(home);
+const settingsPage = element("settings");
+const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
+const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
+const canUpdate = import.meta.env.PROD && "serviceWorker" in navigator;
+const settings = initSettingsPage(settingsPage, {
+  restore: element<HTMLDialogElement>("restore-dialog"),
+  erase: element<HTMLDialogElement>("erase-dialog"),
+}, {
+  release: Number.isFinite(loadedRelease.getTime()) ? loadedRelease : undefined,
+  back: () => history.back(),
+  checkUpdates: openUpdates,
+  restore: (backup) => void restore(backup),
+  erase: () => void erase(),
+  setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
+});
+// The footer checks quietly while the library shows; Settings mirrors its answer.
+const refreshFooter = initLibraryFooter(home, canUpdate
+  ? async () => {
+      if (updates.busy) return false;
+      const ready = Boolean(await findAppUpdate(loadedVersion));
+      settings.setUpdateReady(ready);
+      return ready;
+    }
+  : undefined);
 let controls: ViewerControls | undefined;
 let pendingViewSave = Promise.resolve();
 let openVersion = 0;
@@ -122,14 +155,12 @@ function showMessage(title: string, message: string) {
   element("message-body").textContent = message;
   if (!messageDialog.open) showDialog(messageDialog);
 }
-const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
-const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
 // Ask before downloading; keep the current map/session and wait for durable saves before reloading.
 const updates = initUpdateDialog(element<HTMLDialogElement>("update-dialog"), {
   currentRelease: Number.isFinite(loadedRelease.getTime()) ? loadedRelease : undefined,
   find: () => findAppUpdate(loadedVersion),
   install: (report) => mutate(async () => {
-    if (importing || ocrJob) throw new Error("Mega Maps started preparing a map. Let it finish, then try again.");
+    if (importing || ocrJob) throw new Error(t("Mega Maps started preparing a map. Let it finish, then try again."));
     const installed = await installAppUpdate(loadedVersion, (progress) => report({ step: "download", ...progress }));
     if (!installed) return false;
     report({ step: "save" });
@@ -142,15 +173,15 @@ const updates = initUpdateDialog(element<HTMLDialogElement>("update-dialog"), {
 const sharing = initSharing(app, {
   maps: listMaps,
   import: async (share, destination) => {
-    if (importing || updates.busy) throw new Error("Finish the current operation before importing a share.");
+    if (importing || updates.busy) throw new Error(t("Finish the current operation before importing a share."));
     await pendingViewSave;
     const controller = new AbortController();
     importing = controller;
-    element("progress-title").textContent = "Importing shared map";
+    element("progress-title").textContent = t("Importing shared map");
     element("progress-title-icon").innerHTML = icons.download;
-    element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
+    element("progress-note").textContent = t("Keep Mega Maps open while the share is imported.");
     element("import-name").textContent = displayName(share.manifest.map.name);
-    showProgress(0, "Checking shared map…");
+    showProgress(0, t("Checking shared map…"));
     showDialog(progressDialog);
     try {
       const result = await mutate(async () => {
@@ -158,10 +189,10 @@ const sharing = initSharing(app, {
           controller.signal.throwIfAborted();
           const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal, share.photos);
           const map = (await listMaps()).find((map) => map.id === destination.mapId);
-          if (!map) throw new Error("This map is no longer available.");
+          if (!map) throw new Error(t("This map is no longer available."));
           return { map, ...counts };
         }
-        if (!destination.image) throw new Error("Choose the original map image to create a copy.");
+        if (!destination.image) throw new Error(t("Choose the original map image to create a copy."));
         return importNewCopy(share, destination.image, (progress) =>
           showProgress(progress.fraction * 100, progress.message), controller.signal);
       });
@@ -175,10 +206,10 @@ const sharing = initSharing(app, {
   imported: async (result, destination) => {
     await refresh();
     await openMap(result.map);
-    if (!destination.mapId) showMessage("Share imported", `${plural(result.added, "item")} added to a new map.`);
+    if (!destination.mapId) showMessage(t("Share imported"), t("{items} added to a new map.", { items: plural(result.added, "item") }));
     else if (destination.mode === "replace")
-      showMessage("Share imported", `${plural(result.removed ?? 0, "item")} removed · ${plural(result.added, "shared item")} added.`);
-    else showMessage("Share imported", `${result.added} items added · ${result.skipped} already imported and skipped.\nYour existing annotations and local edits were kept.`);
+      showMessage(t("Share imported"), t("{removed} removed · {added} added.", { removed: plural(result.removed ?? 0, "item"), added: plural(result.added, "shared item") }));
+    else showMessage(t("Share imported"), t("{added} added · {skipped} already imported and skipped.\nYour existing annotations and local edits were kept.", { added: plural(result.added, "item"), skipped: result.skipped }));
   },
 });
 
@@ -189,7 +220,7 @@ async function shareMap(map: MapRecord, item?: { kind: "marker" | "route"; id: s
     await controls?.prepareForUpdate();
     await sharing.openExport(map, await loadNavigation(map.id), item);
   } catch (error) {
-    showMessage("Could not prepare share", error instanceof Error ? error.message : String(error));
+    showMessage(t("Could not prepare share"), error instanceof Error ? error.message : String(error));
   }
 }
 // An origin-wide lock prevents launch cleanup from racing another tab's import.
@@ -201,7 +232,7 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
       (lock) => {
         if (!lock)
           throw new Error(
-            "Mega Maps is preparing a map in another window. Let it finish first.",
+            t("Mega Maps is preparing a map in another window. Let it finish first."),
           );
         return work();
       },
@@ -218,8 +249,13 @@ let leavingMap = false;
 let libraryScroll = 0;
 // Back closes a panel or tool first, then the map.
 window.addEventListener("popstate", (event) => {
-  const wanted = (event.state as { map?: string } | null)?.map;
-  if (leavingMap) leavingMap = false;
+  const state = event.state as { map?: string; settings?: boolean } | null;
+  const wanted = state?.map;
+  if (!settingsPage.hidden && !state?.settings) {
+    if (document.querySelector("dialog:modal")) history.pushState({ settings: true }, "");
+    else hideSettings();
+  } else if (settingsPage.hidden && state?.settings && !currentMap) showSettings();
+  else if (leavingMap) leavingMap = false;
   else if (currentMap && !wanted) {
     if (document.querySelector("dialog:modal") || controls?.escape())
       history.pushState({ map: currentMap.id }, "");
@@ -239,7 +275,7 @@ function closeViewer() {
   currentMap = undefined;
   showTitle();
   void setLastMap(null).catch((error) =>
-    showMessage("Could not save home view", String(error)),
+    showMessage(t("Could not save home view"), String(error)),
   );
   // Drop the map's history entry so Back from home leaves the app as usual.
   if (history.state?.map) {
@@ -255,7 +291,7 @@ function closeViewer() {
       // The map just left now leads the list; the library opens at it.
       if (!home.hidden) window.scrollTo(0, maps[0]?.id === closed ? 0 : libraryScroll);
     })
-    .catch((error) => showMessage("Storage unavailable", String(error)));
+    .catch((error) => showMessage(t("Storage unavailable"), String(error)));
 }
 async function openMap(map: MapRecord) {
   const version = ++openVersion;
@@ -289,7 +325,7 @@ async function openMap(map: MapRecord) {
       map,
       () => {}, // No zoom readout: the map is the only thing on screen.
       (message) => {
-        if (!reported) showMessage("Couldn’t show this map", message);
+        if (!reported) showMessage(t("Couldn’t show this map"), message);
         reported = true;
       },
       controls.options(),
@@ -300,7 +336,7 @@ async function openMap(map: MapRecord) {
   } catch (error) {
     if (version === openVersion) {
       closeViewer();
-      showMessage("Could not open map", String(error));
+      showMessage(t("Could not open map"), String(error));
     }
   }
 }
@@ -315,7 +351,7 @@ function confirmDelete(map: MapRecord) {
   if (frame && img) frame.append(img);
   element("delete-name").replaceChildren(...(frame ? [frame] : []), displayName(map.name));
   const note = element("delete-note");
-  note.textContent = "This removes the map and its saved routes and places from this device.";
+  note.textContent = t("This removes the map and its saved routes and places from this device.");
   showDialog(deleteDialog);
   // Name what would be lost, so an empty map reads as a light delete.
   void loadNavigation(map.id)
@@ -326,8 +362,8 @@ function confirmDelete(map: MapRecord) {
         routes.length && plural(routes.length, "route"),
       ].filter(Boolean);
       note.textContent = saved.length
-        ? `This removes the map and its ${saved.join(" and ")} from this device.`
-        : "This removes the map from this device.";
+        ? t("This removes the map and its {saved} from this device.", { saved: saved.join(t(" and ")) })
+        : t("This removes the map from this device.");
     })
     .catch(() => {});
 }
@@ -340,7 +376,7 @@ async function refresh() {
     .sort((a, b) => (b.opened ?? b.created) - (a.opened ?? a.created));
   if (currentMap && !maps.some((m) => m.id === currentMap!.id)) {
     closeViewer();
-    showMessage("Map removed", "This map was removed in another window.");
+    showMessage(t("Map removed"), t("This map was removed in another window."));
     return;
   }
   if (currentMap) {
@@ -371,6 +407,7 @@ async function refresh() {
     }
   // Behind an open map the grid is unseen; going home renders it afresh.
   if (home.hidden) return;
+  void showBackupReminder();
   mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
@@ -402,34 +439,34 @@ async function refresh() {
           markers.length && plural(markers.length, "place"),
           routes.length && plural(routes.length, "route"),
         ].filter(Boolean);
-        saved.textContent = items.join(" · ") || "Nothing saved yet";
+        saved.textContent = items.join(" · ") || t("Nothing saved yet");
         saved.classList.toggle("none", !items.length);
       })
       .catch(() => {});
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
     const name = displayName(map.name);
-    more.title = "Map options";
-    more.setAttribute("aria-label", `Options for ${name}`);
+    more.title = t("Map options");
+    more.setAttribute("aria-label", t("Options for {name}", { name }));
     const openButton = card.querySelector<HTMLButtonElement>(".map-open")!;
     openButton.addEventListener("click", () => {
       void openMap(map);
     });
     more.addEventListener("click", () =>
       mapMenu.toggle(more, name, [
-        { label: "Share", icon: icons.share, action: () => { void shareMap(map); } },
-        { label: "Rename", icon: icons.edit, action: () => openRenameMap(map) },
+        { label: t("Share"), icon: icons.share, action: () => { void shareMap(map); } },
+        { label: t("Rename"), icon: icons.edit, action: () => openRenameMap(map) },
         {
-          label: "Advanced settings",
+          label: t("Advanced settings"),
           icon: icons.tools,
           action: () => {
             selectedMap = map;
-            element("ocr-status").textContent = "Checking text detection…";
+            element("ocr-status").textContent = t("Checking text detection…");
             showDialog(advancedDialog);
             void renderOcrSettings();
           },
         },
         {
-          label: "Delete",
+          label: t("Delete"),
           icon: icons.trash,
           danger: true,
           action: () => confirmDelete(map),
@@ -470,7 +507,7 @@ async function refresh() {
       })
       .catch(() => {
         card.querySelector(".thumbnail-placeholder")!.textContent =
-          "Preview unavailable";
+          t("Preview unavailable");
       });
   }
 }
@@ -497,6 +534,8 @@ fileInput.addEventListener("change", () => {
 async function importFile(file: File) {
   if (importing) return;
   if (await isShareFile(file).catch(() => false)) void sharing.openImport(file);
+  else if (await isBackupFile(file).catch(() => false))
+    void settings.review(file).catch((error) => showMessage(t("Couldn’t read this backup"), String(error instanceof Error ? error.message : error)));
   else importImage(file);
 }
 // Desktop: a map or .megamap file dropped on the library imports like Import.
@@ -531,8 +570,8 @@ document.addEventListener("paste", (event) => {
   event.preventDefault();
   // Screenshots arrive as "image.png"; a dated name tells them apart.
   if (/^image\.\w+$/i.test(file.name)) {
-    const date = new Date().toLocaleDateString(undefined, { dateStyle: "medium" });
-    file = new File([file], `Pasted map ${date}${file.name.slice(5)}`, { type: file.type });
+    const date = new Date().toLocaleDateString(locale, { dateStyle: "medium" });
+    file = new File([file], `${t("Pasted map {date}", { date })}${file.name.slice(5)}`, { type: file.type });
   }
   void importFile(file);
 });
@@ -540,12 +579,12 @@ function importImage(file: File) {
   if (importing) return;
   importing = new AbortController();
   const controller = importing;
-  element("progress-title").textContent = "Preparing map";
+  element("progress-title").textContent = t("Preparing map");
   element("progress-title-icon").innerHTML = icons.map;
   element("progress-note").textContent =
-    "Keep Mega Maps open while your map is prepared.";
+    t("Keep Mega Maps open while your map is prepared.");
   element("import-name").textContent = file.name;
-  showProgress(0, "Reading image metadata…");
+  showProgress(0, t("Reading image metadata…"));
   showDialog(progressDialog);
   // The map opens once its tiles are saved; text detection follows in the background.
   void mutate(() =>
@@ -565,7 +604,7 @@ function importImage(file: File) {
     .catch((error) => {
       if (!(error instanceof DOMException && error.name === "AbortError"))
         showMessage(
-          "Couldn’t import this map",
+          t("Couldn’t import this map"),
           error instanceof Error ? error.message : String(error),
         );
     })
@@ -593,14 +632,82 @@ progressDialog.addEventListener("cancel", (event) => {
 });
 for (const id of ["message-close", "message-dismiss"])
   element(id).addEventListener("click", () => messageDialog.close());
-element("update-app").addEventListener("click", () => {
+function openUpdates() {
   if (updates.busy) updates.open();
   else if (importing || ocrJob)
-    updates.explain("Finish the current task first", "Mega Maps is preparing a map. Let it finish, or stop it, then check for updates again.");
-  else if (!import.meta.env.PROD || !("serviceWorker" in navigator))
-    updates.explain("Updates aren’t available here", "App updates work in the installed app or on the live HTTPS site.");
+    updates.explain("Finish the current task first", t("Mega Maps is preparing a map. Let it finish, or stop it, then check for updates again."));
+  else if (!canUpdate)
+    updates.explain(t("Updates aren’t available here"), t("App updates work in the installed app or on the live HTTPS site."));
   else updates.open();
+}
+element("app-update-status").addEventListener("click", openUpdates);
+// Settings is a page of its own: it takes the library's place and Back returns.
+function showSettings() {
+  libraryScroll = window.scrollY;
+  home.hidden = true;
+  settingsPage.hidden = false;
+  window.scrollTo(0, 0);
+  void settings.refresh();
+}
+function hideSettings() {
+  settingsPage.hidden = true;
+  home.hidden = false;
+  void refreshFooter();
+  void showBackupReminder();
+  window.scrollTo(0, libraryScroll);
+}
+element("settings-open").addEventListener("click", () => {
+  history.pushState({ settings: true }, "");
+  showSettings();
 });
+// Adds the backup's missing maps, one after another, then shows them in the library.
+async function restore(backup: Backup) {
+  if (importing || ocrJob || updates.busy)
+    return showMessage("Finish the current task first", t("Mega Maps is busy with another map. Let it finish, then restore the backup."));
+  const controller = new AbortController();
+  importing = controller;
+  element("progress-title").textContent = t("Restoring backup");
+  element("progress-title-icon").innerHTML = icons.restore;
+  element("progress-note").textContent = t("Keep Mega Maps open while your maps are prepared again.");
+  element("import-name").textContent = plural(backup.manifest.maps.length, "map");
+  showProgress(0, t("Starting…"));
+  showDialog(progressDialog);
+  try {
+    const result = await mutate(() => restoreBackup(backup, (progress) =>
+      showProgress(progress.fraction * 100, progress.message), controller.signal));
+    progressDialog.close();
+    showMessage(t("Backup restored"), t("{maps} added to your library.", { maps: plural(result.added, "map") }));
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      showMessage(t("Couldn’t restore the backup"), error instanceof Error ? error.message : String(error));
+  } finally {
+    progressDialog.close();
+    importing = undefined;
+    channel?.postMessage("changed");
+    await refresh().catch(() => {});
+    if (!settingsPage.hidden) void settings.refresh();
+  }
+}
+// Settings' Delete everything, once its three steps are confirmed.
+async function erase() {
+  if (importing || ocrJob || updates.busy)
+    return showMessage(t("Finish the current task first"), t("Mega Maps is busy with a map. Let it finish, then try again."));
+  try {
+    await mutate(deleteAllData);
+    showMessage(t("Everything deleted"), t("No maps, places or photos are left on this device."));
+  } catch (error) {
+    showMessage(t("Couldn’t delete everything"), error instanceof Error ? error.message : String(error));
+  } finally {
+    channel?.postMessage("changed");
+    await refresh().catch(() => {});
+    void settings.refresh();
+  }
+}
+// A dot on Settings while a backup is due.
+async function showBackupReminder() {
+  const lastBackup = await loadSetting("last-backup").catch(() => undefined);
+  element("settings-open").dataset.state = backupDue(maps, lastBackup) ? "due" : "";
+}
 element("delete-cancel").addEventListener("click", () => deleteDialog.close());
 element("delete-confirm").addEventListener("click", () => {
   const map = deleting;
@@ -617,17 +724,17 @@ element("delete-confirm").addEventListener("click", () => {
       }),
     )
     .then(() => refresh())
-    .catch((error) => showMessage("Couldn’t delete map", String(error)));
+    .catch((error) => showMessage(t("Couldn’t delete map"), String(error)));
 });
 element("back").addEventListener("click", closeViewer);
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;
   if (typeof data === "object" && data !== null && "type" in data && data.type === "annotations" &&
       "mapId" in data && data.mapId === currentMap?.id)
-    void controls?.refreshImports().catch((error) => showMessage("Could not refresh shared items", String(error)));
+    void controls?.refreshImports().catch((error) => showMessage(t("Could not refresh shared items"), String(error)));
   if (!importing)
     void refresh().catch((error) =>
-      showMessage("Storage unavailable", String(error)),
+      showMessage(t("Storage unavailable"), String(error)),
     );
 });
 
@@ -643,7 +750,7 @@ async function runOcr(
 ) {
   if (ocrJob)
     throw new Error(
-      "Text detection is already running. Let it finish or stop it first.",
+      t("Text detection is already running. Let it finish or stop it first."),
     );
   let previous: OcrIndex | undefined;
   let release = () => {};
@@ -653,7 +760,7 @@ async function runOcr(
   const job = {
     mapId: map.id,
     controller,
-    message: "Starting local text detection…",
+    message: t("Starting local text detection…"),
     fraction: 0,
     done,
   };
@@ -686,8 +793,8 @@ async function runOcr(
     return index;
   } catch (error) {
     const message = controller.signal.aborted
-      ? "Text detection stopped. Rerun it in Advanced settings."
-      : "Text detection failed. Rerun it in Advanced settings.";
+      ? t("Text detection stopped. Rerun it in Advanced settings.")
+      : t("Text detection failed. Rerun it in Advanced settings.");
     ocrErrors.set(map.id, message);
     if (currentMap?.id === map.id) controls?.updateOcr(previous, message);
     throw error;
@@ -714,7 +821,7 @@ async function prepareMapSearch(map: MapRecord, version: number) {
     if (version === openVersion && !ocrErrors.has(map.id))
       controls?.updateOcr(
         undefined,
-        `${String(error)} Retry in the map’s Advanced settings.`,
+        t("{error} Retry in the map’s Advanced settings.", { error: String(error) }),
       );
   }
 }
@@ -732,8 +839,8 @@ async function renderOcrSettings() {
     ? ocrJob!.message
     : (ocrErrors.get(map.id) ??
       (index
-        ? `${plural(index.lines.length, "detected label")}\nLast scanned ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(index.completedAt)}`
-        : "Text detection has not run yet."));
+        ? `${plural(index.lines.length, "detected label")}\n${t("Last scanned {date}", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(index.completedAt) })}`
+        : t("Text detection has not run yet.")));
   element<HTMLButtonElement>("rerun-ocr").disabled = !!ocrJob || !!importing;
   element("stop-ocr").hidden = !running;
 }
@@ -750,7 +857,7 @@ element("rerun-ocr").addEventListener("click", () => {
   void runOcr(map, new AbortController())
     .catch((error) => {
       if (!ocrErrors.has(map.id))
-        showMessage("Couldn’t start text detection", String(error));
+        showMessage(t("Couldn’t start text detection"), String(error));
     })
     .finally(() => void renderOcrSettings());
 });
@@ -763,13 +870,15 @@ async function start() {
       if (map.status !== "ready") await deleteStoredMap(map);
   }).catch(() => {}); // Another tab may legitimately be importing; don't touch its files.
   await refresh();
+  // Reloading on the Settings page stays there.
+  if (history.state?.settings) return showSettings();
   const resume = await lastMap();
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
 }
 void start().catch((error) =>
   showMessage(
-    "Local storage unavailable",
+    t("Local storage unavailable"),
     error instanceof Error ? error.message : String(error),
   ),
 );

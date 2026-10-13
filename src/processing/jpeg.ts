@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Backend, ImageHeader } from "../types";
 import type { RowConsumer } from "./png";
 interface SyncFile {
@@ -69,10 +70,10 @@ export async function decodeJPEG(
     } else {
       if (header.progressive && header.width * header.height > 4_000_000)
         throw new Error(
-          "Large progressive JPEG requires OPFS. Export a baseline JPEG or non-interlaced PNG on this browser.",
+          t("Large progressive JPEG requires OPFS. Export a baseline JPEG or non-interlaced PNG on this browser."),
         );
       if (file.size > 64 * 1024 * 1024)
-        throw new Error("JPEG over 64 MB requires OPFS on this browser.");
+        throw new Error(t("JPEG over 64 MB requires OPFS on this browser."));
       compressed = new Uint8Array(await file.arrayBuffer());
     }
     let nextScratch = 0;
@@ -107,7 +108,7 @@ export async function decodeJPEG(
           module.ioError ?? module.UTF8ToString(module._decoder_error()),
         );
       if (width !== header.width || module._decoder_height() !== header.height)
-        throw new Error("JPEG dimensions changed during decoding.");
+        throw new Error(t("JPEG dimensions changed during decoding."));
       for (let y = 0; y < header.height; y++) {
         const pointer = module._decoder_row();
         if (!pointer)

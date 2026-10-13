@@ -1,3 +1,4 @@
+import { language, t } from "../i18n";
 import type { MapRecord } from "../types";
 import type { VerificationReply } from "./verify.worker";
 // Verification uses local payloads only. One worker decode is retained at a time.
@@ -8,11 +9,12 @@ export function verifyMap(
 ) {
   return new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
-      reject(new DOMException("Check cancelled.", "AbortError"));
+      reject(new DOMException(t("Check cancelled."), "AbortError"));
       return;
     }
     const worker = new Worker(new URL("./verify.worker.ts", import.meta.url), {
       type: "module",
+      name: language,
     });
     const cleanup = () => {
       worker.terminate();
@@ -20,7 +22,7 @@ export function verifyMap(
     };
     const abort = () => {
       cleanup();
-      reject(new DOMException("Check cancelled.", "AbortError"));
+      reject(new DOMException(t("Check cancelled."), "AbortError"));
     };
     signal.addEventListener("abort", abort, { once: true });
     worker.onmessage = (event: MessageEvent<VerificationReply>) => {
@@ -40,7 +42,7 @@ export function verifyMap(
       cleanup();
       reject(
         new Error(
-          "Offline check stopped. Try again with Mega Maps in the foreground.",
+          t("Offline check stopped. Try again with Mega Maps in the foreground."),
         ),
       );
     };

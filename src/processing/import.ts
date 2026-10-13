@@ -1,3 +1,4 @@
+import { language, t } from "../i18n";
 import type { ImportProgress, MapRecord, WorkerReply } from "../types";
 import { readHeader } from "./headers";
 import { chooseBackend, deleteStoredMap } from "../storage/payloads";
@@ -6,12 +7,14 @@ export async function importMap(
   file: File,
   onProgress: (p: ImportProgress) => void,
   signal: AbortSignal,
+  /** Restored backups keep their map's identity, so restoring twice adds nothing. */
+  id: string = crypto.randomUUID(),
 ) {
-  if (signal.aborted) throw new DOMException("Import cancelled.", "AbortError");
-  onProgress({ fraction: 0, message: "Reading image metadata…" });
+  if (signal.aborted) throw new DOMException(t("Import cancelled."), "AbortError");
+  onProgress({ fraction: 0, message: t("Reading image metadata…") });
   const header = await readHeader(file);
   const record: MapRecord = {
-    id: crypto.randomUUID(),
+    id,
     name: file.name,
     width: header.width,
     height: header.height,
@@ -30,17 +33,18 @@ export async function importMap(
     estimate.quota - estimate.usage < file.size
   )
     throw new Error(
-      "Device storage is too low to save the original file. Free space and try again.",
+      t("Device storage is too low to save the original file. Free space and try again."),
     );
   await navigator.storage?.persist?.().catch(() => false);
   await saveMap(record);
   const worker = new Worker(new URL("./import.worker.ts", import.meta.url), {
     type: "module",
+    name: language,
   });
   try {
     return await new Promise<MapRecord>((resolve, reject) => {
       const abort = () =>
-        reject(new DOMException("Import cancelled.", "AbortError"));
+        reject(new DOMException(t("Import cancelled."), "AbortError"));
       signal.addEventListener("abort", abort, { once: true });
       const finish = () => signal.removeEventListener("abort", abort);
       worker.onmessage = (event: MessageEvent<WorkerReply>) => {
@@ -59,7 +63,7 @@ export async function importMap(
         finish();
         reject(
           new Error(
-            "Image processing stopped. Try again with a smaller file or a baseline JPEG.",
+            t("Image processing stopped. Try again with a smaller file or a baseline JPEG."),
           ),
         );
       };

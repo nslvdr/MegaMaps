@@ -1,9 +1,10 @@
+import { t } from "../i18n";
 import { dialogHeader, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { icons } from "./icons";
 import { displayName } from "./format";
 
-export const mapRenameMarkup = `<dialog id="rename-map-dialog" aria-labelledby="rename-map-title"><form id="rename-map-form">${dialogHeader("rename-map-title", "Rename map", icons.edit, "rename-map-cancel")}<label>Name<input id="rename-map-name" required autocomplete="off" enterkeyhint="done" aria-describedby="rename-map-error"></label><p id="rename-map-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>Save</span></button></div></form></dialog>`;
+export const mapRenameMarkup = `<dialog id="rename-map-dialog" aria-labelledby="rename-map-title"><form id="rename-map-form">${dialogHeader("rename-map-title", t("Rename map"), icons.edit, "rename-map-cancel")}<label>${t("Name")}<input id="rename-map-name" required autocomplete="off" enterkeyhint="done" aria-describedby="rename-map-error"></label><p id="rename-map-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="submit" class="primary">${icons.check}<span>${t("Save")}</span></button></div></form></dialog>`;
 
 // Keep the dialog open on save failure so the name can be retried.
 export function initMapRename(
@@ -29,7 +30,7 @@ export function initMapRename(
     if (!mapId || saving) return;
     const name = input.value.trim();
     if (!name) {
-      error.textContent = "Enter a map name.";
+      error.textContent = t("Enter a map name.");
       error.hidden = false;
       input.focus();
       return;

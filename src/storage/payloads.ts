@@ -1,8 +1,9 @@
 import type { Backend, MapRecord } from "../types";
-import { database, transact, removeRecord, saveMap } from "./database";
+import { database, listMaps, transact, removeRecord, saveMap } from "./database";
 import { deleteNavigation } from "./navigation";
 import { deleteOcr } from "./ocr";
 import { deleteMapPhotos } from "./photos";
+import { t } from "../i18n";
 export interface PayloadStore {
   put(mapId: string, key: string, blob: Blob): Promise<void>;
   get(mapId: string, key: string): Promise<Blob>;
@@ -51,7 +52,7 @@ class IndexedDBStore implements PayloadStore {
     const blob = await transact<Blob | undefined>("payloads", "readonly", (s) =>
       s.get(`${id}/${key}`),
     );
-    if (!blob) throw new Error("A stored tile is missing. Reimport this map.");
+    if (!blob) throw new Error(t("A stored tile is missing. Reimport this map."));
     return blob;
   }
   async deleteMap(id: string) {
@@ -96,4 +97,10 @@ export async function deleteStoredMap(map: MapRecord) {
   await deleteOcr(map.id);
   await deleteMapPhotos(map.id);
   await removeRecord(map.id);
+}
+
+/** Settings' Delete everything: every map with what it holds, then the stored settings. */
+export async function deleteAllData() {
+  for (const map of await listMaps()) await deleteStoredMap(map);
+  await transact("settings", "readwrite", (store) => store.clear());
 }

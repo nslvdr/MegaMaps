@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { MapRecord } from "../types";
 import type { OcrIndex } from "../ocr/index";
 import { database, transact } from "./database";
@@ -22,7 +23,7 @@ export async function saveOcr(index: OcrIndex) {
     };
     tx.oncomplete = () => resolve();
     tx.onabort = () =>
-      reject(tx.error ?? new Error("Map is no longer available."));
+      reject(tx.error ?? new Error(t("Map is no longer available.")));
     tx.onerror = () => reject(tx.error);
   });
 }

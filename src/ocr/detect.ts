@@ -1,3 +1,4 @@
+import { language, t } from "../i18n";
 import type { MapRecord, ImportProgress } from "../types";
 import type { OcrLine } from "./index";
 import { ocrCrops, scanMap } from "./scan";
@@ -40,12 +41,13 @@ export async function detectMapText(
   signal: AbortSignal,
 ) {
   signal.throwIfAborted();
-  onProgress({ fraction: 0, message: "Finding text · 0%" });
+  onProgress({ fraction: 0, message: t("Finding text · 0%") });
   const workers = Array.from(
     { length: ocrWorkerCount(ocrCrops(map.width, map.height).length) },
     () =>
       new Worker(new URL("./ocr.worker.ts", import.meta.url), {
         type: "module",
+        name: language,
       }),
   );
   let abort = () => {};
@@ -65,7 +67,7 @@ export async function detectMapText(
           worker.onerror = () =>
             reject(
               new Error(
-                "Text detection stopped unexpectedly. Retry in Advanced settings.",
+                t("Text detection stopped unexpectedly. Retry in Advanced settings."),
               ),
             );
           worker.postMessage({ map, section } satisfies OcrRequest);

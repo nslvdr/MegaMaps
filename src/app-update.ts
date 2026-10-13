@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 export type AppUpdate = {
   version: string;
   /** Bytes to download, or 0 when the host did not say. */
@@ -16,7 +17,7 @@ async function withTimeout<T>(work: Promise<T>, milliseconds = 30_000) {
     return await Promise.race([
       work,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("The update timed out. Check your connection and try again.")), milliseconds);
+        timer = setTimeout(() => reject(new Error(t("The update timed out. Check your connection and try again."))), milliseconds);
       }),
     ]);
   } finally {
@@ -29,7 +30,7 @@ function stallTimer(milliseconds: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let fail = () => {};
   const stalled = new Promise<never>((_, reject) => {
-    fail = () => reject(new Error("The update stopped downloading. Check your connection and try again."));
+    fail = () => reject(new Error(t("The update stopped downloading. Check your connection and try again.")));
   });
   stalled.catch(() => {});
   const touch = () => {
@@ -52,7 +53,7 @@ async function waitForControl(worker: ServiceWorker, container: ServiceWorkerCon
       check = () => {
         activity();
         if (worker.state === "redundant")
-          reject(new Error("The update could not be installed. Your saved data is unchanged."));
+          reject(new Error(t("The update could not be installed. Your saved data is unchanged.")));
         else if (worker.state === "activated" && container.controller === worker)
           resolve();
         else if (worker.state === "installed")
@@ -74,7 +75,7 @@ async function shellVersion(worker: ServiceWorker) {
     return await withTimeout(new Promise<string>((resolve, reject) => {
       channel.port1.onmessage = (event: MessageEvent<{ ready: boolean; version?: string }>) => {
         if (!event.data.ready || !event.data.version)
-          reject(new Error("The updated app is not ready for offline use. Try again while online."));
+          reject(new Error(t("The updated app is not ready for offline use. Try again while online.")));
         else resolve(event.data.version);
       };
       worker.postMessage({ type: "verify-shell" }, [channel.port2]);
@@ -95,12 +96,12 @@ export async function findAppUpdate(
   try {
     response = await withTimeout(request(`/app-version.json?check=${Date.now()}`, { cache: "no-store" }), 15_000);
   } catch {
-    throw new Error("Couldn’t reach Mega Maps. Check your connection and try again.");
+    throw new Error(t("Couldn’t reach Mega Maps. Check your connection and try again."));
   }
   const latest: { version?: unknown; size?: unknown; builtAt?: unknown } | undefined =
     response.ok ? await response.json().catch(() => undefined) : undefined;
   if (typeof latest?.version !== "string")
-    throw new Error("Couldn’t read the latest version information. Try again later.");
+    throw new Error(t("Couldn’t read the latest version information. Try again later."));
   if (latest.version === loadedVersion) return undefined;
   const releasedAt = new Date(typeof latest.builtAt === "string" ? latest.builtAt : "");
   const registration = await container.getRegistration("/").catch(() => undefined);
@@ -141,7 +142,7 @@ export async function installAppUpdate(
     }));
     await timer.race(registration.update());
     const worker = registration.installing ?? registration.waiting ?? registration.active;
-    if (!worker) throw new Error("The app update is not ready. Try again while online.");
+    if (!worker) throw new Error(t("The app update is not ready. Try again while online."));
     await timer.race(waitForControl(worker, container, timer.touch));
     return (await shellVersion(worker)) !== loadedVersion;
   } finally {

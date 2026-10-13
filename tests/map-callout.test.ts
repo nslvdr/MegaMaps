@@ -310,3 +310,24 @@ test("labels fade in, fade out following their pin off screen or without a free 
   draw({ x: 200, y: 200 }, crowd);
   assert.equal(callout.element.hasAttribute("hidden"), true);
 });
+
+test("large labels draw a taller, wider chip for the same text", () => {
+  const { document } = parseHTML("<html><body><svg></svg></body></html>");
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const viewport = { width: 400, height: 400 };
+  const chip = () => {
+    const callout = new MapCallout(markerCalloutIcon("entrance"));
+    callout.setText("Gate");
+    document.querySelector("svg")!.append(callout.element);
+    const anchor = { x: 200, y: 200 };
+    callout.draw(anchor, viewport, { left: 188, right: 212, top: 188, bottom: 212 }, new CalloutLayout(viewport, []));
+    const { left, right, top, bottom } = callout.bounds!;
+    return { width: right - left, height: bottom - top };
+  };
+  const standard = chip();
+  document.documentElement.dataset.labels = "large";
+  const large = chip();
+  assert.equal(standard.height, 36);
+  assert.equal(large.height, 40);
+  assert.ok(large.width > standard.width);
+});

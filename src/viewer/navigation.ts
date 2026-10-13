@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Camera, Point, Size } from "./camera";
 import { screenToWorld, cameraAt } from "./camera";
 export interface SavedView {
@@ -156,15 +157,15 @@ export const routeColor = (state: NavigationState, id: string) =>
       routeColors.length
   ]!;
 export const markerKinds = {
-  landmark: { label: "Landmark", color: "#ff9a5c" },
-  entrance: { label: "Entrance", color: "#7dff8a" },
-  stairs: { label: "Stairs", color: "#ffd23f" },
-  squeeze: { label: "Squeeze", color: "#3ef0c8" },
-  "dead-end": { label: "Dead end", color: "#9aa4b2" },
-  unstable: { label: "Unstable", color: "#ff4d4d" },
-  flooded: { label: "Flooded", color: "#5aa9ff" },
-  graffiti: { label: "Graffiti", color: "#ff5fa2" },
-  "new-room": { label: "New room", color: "#e3e3e3" },
+  landmark: { label: t("Landmark"), color: "#ff9a5c" },
+  entrance: { label: t("Entrance"), color: "#7dff8a" },
+  stairs: { label: t("Stairs"), color: "#ffd23f" },
+  squeeze: { label: t("Squeeze"), color: "#3ef0c8" },
+  "dead-end": { label: t("Dead end"), color: "#9aa4b2" },
+  unstable: { label: t("Unstable"), color: "#ff4d4d" },
+  flooded: { label: t("Flooded"), color: "#5aa9ff" },
+  graffiti: { label: t("Graffiti"), color: "#ff5fa2" },
+  "new-room": { label: t("New room"), color: "#e3e3e3" },
 } as const satisfies Record<string, { label: string; color: string }>;
 export function captureView(camera: Camera, viewport: Size): SavedView {
   return {

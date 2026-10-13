@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { TILE_SIZE, tileKey, type MapRecord } from "../types";
 import { payloadStore } from "../storage/payloads";
 import {
@@ -251,7 +252,7 @@ export class Viewer {
       }
     } catch {
       if (!this.disposed)
-        this.onError("The map preview is missing. Reimport this map.");
+        this.onError(t("The map preview is missing. Reimport this map."));
     }
   }
   private setCamera(camera: Camera) {

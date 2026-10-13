@@ -1,12 +1,10 @@
-export function formatBytes(bytes: number) {
-  if (bytes < 1024) return "<1 KB";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { locale, t } from "../i18n";
+export { plural } from "../i18n";
 
-/** "1 place", "2 places". */
-export function plural(count: number, word: string) {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
+export function formatBytes(bytes: number) {
+  if (bytes < 1024) return t("<1 KB");
+  if (bytes < 1024 * 1024) return t("{size} KB", { size: Math.round(bytes / 1024) });
+  return t("{size} MB", { size: (bytes / (1024 * 1024)).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
 }
 
 /** Map names keep their file name in storage; the list hides the extension. */
@@ -22,16 +20,16 @@ export function lastUsed(map: { created: number; opened?: number }, now = Date.n
     return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
   };
   const days = day(now) - day(time);
-  const when =
-    days <= 0 ? "today"
-    : days === 1 ? "yesterday"
-    : days < 7 ? `${days} days ago`
-    : new Date(time).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        ...(new Date(time).getFullYear() === new Date(now).getFullYear() ? {} : { year: "numeric" }),
-      });
-  return `${map.opened ? "Opened" : "Added"} ${when}`;
+  const date = new Date(time).toLocaleDateString(locale, {
+    month: "short",
+    day: "numeric",
+    ...(new Date(time).getFullYear() === new Date(now).getFullYear() ? {} : { year: "numeric" }),
+  });
+  if (map.opened)
+    return days <= 0 ? t("Opened today") : days === 1 ? t("Opened yesterday")
+      : days < 7 ? t("Opened {days} days ago", { days }) : t("Opened {date}", { date });
+  return days <= 0 ? t("Added today") : days === 1 ? t("Added yesterday")
+    : days < 7 ? t("Added {days} days ago", { days }) : t("Added {date}", { date });
 }
 
 /** "Entrance 3": one past the highest number already given to this kind, so

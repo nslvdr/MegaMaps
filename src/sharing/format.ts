@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
@@ -26,6 +27,8 @@ export interface ShareManifest {
   photos?: SharePhoto[];
   /** Where north is on the map, in degrees clockwise from its top; absent means unknown. */
   northOffset?: number;
+  /** The sender's name from their settings, when they gave one. */
+  from?: string;
 }
 export interface SharedMap {
   manifest: ShareManifest;
@@ -63,14 +66,14 @@ const name = (value: unknown, max: number): value is string =>
 const integer = (value: unknown, min: number, max: number): value is number =>
   finite(value) && Number.isSafeInteger(value) && value >= min && value <= max;
 function invalid(): never {
-  throw new Error("This MegaMaps file contains invalid map or annotation data.");
+  throw new Error(t("This MegaMaps file contains invalid map or annotation data."));
 }
 
 /** Treat shared files as untrusted; construct only the fields this version accepts. */
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
   // Version 1 predates photos and named descriptions `note`; version 2 routes have neither.
-  if (value.version !== 1 && value.version !== 2 && value.version !== 3) throw new Error("This sharing format is not supported. Update MegaMaps and try again.");
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -146,12 +149,14 @@ export function validateManifest(value: unknown): ShareManifest {
   }
   const north = value.northOffset;
   if (north !== undefined && !integer(north, NORTH_MIN, NORTH_MAX)) invalid();
+  if (value.from !== undefined && !name(value.from, 100)) invalid();
   if (!image && markers.length + routes.length === 0)
-    throw new Error("Select at least one place or route, or include the map image.");
+    throw new Error(t("Select at least one place or route, or include the map image."));
   return { format: "megamap", version: 3,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
-    ...(north !== undefined ? { northOffset: north } : {}) };
+    ...(north !== undefined ? { northOffset: north } : {}),
+    ...(typeof value.from === "string" ? { from: value.from.trim() } : {}) };
 }
 const photoBytes = (manifest: ShareManifest) =>
   (manifest.photos ?? []).reduce((total, photo) => total + photo.bytes, 0);
@@ -167,7 +172,7 @@ export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new 
   });
   const json = new TextEncoder().encode(JSON.stringify(valid));
   if (json.byteLength > MAX_MANIFEST_BYTES)
-    throw new Error("Too many annotations for one share. Select fewer items.");
+    throw new Error(t("Too many annotations for one share. Select fewer items."));
   const header = new Uint8Array(HEADER_BYTES);
   header.set(new TextEncoder().encode(MAGIC));
   new DataView(header.buffer).setUint32(8, json.byteLength, true);
@@ -177,21 +182,21 @@ export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new 
 /** Parse metadata without loading or decoding a potentially large embedded map. */
 export async function readShare(file: Blob): Promise<SharedMap> {
   if (file.size < HEADER_BYTES || file.size > HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_PHOTOS * MAX_PHOTO_BYTES + MAX_FILE_BYTES)
-    throw new Error("This MegaMaps file is truncated or too large.");
+    throw new Error(t("This MegaMaps file is truncated or too large."));
   const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer());
   if (new TextDecoder().decode(header.subarray(0, 8)) !== MAGIC)
-    throw new Error("Choose a .megamap file exported by MegaMaps.");
+    throw new Error(t("Choose a .megamap file exported by MegaMaps."));
   const size = new DataView(header.buffer).getUint32(8, true);
   if (!size || size > MAX_MANIFEST_BYTES || HEADER_BYTES + size > file.size) invalid();
   let value: unknown;
   try {
     value = JSON.parse(await file.slice(HEADER_BYTES, HEADER_BYTES + size).text());
   } catch {
-    throw new Error("The annotations in this MegaMaps file could not be read.");
+    throw new Error(t("The annotations in this MegaMaps file could not be read."));
   }
   const manifest = validateManifest(value);
   if (file.size !== HEADER_BYTES + size + photoBytes(manifest) + (manifest.image?.bytes ?? 0))
-    throw new Error("This MegaMaps file is incomplete or contains unexpected data.");
+    throw new Error(t("This MegaMaps file is incomplete or contains unexpected data."));
   let offset = HEADER_BYTES + size;
   const photos = new Map<string, Blob>();
   for (const photo of manifest.photos ?? [])
@@ -205,9 +210,9 @@ export async function readShare(file: Blob): Promise<SharedMap> {
 export async function verifyImage(image: Blob, manifest: ShareManifest, signal?: AbortSignal) {
   const header = await readHeader(image);
   if (header.width !== manifest.map.width || header.height !== manifest.map.height || header.orientation !== 1)
-    throw new Error("The map image dimensions or orientation do not match this share.");
+    throw new Error(t("The map image dimensions or orientation do not match this share."));
   if (await fingerprint(image, signal) !== manifest.map.fingerprint)
-    throw new Error("The map image does not match this share. Choose the exact original image.");
+    throw new Error(t("The map image does not match this share. Choose the exact original image."));
   return header;
 }
 
