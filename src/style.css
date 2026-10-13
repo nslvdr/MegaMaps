@@ -1093,11 +1093,12 @@ button.glass:active:not(:disabled) {
 .status-chip:disabled {
   opacity: 0.35;
 }
-/* Toasts sit below the corner controls, including on narrow screens; text
-   detection progress stays above any passing message. */
+/* Passing messages share one pill: a tone colors its icon and outline. On
+   phones they sit just under the corner controls; once there's room between
+   those, they line up in the controls' row. Text detection stays on top. */
 .toasts {
   position: absolute;
-  top: calc(var(--hud-top) + 54px);
+  top: calc(var(--hud-top) + var(--icon-button-size) + var(--space-12));
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
@@ -1109,28 +1110,55 @@ button.glass:active:not(:disabled) {
   z-index: 6;
   pointer-events: none;
 }
-.toast {
-  max-width: var(--surface-width);
-  width: max-content;
-  margin: 0;
-  padding: var(--space-12) var(--space-16);
-  border-radius: var(--radius-pill);
-  background: var(--glass-strong);
-  font-size: var(--font-size-small);
-  text-align: center;
-  /* Longer messages wrap to two even lines, not a line and a stray word. */
-  text-wrap: balance;
-  animation: toast-in 0.2s ease-out;
+@media (min-width: 720px) {
+  .toasts {
+    top: var(--hud-top);
+    max-width: min(
+      var(--surface-width),
+      calc(100vw - 2 * (var(--edge-r) + 2 * var(--icon-button-size) + var(--space-24)))
+    );
+  }
 }
-.ocr-progress {
+.toast {
+  --c: var(--neon-add);
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-12);
+  max-width: 100%;
+  min-height: var(--icon-button-size);
+  margin: 0;
+  padding: var(--space-8) var(--space-20) var(--space-8) var(--space-16);
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--glass-strong);
+  font-size: var(--font-size-body);
+  line-height: 1.35;
+  animation: toast-in 0.2s ease-out;
 }
-.ocr-progress svg {
-  width: 17px;
-  height: 17px;
-  color: var(--neon-saved);
+.toast[data-tone="quiet"] {
+  --c: var(--muted);
+}
+.toast:is([data-tone="removed"], [data-tone="error"]) {
+  --c: var(--danger);
+}
+.toast[data-tone="progress"] {
+  --c: var(--neon-saved);
+}
+.toast-icon {
+  display: grid;
+  flex-shrink: 0;
+}
+.toast > svg,
+.toast-icon svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--c);
+}
+.toast p {
+  margin: 0;
+  /* Longer messages wrap to two even lines, not a line and a stray word. */
+  text-wrap: balance;
 }
 .ocr-percent {
   min-width: 4ch;
@@ -1138,16 +1166,10 @@ button.glass:active:not(:disabled) {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.toast p {
-  margin: 0;
-}
 /* After a delete the pill carries Undo, the one part of it you can tap. */
 .toast:has(.toast-undo:not([hidden])) {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-16);
-  text-align: left;
+  padding-block: var(--space-4);
+  padding-right: var(--space-4);
 }
 .toast-undo {
   position: relative;
@@ -1157,10 +1179,10 @@ button.glass:active:not(:disabled) {
   flex-shrink: 0;
   height: 34px;
   padding: 0 var(--space-16) 0 var(--space-12);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--neon-add) 14%, #000);
   color: var(--neon-add);
-  font-size: var(--font-size-small);
+  font-size: var(--font-size-body);
   font-weight: 650;
   pointer-events: auto;
 }
@@ -1170,8 +1192,8 @@ button.glass:active:not(:disabled) {
   inset: -5px;
 }
 .toast-undo svg {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
 }
 @media (hover: hover) {
   .toast-undo:hover {
@@ -1188,8 +1210,7 @@ button.glass:active:not(:disabled) {
 /* Bottom pill: Saved, a flexible search field, and a solid Add action. */
 .dock,
 .tool-bar,
-.sheet,
-.viewer-error {
+.sheet {
   left: var(--edge-l);
   right: var(--edge-r);
   width: var(--surface-width);
@@ -1398,21 +1419,6 @@ button.glass:active:not(:disabled) {
 .sheet[data-panel="rotation"] {
   --c: var(--neon-lock);
 }
-.viewer-error {
-  position: absolute;
-  bottom: calc(var(--hud-bottom) + var(--dock-h) + 16px);
-  text-align: center;
-  font-size: var(--font-size-small);
-  line-height: 1.5;
-  color: #ffd4c0;
-  background: #34201aee;
-  border-radius: var(--radius-md);
-  padding: var(--space-12);
-  margin: auto;
-  z-index: 6;
-  pointer-events: none;
-}
-
 /* ---------- Add, placing and drawing ---------- */
 /* Saved and Add are solid neon buttons; each opens its panel above the pill.
    Placing, drawing or moving swaps the pill for a card with the panels'
@@ -2165,6 +2171,9 @@ label.panel-row {
 }
 .spotlight-action svg {
   color: #ffe27a;
+}
+.panel-action:disabled {
+  opacity: 0.35;
 }
 .panel-action.active {
   border-color: color-mix(in srgb, var(--c) 60%, transparent);

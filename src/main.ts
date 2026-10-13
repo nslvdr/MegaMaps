@@ -274,7 +274,6 @@ async function openMap(map: MapRecord) {
   viewerSection.hidden = false;
   home.hidden = true;
   document.body.classList.add("viewing");
-  element("viewer-error").hidden = true;
   try {
     // Reopening immediately must read the completed save, not the last throttle tick.
     await pendingViewSave;
@@ -283,13 +282,15 @@ async function openMap(map: MapRecord) {
     if (version !== openVersion) return;
     void prunePhotos(map.id).catch(() => {});
     controls = new ViewerControls(viewerSection, map, state, (item) => { void shareMap(map, item); });
+    // A broken map is a big error: say so once, not for every unreadable tile.
+    let reported = false;
     viewer = new Viewer(
       element<HTMLCanvasElement>("map-canvas"),
       map,
       () => {}, // No zoom readout: the map is the only thing on screen.
       (message) => {
-        element("viewer-error").textContent = message;
-        element("viewer-error").hidden = false;
+        if (!reported) showMessage("Couldn’t show this map", message);
+        reported = true;
       },
       controls.options(),
     );

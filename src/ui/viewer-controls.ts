@@ -46,6 +46,14 @@ const rotationModes: Record<RotationMode, { icon: string; label: string; help: s
   locked: { icon: icons.rotationLock, label: "Locked", help: "The map keeps its current angle." },
 };
 /** Auto mode's compass: off, starting, turning the map, or not reaching it. */
+// Every passing message is one pill: a tone sets its icon and outline color.
+const toastIcons = {
+  done: icons.check,
+  quiet: icons.check,
+  removed: icons.trash,
+  error: icons.alert,
+};
+type ToastTone = keyof typeof toastIcons;
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
 /** Height of one north wheel row, as in `.north-track span`. */
@@ -135,7 +143,7 @@ export class ViewerControls {
   ) {
     this.persistence = new NavigationPersistence(
       () => this.state,
-      () => this.toast("Could not save. Free some device storage."),
+      () => this.toast("Could not save. Free some device storage.", "error"),
     );
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
@@ -228,9 +236,11 @@ export class ViewerControls {
     if (this.openSheet === "search" && !this.searchTimer) this.renderSearch();
     this.render();
   }
-  private toast(message: string, undo?: () => void) {
+  private toast(message: string, tone: ToastTone, undo?: () => void) {
     const toast = this.el("toast");
     toast.textContent = message;
+    this.el("toast-bar").dataset.tone = tone;
+    this.el("toast-icon").innerHTML = toastIcons[tone];
     this.toastUndo = undo;
     this.el("toast-undo").hidden = !undo;
     this.showToast(true);
@@ -246,10 +256,10 @@ export class ViewerControls {
   }
   /** Deletes stay two taps, and a few seconds to change your mind after. */
   private deleted(label: string, restore: () => void) {
-    this.toast(`${label} deleted`, () => {
+    this.toast(`${label} deleted`, "removed", () => {
       restore();
       this.changed();
-      this.toast(`${label} restored`);
+      this.toast(`${label} restored`, "done");
     });
   }
   private sheet(name: Sheet | undefined) {
@@ -459,7 +469,7 @@ export class ViewerControls {
       this.renderFormPhotos();
     }
     if (failed) this.toast(failed === files.length && failed === 1
-      ? "This photo could not be added." : `${plural(failed, "photo")} could not be added.`);
+      ? "This photo could not be added." : `${plural(failed, "photo")} could not be added.`, "error");
   }
   private onTap(point: Point) {
     if (!insideImage(point, this.map)) return;
@@ -507,14 +517,14 @@ export class ViewerControls {
       if (route.points.length < 2 && before) {
         route.points = before;
         route.draft = false;
-        this.toast(`${route.name} unchanged`);
+        this.toast(`${route.name} unchanged`, "quiet");
       } else if (route.points.length >= 2) {
         route.draft = false;
-        this.toast(`${route.name} saved · ${plural(route.points.length, "point")}`);
+        this.toast(`${route.name} saved · ${plural(route.points.length, "point")}`, "done");
       } else {
         this.state.routes = this.state.routes.filter((r) => r.id !== route.id);
         if (route.points.length)
-          this.toast("Route discarded: it needs at least 2 points");
+          this.toast("Route discarded: it needs at least 2 points", "removed");
       }
       this.changed();
     }
@@ -553,6 +563,7 @@ export class ViewerControls {
     if (changed)
       this.toast(
         start.points.length ? `${route.name} unchanged` : "Route discarded",
+        start.points.length ? "quiet" : "removed",
       );
     this.changed();
     this.mode("browse");
@@ -581,6 +592,7 @@ export class ViewerControls {
       if (moved) {
         this.toast(
           keep ? `${marker.label} moved` : `${marker.label} not moved`,
+          keep ? "done" : "quiet",
         );
         this.changed();
       }
@@ -739,16 +751,13 @@ export class ViewerControls {
       return;
     }
     if (returnToDetails) this.showDetails(route);
-    this.toast(unchanged ? `${name} unchanged` : `${name} updated`);
+    this.toast(unchanged ? `${name} unchanged` : `${name} updated`, unchanged ? "quiet" : "done");
   }
   private spotlight() {
     const stage = this.el("map-stage");
     const count = this.state.routes.length + this.state.markers.length;
     this.sheet(undefined);
-    if (!count) {
-      this.toast("Nothing saved yet. Use Add to create routes and places.");
-      return;
-    }
+    if (!count) return;
     clearTimeout(this.spotlightTimer);
     // Restart the CSS animation when pressed again.
     stage.classList.remove("spotlight");
@@ -1026,7 +1035,8 @@ export class ViewerControls {
       }
       if (returnToDetails) this.showDetails(marker);
       else this.mode("browse");
-      this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`);
+      this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`,
+        unchanged ? "quiet" : "done");
     });
     // Move or Edit points from the card keeps what was typed, then lifts the
     // pin or the route's points.
@@ -1082,8 +1092,6 @@ export class ViewerControls {
       if (this.compass !== "waiting") return;
       this.compass = "missing";
       this.renderRotation();
-      if (!ask && compassNeedsPermission())
-        this.toast("Open Rotation and tap Auto to turn the compass back on");
     }, COMPASS_WAIT_MS);
     this.stopWatching = () => {
       stop();
@@ -1400,6 +1408,7 @@ export class ViewerControls {
     }
     this.el("saved-routes-count").textContent = String(counts.routes);
     this.el("saved-places-count").textContent = String(counts.places);
+    this.el<HTMLButtonElement>("spotlight").disabled = !(counts.routes + counts.places);
     // Fine rotation only appears once twisting is unlocked.
     this.rowPopover?.remove();
     this.rowPopover = undefined;
