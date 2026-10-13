@@ -32,6 +32,16 @@ The original rotated labels, the clipped internal section-edge label, 14 px ligh
 
 The fast model and reduced detection resolution can miss or misread text outside these fixtures. Process RSS medians decreased in the desktop runs, but include Node/native canvas/allocator retention and are not process peaks or phone budgets. Physical-device speed, memory and representative-map accuracy remain pending; no browser automation was used.
 
+## PaddleOCR recognizer and background scanning — 2026-10-13
+
+All 122 tests and the strict TypeScript/production build pass. The 22-asset offline shell replaces Tesseract and its English model with the PP-LCNet text-line orientation classifier, the latin PP-OCRv5 mobile recognizer and its dictionary; all model hashes are checked before builds.
+
+`npm run benchmark:ocr` now scans a seeded 3000×2400 quarry sheet with 170 labels at 11–36 px, in nine fonts, rotated, coloured, haloed and white-on-dark, over galleries, pillars and a grid. A label counts only when searching its text highlights its own position. Against the previous pipeline (768 px detector input, Tesseract `tessdata_fast`, one worker, 3.6 s), label recall rose from 54.1% to 80.0% and word recall from 62.4% to 86.3%, with 2 spurious lines. Scan times on Apple M4 Pro / Node v24.9.0 were 7.8, 4.3, 2.9 and 2.4 s with one to four workers; the app uses up to three. Model loading takes about 180 ms per worker. [Raw results](ocr-recognizer-results.json) include methodology and limits.
+
+Tests cover reading the real models at 14–36 px, labels crossing section edges read once, sure and unsure orientations, CTC word spans, worker handout and in-order merging, progress, worker failure and cancellation, and fewer workers on low-memory devices. Imports open the map after tiling and scan in the background with a top progress toast; maps indexed by the earlier pipeline are rescanned when opened.
+
+One engine peaked at about 330 MB of Node RSS while scanning. Most remaining misses are 11–13 px labels and labels crossed by gallery walls. These are synthetic desktop measurements; no browser, GPU or physical-device speed, memory or accuracy was measured.
+
 ## Full image preprocessing benchmarks
 
 Host: Apple M4 Pro, macOS 27.0.1, Node v24.9.0. Each table row used a separate process. Values are rounded.

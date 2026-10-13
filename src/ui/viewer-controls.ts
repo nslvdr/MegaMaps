@@ -1478,11 +1478,19 @@ export class ViewerControls {
   refreshMetadata() {
     this.render();
   }
-  // Keep detection status available to assistive technology while indexing.
-  updateOcr(index: OcrIndex | undefined, message = "") {
+  // Keep detection status available to assistive technology while indexing;
+  // a running scan also passes its progress, from 0 to 1, for the top toast.
+  updateOcr(index: OcrIndex | undefined, message = "", progress?: number) {
     const sameIndex = this.ocr === index;
     this.ocr = index;
     this.ocrMessage = message;
+    const toast = this.el("ocr-progress");
+    toast.hidden = progress === undefined;
+    if (progress !== undefined) {
+      const percent = Math.floor(progress * 100);
+      this.el("ocr-percent").textContent = `${percent}%`;
+      toast.setAttribute("aria-valuenow", String(percent));
+    }
     this.renderSearch(sameIndex || !!this.searchTimer);
   }
   // Typing coalesces into one search; clearing and result navigation apply immediately.

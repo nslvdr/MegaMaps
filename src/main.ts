@@ -63,6 +63,7 @@ let ocrJob:
       mapId: string;
       controller: AbortController;
       message: string;
+      fraction: number;
       done: Promise<void>;
     }
   | undefined;
@@ -147,8 +148,6 @@ const sharing = initSharing(app, {
     element("progress-title").textContent = "Importing shared map";
     element("progress-title-icon").innerHTML = icons.download;
     element("progress-note").textContent = "Keep Mega Maps open while the share is imported.";
-    element("cancel-import").setAttribute("aria-label", "Cancel import");
-    element("cancel-import").title = "Cancel import";
     element("import-name").textContent = displayName(share.manifest.map.name);
     showProgress(0, "Checking shared map…");
     showDialog(progressDialog);
@@ -350,12 +349,12 @@ async function refresh() {
       controls?.refreshMetadata();
       void loadOcr(updated.id)
         .then((index) => {
+          const job = ocrJob?.mapId === updated.id ? ocrJob : undefined;
           if (currentMap?.id === updated.id)
             controls?.updateOcr(
               index,
-              ocrJob?.mapId === updated.id
-                ? ocrJob.message
-                : (ocrErrors.get(updated.id) ?? ""),
+              job?.message ?? ocrErrors.get(updated.id),
+              job?.fraction,
             );
         })
         .catch(() => {});
@@ -543,37 +542,23 @@ function importImage(file: File) {
   element("progress-title-icon").innerHTML = icons.map;
   element("progress-note").textContent =
     "Keep Mega Maps open while your map is prepared.";
-  element("cancel-import").setAttribute("aria-label", "Cancel import");
-  element("cancel-import").title = "Cancel import";
   element("import-name").textContent = file.name;
   showProgress(0, "Reading image metadata…");
   showDialog(progressDialog);
-  void mutate(async () => {
-    const map = await importMap(
+  // The map opens once its tiles are saved; text detection follows in the background.
+  void mutate(() =>
+    importMap(
       file,
-      (progress) => showProgress(progress.fraction * 80, progress.message),
+      (progress) => showProgress(progress.fraction * 100, progress.message),
       controller.signal,
-    );
-    element("progress-title").textContent = "Detecting map text";
-    element("progress-title-icon").innerHTML = icons.search;
-    element("progress-note").textContent =
-      "Your map is saved. Keep the app open to finish search detection, or stop and do it later.";
-    element("cancel-import").setAttribute("aria-label", "Stop detection");
-    element("cancel-import").title = "Stop detection";
-    try {
-      await runOcr(map, controller, (progress) =>
-        showProgress(80 + progress.fraction * 20, progress.message));
-    } catch (error) {
-      if (!controller.signal.aborted)
-        showMessage(
-          "Map saved; text detection failed",
-          `${String(error)} You can retry in the map’s Advanced settings.`,
-        );
-    }
-    channel?.postMessage("changed");
-  })
-    .then(async () => {
+    ),
+  )
+    .then(async (map) => {
+      channel?.postMessage("changed");
+      progressDialog.close();
+      importing = undefined;
       await refresh();
+      await openMap(map);
     })
     .catch((error) => {
       if (!(error instanceof DOMException && error.name === "AbortError"))
@@ -644,7 +629,8 @@ channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
     );
 });
 
-// OCR shares the storage lock with imports/deletion, and commits only full scans.
+// OCR runs in the background, outside the storage lock, so the library stays
+// usable. It commits only full scans, and only while the map still exists.
 async function runOcr(
   map: MapRecord,
   controller: AbortController,
@@ -666,12 +652,14 @@ async function runOcr(
     mapId: map.id,
     controller,
     message: "Starting local text detection…",
+    fraction: 0,
     done,
   };
   ocrJob = job;
   ocrErrors.delete(map.id);
   const update = () => {
-    if (currentMap?.id === map.id) controls?.updateOcr(previous, job.message);
+    if (currentMap?.id === map.id)
+      controls?.updateOcr(previous, job.message, job.fraction);
     if (selectedMap?.id === map.id) {
       element("ocr-status").textContent = job.message;
       element<HTMLButtonElement>("rerun-ocr").disabled = true;
@@ -685,6 +673,7 @@ async function runOcr(
       map,
       (progress) => {
         job.message = progress.message;
+        job.fraction = progress.fraction;
         update();
         onProgress(progress);
       },
@@ -714,9 +703,11 @@ async function prepareMapSearch(map: MapRecord, version: number) {
   try {
     const index = await loadOcr(map.id);
     if (version !== openVersion) return;
-    controls?.updateOcr(index, ocrJob?.mapId === map.id ? ocrJob.message : "");
-    if (!needsOcr(index) || ocrJob?.mapId === map.id) return;
-    await mutate(() => runOcr(map, new AbortController()));
+    const job = ocrJob?.mapId === map.id ? ocrJob : undefined;
+    controls?.updateOcr(index, job?.message, job?.fraction);
+    // Another map's scan restarts this one when it ends.
+    if (!needsOcr(index) || ocrJob) return;
+    await runOcr(map, new AbortController());
   } catch (error) {
     if (version === openVersion && !ocrErrors.has(map.id))
       controls?.updateOcr(
@@ -754,7 +745,7 @@ element("rerun-ocr").addEventListener("click", () => {
   const map = selectedMap;
   if (!map || ocrJob || importing) return;
   element<HTMLButtonElement>("rerun-ocr").disabled = true;
-  void mutate(() => runOcr(map, new AbortController()))
+  void runOcr(map, new AbortController())
     .catch((error) => {
       if (!ocrErrors.has(map.id))
         showMessage("Couldn’t start text detection", String(error));

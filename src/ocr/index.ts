@@ -1,6 +1,6 @@
 import type { Point } from "../viewer/camera";
 
-export const OCR_VERSION = 1;
+export const OCR_VERSION = 2;
 export interface OcrWord {
   text: string;
   polygon: Point[];

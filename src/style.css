@@ -1084,12 +1084,23 @@ button.glass:active:not(:disabled) {
 .status-chip:disabled {
   opacity: 0.35;
 }
-.toast {
+/* Toasts sit below the corner controls, including on narrow screens; text
+   detection progress stays above any passing message. */
+.toasts {
   position: absolute;
   top: calc(var(--hud-top) + 54px);
   left: 50%;
   transform: translateX(-50%);
-  /* Toasts sit below the corner controls, including on narrow screens. */
+  width: max-content;
+  max-width: var(--surface-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  z-index: 6;
+  pointer-events: none;
+}
+.toast {
   max-width: var(--surface-width);
   width: max-content;
   margin: 0;
@@ -1100,9 +1111,23 @@ button.glass:active:not(:disabled) {
   text-align: center;
   /* Longer messages wrap to two even lines, not a line and a stray word. */
   text-wrap: balance;
-  z-index: 6;
-  pointer-events: none;
   animation: toast-in 0.2s ease-out;
+}
+.ocr-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+.ocr-progress svg {
+  width: 17px;
+  height: 17px;
+  color: var(--neon-saved);
+}
+.ocr-percent {
+  min-width: 4ch;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .toast p {
   margin: 0;
@@ -1147,7 +1172,7 @@ button.glass:active:not(:disabled) {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -6px);
+    transform: translateY(-6px);
   }
 }
 

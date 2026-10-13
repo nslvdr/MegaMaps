@@ -4,9 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
-import { startOcrEngines } from "../src/ocr/engines";
 import { OcrTileCache, OCR_TILE_CACHE_BYTES } from "../src/ocr/tiles";
-import { ocrCrops, scanMap } from "../src/ocr/scan";
+import { ocrCrops, scanMap, scanSection, type OcrEngine } from "../src/ocr/scan";
 import { tileKey, type MapRecord } from "../src/types";
 import type { PayloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
@@ -22,55 +21,6 @@ const map: MapRecord = {
   created: 1,
   status: "ready",
 };
-
-test("concurrent OCR startup waits for both engines and releases a late success after failure", async () => {
-  for (const failed of ["recognizer", "detector"]) {
-    const error = new Error(`${failed} failed`);
-    let finish!: () => void;
-    let closed = false;
-    const late = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    const pending = startOcrEngines(
-      failed === "recognizer"
-        ? Promise.reject(error)
-        : late.then(() => ({
-            terminate: async () => {
-              closed = true;
-            },
-          })),
-      failed === "detector"
-        ? Promise.reject(error)
-        : late.then(() => ({
-            dispose: async () => {
-              closed = true;
-            },
-          })),
-    );
-    assert.equal(closed, false);
-    finish();
-    await assert.rejects(pending, (cause) => cause === error);
-    assert.equal(closed, true);
-  }
-  const reader = { terminate: async () => {} };
-  const finder = { dispose: async () => {} };
-  assert.deepEqual(
-    await startOcrEngines(Promise.resolve(reader), Promise.resolve(finder)),
-    { recognizer: reader, detector: finder },
-  );
-  const startup = new Error("startup");
-  await assert.rejects(
-    startOcrEngines(
-      Promise.reject(startup),
-      Promise.resolve({
-        dispose: async () => {
-          throw new Error("cleanup");
-        },
-      }),
-    ),
-    (cause) => cause === startup,
-  );
-});
 
 test("OCR tile cache reuses and refreshes tiles, reserves decode memory, and closes aborted decodes", async () => {
   const previous = Object.getOwnPropertyDescriptor(
@@ -179,50 +129,52 @@ test("overlapping OCR sections keep exact pixels, reuse decodes and release the 
     0,
   );
   nativeStats.peakDecodedBytes = 0;
+  // One worker's scan: a single tile cache shared by its sections, in order.
+  const scan = async (engine: OcrEngine, signal: AbortSignal) => {
+    const tiles = new OcrTileCache(map, store, signal);
+    try {
+      return await scanMap(
+        map,
+        [(section) => scanSection(map, tiles, crops[section]!, engine, signal)],
+        () => {},
+        signal,
+      );
+    } finally {
+      tiles.dispose();
+    }
+  };
+  const unread = async (): Promise<never> => {
+    throw new Error("empty regions should not reach OCR");
+  };
   let section = 0;
   try {
-    const started = performance.now();
-    await scanMap(
-      map,
-      store,
-      async (image) => {
-        const crop = crops[section++]!;
-        const ctx = image.getContext("2d")!;
-        for (const [x, y] of [
-          [0, 0],
-          [image.width - 1, image.height - 1],
-          [512, 256],
-        ]) {
-          const gray =
-            170 +
-            (Math.floor((crop.x + x!) / 512) +
-              Math.floor((crop.y + y!) / 512)) *
-              5;
-          assert.deepEqual(
-            [...ctx.getImageData(x!, y!, 1, 1).data],
-            [gray, gray, gray, 255],
-          );
-        }
-        return [];
+    await scan(
+      {
+        async detect(image) {
+          const crop = crops[section++]!;
+          const ctx = image.getContext("2d")!;
+          for (const [x, y] of [
+            [0, 0],
+            [image.width - 1, image.height - 1],
+            [512, 256],
+          ]) {
+            const gray =
+              170 +
+              (Math.floor((crop.x + x!) / 512) +
+                Math.floor((crop.y + y!) / 512)) *
+                5;
+            assert.deepEqual(
+              [...ctx.getImageData(x!, y!, 1, 1).data],
+              [gray, gray, gray, 255],
+            );
+          }
+          return [];
+        },
+        recognize: unread,
+        upsideDown: unread,
       },
-      async () => {
-        throw new Error("empty regions should not reach OCR");
-      },
-      () => {},
       new AbortController().signal,
     );
-    if (process.env.OCR_BENCHMARK)
-      console.log(
-        "OCR_BENCHMARK",
-        JSON.stringify({
-          fixture: "tile-cache",
-          ms: performance.now() - started,
-          sections: crops.length,
-          tileDecodes: reads,
-          uncachedTileDecodes: uncachedReads,
-          peakDecodedBytes: nativeStats.peakDecodedBytes,
-        }),
-      );
     assert.equal(section, crops.length);
     assert.ok(
       reads < uncachedReads,
@@ -232,15 +184,15 @@ test("overlapping OCR sections keep exact pixels, reuse decodes and release the 
     assert.equal(nativeStats.decodedBytes, 0);
     const abort = new AbortController();
     await assert.rejects(
-      scanMap(
-        map,
-        store,
-        async () => {
-          abort.abort();
-          return [];
+      scan(
+        {
+          async detect() {
+            abort.abort();
+            return [];
+          },
+          recognize: unread,
+          upsideDown: unread,
         },
-        async () => ({ blocks: null, confidence: 0 }),
-        () => {},
         abort.signal,
       ),
       { name: "AbortError" },
@@ -248,12 +200,8 @@ test("overlapping OCR sections keep exact pixels, reuse decodes and release the 
     assert.equal(nativeStats.decodedBytes, 0);
     blobs.delete(tileKey(0, 1, 0));
     await assert.rejects(
-      scanMap(
-        map,
-        store,
-        async () => [],
-        async () => ({ blocks: null, confidence: 0 }),
-        () => {},
+      scan(
+        { detect: async () => [], recognize: unread, upsideDown: unread },
         new AbortController().signal,
       ),
       /missing tile/,
