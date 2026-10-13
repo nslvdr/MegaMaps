@@ -31,7 +31,7 @@ export const fr = {
   "Annotations only": "Annotations seules",
   "App shell checked offline.": "Application vérifiée hors ligne.",
   "App updates work in the installed app or on the live HTTPS site.": "Les mises à jour fonctionnent dans l’app installée ou sur le site HTTPS.",
-  "Appears as “Shared by …” on maps you send": "Apparaît en « Partagé par … » sur les cartes que vous envoyez",
+  "Appears as “Shared by …” on maps you send.": "Apparaît en « Partagé par … » sur les cartes que vous envoyez.",
   "Auto": "Auto",
   "Back": "Retour",
   "Back to library": "Retour à la bibliothèque",
@@ -157,9 +157,9 @@ export const fr = {
   "Keeps your {places} and {routes} and adds the new ones. Items you already imported are skipped.": "Garde vos {places} et {routes} et ajoute les nouveaux. Les éléments déjà importés sont ignorés.",
   "Landmark": "Repère",
   "Language": "Langue",
+  "Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map.": "La langue change les menus et les messages, pas les noms que vous avez saisis. Les grandes étiquettes se lisent mieux dans le noir mais cachent plus la carte.",
   "Large": "Grande",
   "Large progressive JPEG requires OPFS. Export a baseline JPEG or non-interlaced PNG on this browser.": "Les grands JPEG progressifs nécessitent OPFS. Sur ce navigateur, exportez un JPEG standard ou un PNG non entrelacé.",
-  "Large reads better in the dark but covers more of the map": "Grande se lit mieux dans le noir mais cache plus la carte",
   "Last backup {date}. Keep it in Files or on another device.": "Dernière sauvegarde le {date}. Gardez-la dans Fichiers ou sur un autre appareil.",
   "Last check: delete {maps} from this device for good?": "Dernière vérification : supprimer définitivement {maps} de cet appareil ?",
   "Last scanned {date}": "Dernière analyse le {date}",
@@ -194,7 +194,6 @@ export const fr = {
   "Mega Maps needs a modern browser with worker canvas support (iOS 17+ recommended).": "Mega Maps nécessite un navigateur récent prenant en charge les canvas dans les workers (iOS 17+ recommandé).",
   "Mega Maps restarts and reopens where you left off": "Mega Maps redémarre et rouvre là où vous en étiez",
   "Mega Maps started preparing a map. Let it finish, then try again.": "Mega Maps a commencé à préparer une carte. Attendez la fin, puis réessayez.",
-  "Menus and messages. Names you typed stay as they are": "Menus et messages. Les noms que vous avez saisis restent tels quels",
   "Merge": "Fusionner",
   "Merge into {name}": "Fusionner dans {name}",
   "Move": "Déplacer",
@@ -433,7 +432,6 @@ export const fr = {
   "{restored} of {total} maps were restored before this problem: {reason}": "{restored} cartes sur {total} ont été restaurées avant ce problème : {reason}",
   "{size} KB": "{size} Ko",
   "{size} MB": "{size} Mo",
-  "{size} used on this device": "{size} utilisés sur cet appareil",
 } as const;
 
 /** Singular and plural, keyed by the English noun. */
