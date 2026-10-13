@@ -428,41 +428,60 @@ small {
 }
 .library-footer {
   margin-top: var(--space-24);
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-16);
   padding-top: var(--space-16);
   border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
   font-size: var(--font-size-small);
-  line-height: 1.6;
+  line-height: 1.45;
   color: var(--muted);
 }
-.app-updated,
-.connection-status {
+/* Online is lime, offline stays neutral: no signal underground is normal.
+   Only missing offline files are a problem, so only that line turns red. */
+.footer-side {
+  --c: var(--muted);
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
 }
-/* The column sits at the right edge, but its lines start together so the
-   status dots line up instead of following each label's length. */
-.connection-status {
-  align-items: flex-start;
+.footer-side[data-state="available"] {
+  --c: var(--neon-add);
 }
-.connection-status span::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-right: var(--space-8);
+.footer-updated {
+  --c: var(--neon-view);
+}
+.footer-side:last-child {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.footer-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-round);
-  background: var(--muted);
-  vertical-align: middle;
+  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  background: color-mix(in srgb, var(--c) 10%, #000);
+  color: var(--c);
 }
-.connection-status span[data-state="available"]::before {
-  background: var(--neon-add);
+.footer-icon svg {
+  width: 18px;
+  height: 18px;
 }
-.connection-status span[data-state="unavailable"]::before {
-  background: var(--danger);
+.footer-side strong,
+.footer-side small {
+  display: block;
+}
+.footer-side strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#offline-availability[data-state="unavailable"] {
+  color: var(--danger);
 }
 @media (max-width: 360px) {
   .library-action {

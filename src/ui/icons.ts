@@ -42,6 +42,8 @@ import {
   TriangleAlert,
   Undo2,
   Waves,
+  Wifi,
+  WifiOff,
   X,
 } from "lucide";
 import type { MapMarker } from "../viewer/navigation";
@@ -112,4 +114,6 @@ export const icons = {
   north: svg(Navigation2),
   routeStart: svg(Circle),
   routeEnd: svg(Square),
+  online: svg(Wifi),
+  noInternet: svg(WifiOff),
 };

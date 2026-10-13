@@ -14,7 +14,7 @@ import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { prunePhotos } from "./storage/photos";
 import { darkMode, measureTone } from "./viewer/appearance";
-import { initLibraryFooter } from "./ui/library-footer";
+import { initLibraryFooter, libraryFooterMarkup } from "./ui/library-footer";
 import { initKeyboardInset } from "./ui/keyboard-inset";
 import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
@@ -33,7 +33,7 @@ app.innerHTML = `
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
     <div class="library-actions"><button class="library-action import-trigger" id="import-open" aria-keyshortcuts="Meta+O Control+O">${icons.plus}<span>Import</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p><p class="empty-drop">You can also drop or paste one here.</p></div></section>
-    <footer class="library-footer"><div class="app-updated"><span>Last app update</span><time id="app-updated-at">Checking…</time></div><div class="connection-status" role="status" aria-live="polite"><span id="internet-status">Checking connection…</span><span id="app-availability">Checking live app…</span><span id="offline-availability">Checking offline app…</span></div></footer>
+    ${libraryFooterMarkup}
   </main>
   <section id="viewer" class="viewer" aria-label="Map viewer" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
