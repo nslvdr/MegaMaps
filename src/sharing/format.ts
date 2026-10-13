@@ -3,7 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -122,10 +122,12 @@ export function validateManifest(value: unknown): ShareManifest {
     const description = version === 1 ? value.note : value.description;
     if (!name(value.label, 100) || !text(description, 2000) ||
         typeof value.kind !== "string" ||
-        (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind))) invalid();
+        (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind)) ||
+        (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water)))) invalid();
     return { ...identity(value, "marker"), label: value.label, description,
       ...ownPhotos(value),
-      kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]), point: point(value.point) };
+      kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]),
+      ...(isWaterLevel(value.water) ? { water: value.water } : {}), point: point(value.point) };
   });
   let points = 0;
   const routes = value.routes.map((value: unknown): PlannedRoute => {

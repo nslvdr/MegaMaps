@@ -14,6 +14,8 @@ export interface MapMarker {
   /** Photo IDs, shown in this order; the blobs live in the photos store. */
   photos?: string[];
   kind: keyof typeof markerKinds;
+  /** How deep the water is; only flooded places have one. */
+  water?: WaterLevel;
   created: number;
 }
 /** Saved by older versions; now loaded as places. */
@@ -167,6 +169,11 @@ export const markerKinds = {
   graffiti: { label: t("Graffiti"), color: "#ff5fa2" },
   "new-room": { label: t("New room"), color: "#e3e3e3" },
 } as const satisfies Record<string, { label: string; color: string }>;
+/** Three steps of water depth, shallowest first; a place stores the step number. */
+export const waterLevels = { 1: t("Ankle"), 2: t("Knee"), 3: t("Waist+") } as const;
+export type WaterLevel = keyof typeof waterLevels;
+export const isWaterLevel = (value: unknown): value is WaterLevel =>
+  value === 1 || value === 2 || value === 3;
 export function captureView(camera: Camera, viewport: Size): SavedView {
   return {
     center: screenToWorld(camera, {

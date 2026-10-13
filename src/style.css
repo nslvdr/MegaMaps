@@ -1922,6 +1922,51 @@ dialog.place-card::backdrop {
   border-color: var(--c);
   background: color-mix(in srgb, var(--c) 12%, transparent);
 }
+/* A flooded place's water level: three big steps, tap the chosen one to clear. */
+.water-picker {
+  margin: var(--space-16) 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+.water-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+}
+.water-step {
+  display: grid;
+  place-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-8) 0;
+  border: 1.5px solid var(--glass-line);
+  border-radius: var(--radius-sm);
+  background: var(--fill);
+  color: var(--text);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+/* The water rim reaches 4 of 24 units past the box on each side; the margin
+   makes room for it so the whole pin sits centred above its name. */
+.water-step svg {
+  width: 28px;
+  height: 28px;
+  margin: calc(28px / 6);
+  overflow: visible;
+}
+.water-step[aria-pressed="true"] {
+  border-color: var(--water);
+  background: color-mix(in srgb, var(--water) 12%, transparent);
+}
+.place-detail-water {
+  margin: 0 0 var(--space-12);
+  color: var(--c);
+  font-weight: 600;
+}
 .place-add {
   display: flex;
   align-items: center;

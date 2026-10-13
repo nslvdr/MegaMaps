@@ -23,6 +23,8 @@ import {
   type MapMarker,
   type PlannedRoute,
   type RotationMode,
+  type WaterLevel,
+  waterLevels,
 } from "../viewer/navigation";
 import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
 import { icons } from "./icons";
@@ -124,6 +126,8 @@ export class ViewerControls {
   private newMarkerKind: MapMarker["kind"] = "landmark";
   /** Photos in the place form, saved with the place on Save. */
   private formPhotos: string[] = [];
+  /** The water level picked in the form; kept only if the place is saved as flooded. */
+  private formWater?: WaterLevel;
   /** Bumped per form so a photo still being prepared can't land on another place. */
   private formVersion = 0;
   private photoJobs = 0;
@@ -343,6 +347,15 @@ export class ViewerControls {
     ))
       input.checked = input.value === kind;
   }
+  /** Paints the picker and card for the chosen level; the picker shows only for flooded. */
+  private setFormWater(water?: WaterLevel) {
+    this.formWater = water;
+    const kind = this.markerKind();
+    this.el("marker-water").hidden = kind !== "flooded";
+    for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
+      step.setAttribute("aria-pressed", String(Number(step.dataset.water) === water));
+    this.paintPlaceCard(kind, water);
+  }
   private markerName(kind: MapMarker["kind"]) {
     return this.mapLabel ??
       nextName(markerKinds[kind].label, this.state.markers.map((m) => m.label));
@@ -365,6 +378,7 @@ export class ViewerControls {
     this.editingRoute = route?.id;
     // A route's look comes from its line, so only places pick an icon.
     this.el("marker-kinds").hidden = !!route;
+    this.el("marker-water").hidden = true;
     this.el("marker-move").hidden = true;
     this.el("route-points").hidden = !route;
     this.input("marker-label").value = fields.name;
@@ -385,7 +399,7 @@ export class ViewerControls {
       : this.markerName(kind);
     this.openForm(title, { ...marker, name: marker?.label ?? this.autoMarkerName });
     this.setMarkerKind(kind);
-    this.paintPlaceCard(kind);
+    this.setFormWater(marker?.water);
     this.el("marker-delete").hidden = !marker;
     this.el("marker-move").hidden = !marker;
     // A new place shows where it will go while it is named.
@@ -625,8 +639,8 @@ export class ViewerControls {
     this.el("marker-dialog-title-icon").innerHTML = icon;
     this.dialog("marker-dialog").style.setProperty("--c", color);
   }
-  private paintPlaceCard(kind: MapMarker["kind"]) {
-    this.paintCard(placeIcon(kind), (markerKinds[kind] ?? markerKinds.landmark).color);
+  private paintPlaceCard(kind: MapMarker["kind"], water?: WaterLevel) {
+    this.paintCard(placeIcon(kind, water), (markerKinds[kind] ?? markerKinds.landmark).color);
   }
   private routeIcon(route: PlannedRoute) {
     return icons.route.replace("<svg ", `<svg style="color:${routeColor(this.state, route.id)}" `);
@@ -651,7 +665,7 @@ export class ViewerControls {
     edit.title = place ? t("Edit place") : t("Edit route");
     edit.setAttribute("aria-label", edit.title);
     this.el("marker-dialog-title").textContent = "label" in item ? item.label : item.name;
-    if ("label" in item) this.paintPlaceCard(item.kind);
+    if ("label" in item) this.paintPlaceCard(item.kind, item.water);
     else this.paintCard(this.routeIcon(item), routeColor(this.state, item.id));
     const description = this.el("marker-detail-description");
     description.textContent = item.description ?? "";
@@ -667,10 +681,14 @@ export class ViewerControls {
     }));
     photos.hidden = !count;
     photos.scrollLeft = 0;
+    const water = place?.kind === "flooded" ? place.water : undefined;
+    const waterLine = this.el("marker-detail-water");
+    waterLine.textContent = water ? t("Water level: {level}", { level: waterLevels[water] }) : "";
+    waterLine.hidden = !water;
     const details = this.el("marker-details");
     details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
-    details.hidden = !item.description && !count;
+    details.hidden = !item.description && !count && !water;
     details.scrollTop = 0;
     // Measured at its natural height, up to half the screen.
     details.dataset.expandable = "false";
@@ -972,7 +990,7 @@ export class ViewerControls {
       'input[name="marker-kind"]',
     ))
       this.on(input, "change", () => {
-        this.paintPlaceCard(this.markerKind());
+        this.setFormWater(this.formWater);
         // Keep auto names in sync with the chosen kind until the user types.
         const label = this.input("marker-label");
         if (this.autoMarkerName && label.value === this.autoMarkerName) {
@@ -981,6 +999,11 @@ export class ViewerControls {
         }
         if (!this.editingMarker && this.markerPoint)
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
+      });
+    for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
+      this.on(step, "click", () => {
+        const water = Number(step.dataset.water) as WaterLevel;
+        this.setFormWater(water === this.formWater ? undefined : water);
       });
     this.click("photo-viewer-close", () => this.dialog("photo-viewer").close());
     this.on(this.dialog("marker-dialog"), "close", () => {
@@ -1017,10 +1040,12 @@ export class ViewerControls {
         description: this.el<HTMLTextAreaElement>("marker-description").value.trim(),
         ...(this.formPhotos.length ? { photos: [...this.formPhotos] } : {}),
         kind: this.markerKind(),
+        ...(this.markerKind() === "flooded" && this.formWater ? { water: this.formWater } : {}),
         created: existing?.created ?? Date.now(),
       };
       const unchanged = !!existing && existing.label === marker.label &&
         existing.description === marker.description && existing.kind === marker.kind &&
+        existing.water === marker.water &&
         (existing.photos ?? []).join() === (marker.photos ?? []).join() &&
         existing.point.x === marker.point.x && existing.point.y === marker.point.y;
       // An edit keeps the place where it was in the Saved list.
@@ -1426,7 +1451,7 @@ export class ViewerControls {
         label: marker.label,
         description: marker.description,
         photos: marker.photos,
-        icon: placeIcon(marker.kind),
+        icon: placeIcon(marker.kind, marker.water),
         jump: () => this.showDetails(marker),
         actions: [
           {

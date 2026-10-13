@@ -72,6 +72,15 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   assert.deepEqual((await loadNavigation(destination.id)).markers, decoded.manifest.markers);
 });
 
+test("a flooded place's water level travels in shares; levels on other kinds or out of range are rejected", async () => {
+  const { manifest } = await fixture();
+  const flooded = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "flooded" as const, water: 2 as const }] };
+  assert.deepEqual((await readShare(encodeShare(flooded))).manifest, flooded);
+  await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], water: 4 }] })), /invalid/);
+  await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], water: "2" }] })), /invalid/);
+  await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], kind: "entrance" }] })), /invalid/);
+});
+
 test("place photos travel with their place, and version 1 notes arrive as descriptions", async () => {
   const { manifest } = await fixture();
   const photos = new Map([["photo-a", new Blob(["first jpeg"], { type: "image/jpeg" })], ["photo-b", new Blob(["second"], { type: "image/webp" })]]);
