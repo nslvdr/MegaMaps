@@ -33,18 +33,15 @@ const kindPicks = Object.entries(markerKinds)
   )
   .join("");
 
-const undoKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") ? "⌘Z" : "Ctrl+Z";
-
 // Map-first layout: almost nothing floats over the map.
 //   top corners   – Back on the left; Rotation and View on the right, both panels
 //   bottom pill   – Saved · Search · Add; Saved and Add open panels like View.
 //                   Placing, drawing or moving swaps the pill for a task card
 //                   with the same header (icon, title, X) and full-size actions
-// Pinch and drag move the map, so there are no zoom or pan buttons. The canvas
-// takes its own keys, so it is an application: screen readers pass it arrows.
+// Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" tabindex="0" role="application" aria-label="Map: drag to pan; pinch, scroll or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place. Arrows pan, Shift for farther; plus and minus zoom, F fits, slash searches and Enter steps through matches. While adding, Enter puts the point in the middle."></canvas><div class="map-shade" aria-hidden="true"></div><div class="map-crosshair" aria-hidden="true">${icons.crosshair}</div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
-<button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library (Esc)" aria-keyshortcuts="Escape">${icons.arrow}</button>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place."></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
+<button class="glass corner-button corner-left" id="back" aria-label="Back to library" title="Back to library">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="Map view controls">
   <button id="open-rotation" class="glass status-chip" data-sheet="rotation" aria-label="Rotation" title="Rotation" aria-controls="sheet" aria-expanded="false">${icons.rotationLock}</button>
   <button id="open-display" class="glass status-chip" data-sheet="display" aria-label="View settings" title="View settings" aria-controls="sheet" aria-expanded="false">${icons.sun}</button>
@@ -52,7 +49,7 @@ export const viewerMarkup = `
 <div id="toast-bar" class="toast glass" hidden><p id="toast" role="status" aria-live="polite" hidden></p><button id="toast-undo" class="toast-undo" hidden>${icons.undo}<span>Undo</span></button></div>
 <nav class="dock glass" id="dock" aria-label="Map menu">
   <button id="open-saved" data-sheet="saved" aria-label="Saved" title="Saved" aria-controls="sheet" aria-expanded="false">${icons.saved}</button>
-  <div id="open-search" class="search-field" tabindex="-1" title="Search (/)" aria-keyshortcuts="/">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" aria-controls="search-overlay" aria-expanded="false" placeholder="Search map…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match (Enter)" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close (Esc)" hidden>${icons.close}</button></div>
+  <div id="open-search" class="search-field" title="Search">${icons.search}<input id="map-search" type="search" aria-label="Search map text and saved places" aria-describedby="search-status" aria-controls="search-overlay" aria-expanded="false" placeholder="Search map…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" id="search-count" class="search-count" title="Next match" hidden></button><button type="button" id="search-close" class="search-close" aria-label="Close search" title="Close" hidden>${icons.close}</button></div>
   <button id="open-add" aria-label="Add" title="Add" data-sheet="add" aria-controls="sheet" aria-expanded="false">${icons.add}</button>
 </nav>
 <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
@@ -60,11 +57,11 @@ export const viewerMarkup = `
   <div class="sheet-header"><span id="tool-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="tool-title"></h2><button type="button" id="tool-rename" class="dialog-edit" aria-label="Rename route" title="Rename route" hidden>${icons.edit}</button><button type="button" id="tool-cancel" class="dialog-close" aria-label="Cancel" title="Cancel">${icons.close}</button></div>
   <p id="tool-message" class="tool-hint" role="status"></p>
   <div id="tool-actions" class="dialog-actions tool-actions">
-    <button type="button" id="route-undo" class="quiet" title="Undo (${undoKey})" aria-keyshortcuts="Meta+Z Control+Z Backspace">${icons.undo}<span>Undo</span></button>
+    <button type="button" id="route-undo" class="quiet">${icons.undo}<span>Undo</span></button>
     <button type="button" id="tool-done" class="primary">${icons.check}<span>Done</span></button>
   </div>
 </section>
-<button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" tabindex="-1" hidden></button>
+<button id="sheet-dismiss" class="sheet-dismiss" aria-label="Close" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
   <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="Share map or selected items" hidden>${icons.share}</button><button id="close-sheet" class="sheet-close" aria-label="Close">${icons.close}</button></div>
   <div class="sheet-content">
@@ -90,7 +87,7 @@ export const viewerMarkup = `
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
       <div id="north-field" class="panel-card" hidden>
-        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">North</strong><small id="north-help">Clockwise from map top</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" tabindex="0" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
+        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">North</strong><small id="north-help">Clockwise from map top</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
       </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="Saved" hidden>

@@ -96,13 +96,9 @@ button:disabled {
   opacity: 0.4;
   cursor: default;
 }
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-summary:focus-visible,
-canvas:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+/* Touch only: nothing draws a keyboard focus ring. */
+:focus {
+  outline: none;
 }
 svg {
   width: 24px;
@@ -290,14 +286,6 @@ small {
   background: none;
   text-align: left;
   padding: var(--row-padding);
-}
-/* The card clips the open button's ring to a sliver, so the card shows it. */
-.map-card:has(.map-open:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-.map-card .map-open:focus-visible {
-  outline: none;
 }
 .map-open:active:not(:disabled) {
   transform: none;
@@ -622,10 +610,6 @@ dialog h2 {
   margin: 0 0 var(--space-8);
   overflow-wrap: anywhere;
 }
-/* Dialog headings receive opening focus without looking like a selected control. */
-dialog h2[autofocus]:focus {
-  outline: none;
-}
 dialog p {
   color: var(--muted);
   font-size: var(--font-size-body);
@@ -797,18 +781,6 @@ dialog .dialog-error {
   background: color-mix(in srgb, var(--danger) 10%, #000);
   color: var(--danger);
 }
-/* Keyboard navigation lights up each action's own border. */
-.primary:focus-visible,
-.secondary:focus-visible,
-.danger:focus-visible,
-.quiet:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-}
-.secondary:focus-visible,
-.quiet:not(.danger):focus-visible {
-  border-color: color-mix(in srgb, var(--text) 45%, transparent);
-}
 .primary:active:not(:disabled),
 .danger:active:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 24%, #000);
@@ -936,7 +908,6 @@ dialog textarea {
 dialog input:focus,
 dialog select:focus,
 dialog textarea:focus {
-  outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
@@ -988,32 +959,12 @@ dialog textarea {
   display: block;
   touch-action: none;
 }
-/* Actions return keyboard focus to the map without framing the whole screen. */
-.viewer canvas:focus-visible {
-  outline: none;
-}
 /* The map is the only filtered raster surface. All tools stay in screen space. */
 .map-stage {
   position: absolute;
   inset: 0;
   overflow: hidden;
   background: #000;
-}
-/* Placing from the keyboard: Enter puts the point under this mark. */
-.map-crosshair {
-  display: none;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 24px;
-  height: 24px;
-  translate: -50% -50%;
-  color: var(--accent);
-  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
-  pointer-events: none;
-}
-.viewer:not([data-tool="browse"]) .map-stage:has(canvas:focus-visible) .map-crosshair {
-  display: block;
 }
 .map-shade {
   position: absolute;
@@ -1296,9 +1247,6 @@ button.glass:active:not(:disabled) {
   color: var(--text);
   font: inherit;
   font-size: var(--font-size-body);
-}
-#map-search:focus-visible {
-  outline: none;
 }
 #map-search::-webkit-search-cancel-button,
 #map-search::-webkit-search-decoration {
@@ -1753,10 +1701,6 @@ dialog.place-card::backdrop {
   border-color: var(--c);
   background: color-mix(in srgb, var(--c) 12%, transparent);
 }
-.kind-pick:has(input:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 .place-add {
   display: flex;
   align-items: center;
@@ -1882,7 +1826,7 @@ dialog.place-card::backdrop {
 }
 .sheet-content {
   min-height: 0;
-  /* Room inside the scroller for focus rings at its edges; content stays put. */
+  /* Room inside the scroller so edge highlights aren't clipped; content stays put. */
   margin: 0 calc(-1 * var(--space-8)) calc(-1 * var(--space-8));
   padding: 0 var(--space-8) var(--space-8);
   overflow: auto;
@@ -2018,10 +1962,6 @@ label.panel-row {
   border-color: color-mix(in srgb, var(--c) 40%, transparent);
   background: color-mix(in srgb, var(--c) 12%, #000);
 }
-.brightness-options label:has(input:focus-visible) {
-  outline: 2px solid var(--c);
-  outline-offset: 2px;
-}
 /* On/off switch in the panel's neon color. */
 .switch {
   appearance: none;
@@ -2057,10 +1997,6 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
-.switch:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* Rotation help sits right under the modes; North follows when Auto is on. */
 #rotation-help {
   margin-bottom: 0;
@@ -2083,11 +2019,6 @@ label.panel-row {
   background: color-mix(in srgb, var(--c) 18%, transparent);
   pointer-events: none;
 }
-/* The mask would hide a focus ring on the track, so the wheel draws it. */
-.north-wheel:has(:focus-visible) {
-  outline: 2px solid var(--c);
-  outline-offset: 2px;
-}
 .north-track {
   position: relative;
   height: 96px;
@@ -2095,7 +2026,6 @@ label.panel-row {
   scroll-snap-type: y mandatory;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  outline: none;
   mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
 }
 .north-track::-webkit-scrollbar {
@@ -2170,10 +2100,6 @@ label.panel-row {
   background: color-mix(in srgb, var(--c) 5%, #000);
 }
 .layer-toggle:has(input:checked) svg { color: var(--c); }
-.layer-toggle:has(input:focus-visible) {
-  outline: 2px solid var(--c);
-  outline-offset: 2px;
-}
 .layer-count {
   position: absolute;
   top: 5px;
@@ -2366,10 +2292,8 @@ label.panel-row {
   flex-shrink: 0;
   color: var(--muted);
 }
-.popover-item:active:not(:disabled),
-.popover-item:focus-visible {
+.popover-item:active:not(:disabled) {
   background: var(--fill-strong);
-  outline: none;
 }
 /* A plain row like the others, not the bordered, centered .danger pill. */
 .popover-item.danger {
@@ -2380,8 +2304,7 @@ label.panel-row {
   background: none;
   color: var(--danger);
 }
-.popover-item.danger:active:not(:disabled),
-.popover-item.danger:focus-visible {
+.popover-item.danger:active:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 @media (hover: hover) {
@@ -2566,8 +2489,6 @@ button.share-row:active:not(:disabled) { transform: none; background: #ffffff0f;
   button.share-row:hover:not(:disabled) { background: #ffffff0a; }
 }
 button.share-row:disabled > svg:last-child { visibility: hidden; }
-/* The summary clips its rows to its rounded box, so a row's ring sits inside. */
-button.share-row:focus-visible { outline-offset: -4px; border-radius: calc(var(--radius-md) - var(--space-4)); }
 .share-row-icon {
   display: grid;
   place-items: center;
@@ -2679,5 +2600,4 @@ dialog .share-size { display: flex; justify-content: space-between; gap: var(--s
 .share-segments input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .share-segments label:has(input:checked) { color: var(--text); background: color-mix(in srgb, var(--c) 18%, #000); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
 .share-segments .share-segment-danger { --c: var(--danger); }
-.share-segments label:has(input:focus-visible) { outline: 2px solid var(--c); outline-offset: 2px; }
 dialog #receive-note { margin: var(--space-16) 0 0; }

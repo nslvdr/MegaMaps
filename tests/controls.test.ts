@@ -226,8 +226,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-add");
     assert.equal(sheet.hidden, true, "Add toggles its panel");
     click("open-add");
-    key(root, "Escape");
-    assert.equal(sheet.hidden, true, "Escape closes the panel");
+    controls.escape();
+    assert.equal(sheet.hidden, true, "Back closes the panel");
     click("open-add");
     click("open-saved");
     assert.equal(el("sheet-add").hidden, true, "a panel replaces the choice");
@@ -239,7 +239,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-display");
     assert.equal(sheet.hidden, true);
     click("open-saved");
-    key(root, "Escape");
+    controls.escape();
     assert.equal(sheet.hidden, true);
     assert.equal(controls.escape(), false, "nothing left to back out of");
     click("open-display");
@@ -329,9 +329,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     wheel.scrollTop = 0;
     wheel.dispatchEvent(new window.Event("scroll"));
     assert.equal(wheel.querySelector(".selected")!.textContent, "−179°");
-    key(wheel, "ArrowDown");
-    assert.equal(state.northOffset, 180, "a full turn wraps around");
-    assert.equal(wheel.scrollTop, (zero + 180) * row);
+    wheel.scrollTop = (zero + 180) * row;
+    wheel.dispatchEvent(new window.Event("scroll"));
+    assert.equal(state.northOffset, 180);
     await controls.flush();
     const saved = await loadNavigation("controls");
     assert.equal(saved.rotationMode, "compass");
@@ -449,12 +449,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(entrance.checked, true);
     assert.equal(el("marker-delete").hidden, false);
     input("marker-description", "Updated description");
-    // ⌘/Ctrl+Enter saves from the description, where Enter starts a new line.
     (el("marker-form") as HTMLFormElement).requestSubmit = () => submit("marker-form");
-    const save = new window.Event("keydown", { cancelable: true });
-    Object.defineProperties(save, { key: { value: "Enter" }, metaKey: { value: true } });
-    el("marker-description").dispatchEvent(save);
-    assert.equal(save.defaultPrevented, true);
+    submit("marker-form");
     assert.equal(state.markers[0]?.description, "Updated description");
     assert.equal(state.markers.length, 1);
     assert.equal(el("marker-form").hidden, true, "saving returns to readable information");
@@ -511,7 +507,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(shares.at(-1), { kind: "marker", id: state.markers[0]!.id });
     assert.equal(state.markers.length, 1, "sharing does not modify the selected place");
     placeMore().dispatchEvent(new window.Event("click"));
-    // Tapping elsewhere closes it; so does Escape, before the panel.
+    // Tapping elsewhere closes it; so does Back, before the panel.
     document.body.dispatchEvent(
       new window.Event("pointerdown", { bubbles: true }),
     );
@@ -537,11 +533,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(requestedZooms.at(-1), 1, "Saved places request the same detail zoom");
     assert.equal(el("marker-dialog").hasAttribute("open"), true, "Saved places open the same detail view");
     assert.equal(el("marker-form").hidden, true);
-    assert.ok(focus.mock.calls.at(-1)?.this !== el("map-canvas"), "opening details does not focus the inert map");
     click("marker-cancel");
-    // An application role names the map and hands it the arrow keys from screen readers.
-    assert.equal(el("map-canvas").getAttribute("role"), "application");
-    assert.match(el("map-canvas").getAttribute("aria-label")!, /^Map: .*Arrows pan/);
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
     root
@@ -556,7 +548,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     window.dispatchEvent(new window.Event("resize"));
     assert.equal(popover(), null, "rotation/resize dismisses the menu");
     placeMore().dispatchEvent(new window.Event("click"));
-    key(root, "Escape");
+    controls.escape();
     assert.equal(popover(), null);
     assert.equal(sheet.hidden, false);
     placeMore().dispatchEvent(new window.Event("click"));
@@ -602,7 +594,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("tool-actions").hidden, false);
     assert.equal(done.disabled, true);
     assert.equal((el("route-undo") as HTMLButtonElement).disabled, true);
-    assert.equal(controls.undo(), false, "keyboard undo has nothing to take back");
     assert.equal(el("tool-message").textContent, "Tap where the route starts");
     tap(900, 1000);
     assert.equal(el("tool-message").textContent, "1 point · Tap where it goes next", "one point asks for the next");
@@ -632,7 +623,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // An interrupted drag leaves no Undo step behind.
     options.onDragStart?.();
     options.onDrop?.(false);
-    assert.equal(controls.undo(), true, "⌘Z works like the Undo button");
+    click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
     tap(1400, 1600);
     click("tool-done");
@@ -655,7 +646,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(framed.at(-1), state.routes[0]!.points, "editing frames the route");
     click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
-    key(root, "Escape");
+    controls.escape();
     assert.equal(state.routes[0]?.points.length, 2);
     assert.equal(state.routes[0]?.draft, false);
 
@@ -698,43 +689,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
 
-    // Arrows walk the Saved rows, staying in the jump or ⋯ column.
-    assert.equal(state.markers.length, 1);
-    const focusedLast = () => focus.mock.calls.at(-1)?.this;
-    key(el("route-list").querySelector(".navigation-jump")!, "ArrowDown");
-    assert.ok(focusedLast() === el("marker-list").querySelector(".navigation-jump"), "Down reaches the place below");
-    key(el("marker-list").querySelector(".row-more")!, "ArrowUp");
-    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "⋯ stays in its column");
-    // Typing a row's first letters jumps to it, ahead of the map's shortcuts.
-    const names = [...el("sheet-saved").querySelectorAll("strong")].map((title) => title.textContent!);
-    const routeJump = el("route-list").querySelector(".navigation-jump")!,
-      placeJump = el("marker-list").querySelector(".navigation-jump")!;
-    const typed = new window.Event("keydown", { bubbles: true, cancelable: true });
-    Object.defineProperty(typed, "key", { value: "e" });
-    routeJump.dispatchEvent(typed);
-    assert.deepEqual(names, ["Lower loop", "<Entrance>"]);
-    assert.ok(focusedLast() === placeJump, "E reaches <Entrance>, past its bracket");
-    assert.equal(typed.defaultPrevented, true);
-    // As in the library, F2 edits a row and Delete arms its menu's Delete.
-    key(routeJump, "F2");
-    assert.equal(el("marker-dialog").hasAttribute("open"), true);
-    assert.equal(el("marker-dialog-title").textContent, "Edit route");
-    assert.equal(el("marker-kinds").hidden, true, "a route's look comes from its line");
-    click("marker-cancel");
-    assert.equal(el("marker-dialog").hasAttribute("open"), false);
-    key(placeJump, "F2");
-    assert.equal(el("marker-dialog").hasAttribute("open"), true, "a place edits its name and kind");
-    click("marker-cancel");
-    key(routeJump, "Delete");
-    assert.equal(routeJump.closest(".navigation-row")!.querySelector(".row-more")!.getAttribute("aria-expanded"), "true");
-    const armed = root.querySelector(".row-popover .danger")!;
-    assert.match(armed.textContent!, /Tap again/);
-    assert.ok(focusedLast() === armed, "Enter then deletes");
-    key(routeJump, "Delete");
-    assert.equal(state.routes.length, 1, "repeating Delete never deletes");
-    key(root, "Escape");
-    assert.equal(root.querySelector(".row-popover"), null);
-
     // Edit uses the place form, delete needs two taps; all behind ⋯.
     const openMenu = () => {
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
@@ -750,27 +704,21 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
       ["Edit", "Edit points", "Share", "Delete"],
     );
-    // An open menu takes the arrows, entering from ⋯ and wrapping around.
-    key(el("route-list").querySelector(".row-more")!, "ArrowDown");
-    assert.ok(focusedLast() === rowButton(/^Edit$/), "Down enters the menu");
-    key(rowButton(/^Edit$/), "ArrowUp");
-    assert.ok(focusedLast() === rowButton(/Delete/), "Up wraps to the last action");
     rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
     assert.deepEqual(shares.at(-1), { kind: "route", id: state.routes[0]!.id });
     click("share-saved");
     assert.equal(shares.at(-1), undefined, "the map-level action opens selection of all annotations");
-    const focusIn = (target: Element) => target.dispatchEvent(new window.Event("focusin", { bubbles: true }));
     click("open-saved");
-    focusIn(el("route-list").querySelector(".row-more")!);
     openMenu();
     rowButton(/^Edit$/).dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-dialog-title").textContent, "Edit route");
+    assert.equal(el("marker-kinds").hidden, true, "a route's look comes from its line");
     input("marker-label", "Exit plan");
     input("marker-description", "Mind the low ceiling");
     submit("marker-form");
     assert.equal(state.routes[0]?.name, "Exit plan");
     assert.equal(state.routes[0]?.description, "Mind the low ceiling");
     assert.equal(el("marker-dialog").hasAttribute("open"), false, "opened from Saved, Save goes back there");
-    assert.ok(focusedLast() === el("route-list").querySelector(".row-more"), "focus returns to the rebuilt row");
     await controls.flush();
     assert.equal(
       (await loadNavigation("controls")).routes[0]?.name,
@@ -797,7 +745,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       null,
       "the menu stays open for the second delete tap",
     );
-    key(root, "Escape");
+    controls.escape();
     openMenu();
     assert.ok(
       rowButton(/^Delete$/),
@@ -812,7 +760,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
     assert.equal(el("toast").textContent, "Exit plan deleted");
-    assert.ok(focusedLast() === el("marker-list").querySelector(".row-more"), "the next row takes the deleted one's focus");
 
     // Layers hide/show and the highlight briefly reveals everything.
     assert.equal(el("layer-places-count").textContent, "1");
@@ -890,12 +837,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     focus.mock.resetCalls();
     click("open-search");
     assert.equal(focus.mock.callCount(), 1, "tapping the search field opens it ready to type");
-    click("search-close");
-    assert.equal(controls.stepSearch(), false, "Enter is left alone with Search closed");
-    focus.mock.resetCalls();
-    assert.equal(controls.openSearch(), true);
     assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
-    assert.equal(focus.mock.callCount(), 1, "the / key opens Search ready to type");
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
@@ -930,20 +872,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").textContent, "2 / 2", "progress keeps the current match");
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), polygon, "next wraps to the first match");
-    const previous = new window.Event("keydown", { cancelable: true });
-    Object.defineProperties(previous, { key: { value: "Enter" }, shiftKey: { value: true } });
-    el("map-search").dispatchEvent(previous);
-    assert.deepEqual(framed.at(-1), secondPolygon, "previous wraps to the last match");
-    // Enter put the keyboard away; the page's Enter keeps stepping.
-    assert.equal(controls.stepSearch(), true);
-    assert.deepEqual(framed.at(-1), polygon);
-    assert.equal(controls.stepSearch(true), true);
-    assert.deepEqual(framed.at(-1), secondPolygon);
-    // On a touch screen the count steps on once the keyboard is away.
+    // The count steps on once the keyboard is away.
     click("search-count");
-    assert.deepEqual(framed.at(-1), polygon, "the count is a Next button");
-    assert.equal(el("search-count").textContent, "1 / 2");
-    assert.equal(el("search-count").getAttribute("aria-label"), "Match 1 of 2. Next match");
+    assert.deepEqual(framed.at(-1), secondPolygon, "the count is a Next button");
+    assert.equal(el("search-count").textContent, "2 / 2");
+    assert.equal(el("search-count").getAttribute("aria-label"), "Match 2 of 2. Next match");
     assert.equal(el("map-search").getAttribute("aria-expanded"), "true");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
@@ -1010,15 +943,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("map-search").dispatchEvent(enter);
     assert.equal(highlights?.matches.length, 30, "Enter immediately searches the latest query, including notes");
     assert.equal(highlights?.selected, 0);
-    assert.ok(focus.mock.calls.at(-1)?.this === el("map-canvas"), "Enter hands focus to the map");
     input("map-search", "unknown");
     el("map-search").dispatchEvent(new window.Event("input"));
     input("map-search", "");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
     assert.equal(highlights?.active, false, "clear cancels a pending query");
-    key(root, "Escape");
-    assert.equal(dock.hidden, false, "Escape restores the navbar too");
+    controls.escape();
+    assert.equal(dock.hidden, false, "Back restores the navbar too");
     state.markers = originalMarkers;
 
     // Toasts stay up for as long as they take to read.
@@ -1167,7 +1099,6 @@ test("place details read long descriptions safely and expand while scrolling", a
     assert.equal(noteElement.querySelector("img"), null, "notes cannot inject markup");
     assert.deepEqual(state.markers[0], original, "reading does not modify the place");
     assert.equal(details.dataset.expandable, "true");
-    assert.equal(details.getAttribute("tabindex"), "0", "overflowing notes can be scrolled from the keyboard");
     scroll(20);
     assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "20px", "a small scroll only unfolds that distance");
     assert.deepEqual(centered.at(-1), { point: marker.point, animated: false }, "the map follows pane movement without a separate glide");
@@ -1192,7 +1123,6 @@ test("place details read long descriptions safely and expand while scrolling", a
     marker.description = "";
     controls.options().onMarker(marker);
     assert.equal(details.dataset.expandable, "false", "short notes need no extra scroll distance");
-    assert.equal(details.getAttribute("tabindex"), "-1", "short notes do not add an unnecessary tab stop");
     assert.equal(noteElement.hidden, true, "a place without a description shows none");
     document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
     assert.equal(card.hasAttribute("open"), false);
@@ -1260,7 +1190,7 @@ test("reading a place leaves the map usable and closes when tapping away", async
     assert.equal(card.hasAttribute("open"), false, "pressing other controls closes it");
     controls.options().onMarker(marker);
     assert.equal(controls.escape(), true);
-    assert.equal(card.hasAttribute("open"), false, "Escape closes it");
+    assert.equal(card.hasAttribute("open"), false, "Back closes it");
     controls.options().onMarker(marker);
     document.getElementById("marker-edit")!.dispatchEvent(new window.Event("click"));
     assert.deepEqual(opened.slice(-2), [false, true], "editing is modal");

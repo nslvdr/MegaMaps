@@ -21,7 +21,6 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
-import { initLibraryKeys } from "./ui/library-keys";
 import { initMapMenu } from "./ui/map-menu";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
@@ -32,7 +31,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="update-app" id="update-app">${icons.rotateRight}<span>Update app</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger" id="import-open" aria-keyshortcuts="Meta+O Control+O">${icons.plus}<span>Import</span></button></div>
+    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>Import</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">Your maps <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>Your next route starts here</h3><p>Import a JPEG, PNG or WebP map, or a .megamap file from a friend.<br>Keep it with you, even offline.</p><p class="empty-drop">You can also drop or paste one here.</p></div></section>
     ${libraryFooterMarkup}
   </main>
@@ -58,43 +57,6 @@ const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
 const mapMenu = initMapMenu();
-initLibraryKeys(grid, {
-  rename(id) {
-    const map = maps.find((map) => map.id === id);
-    if (map) openRenameMap(map);
-  },
-  remove(id) {
-    const map = maps.find((map) => map.id === id);
-    if (map) confirmDelete(map);
-  },
-});
-// Renaming or deleting rebuilds the cards, which would drop keyboard focus to
-// the top of the page. It returns to the same map, or after a delete to the
-// one that took its place. Mouse and touch use is left alone.
-let libraryFocus: { id: string; part: string; index: number; element: Element } | undefined;
-grid.addEventListener("focusin", (event) => {
-  const target = event.target as Element, card = target.closest<HTMLElement>(".map-card");
-  libraryFocus = card && target.matches(":focus-visible")
-    ? {
-        id: card.dataset.map!,
-        part: target.closest(".map-more") ? ".map-more" : ".map-open",
-        index: [...grid.querySelectorAll(".map-card")].indexOf(card),
-        element: target,
-      }
-    : undefined;
-});
-function restoreLibraryFocus() {
-  if (home.hidden || !libraryFocus || libraryFocus.element.isConnected) return;
-  // Focus left in a just-closed dialog is about to fall to the page too.
-  const active = document.activeElement;
-  if (active && active !== document.body && !active.closest("dialog:not([open])")) return;
-  const cards = grid.querySelectorAll<HTMLElement>(".map-card");
-  const card = grid.querySelector(`[data-map="${libraryFocus.id}"]`) ??
-    cards[Math.min(libraryFocus.index, cards.length - 1)];
-  (card?.querySelector<HTMLElement>(libraryFocus.part) ?? element("import-open")).focus({ preventScroll: true });
-}
-// A dialog hands focus back to its opener, which a rebuild may have replaced.
-document.addEventListener("close", restoreLibraryFocus, true);
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
@@ -254,7 +216,7 @@ function showTitle() {
 let leavingMap = false;
 // Going home returns to the same place in the list, on the map just closed.
 let libraryScroll = 0;
-// Back acts like Escape: it closes a panel or tool first, then the map.
+// Back closes a panel or tool first, then the map.
 window.addEventListener("popstate", (event) => {
   const wanted = (event.state as { map?: string } | null)?.map;
   if (leavingMap) leavingMap = false;
@@ -290,11 +252,8 @@ function closeViewer() {
   document.body.classList.remove("viewing");
   void refresh()
     .then(() => {
-      if (!home.hidden) {
-        // The map just left now leads the list; the library opens at it.
-        window.scrollTo(0, maps[0]?.id === closed ? 0 : libraryScroll);
-        grid.querySelector<HTMLElement>(`[data-map="${closed}"] .map-open`)?.focus({ preventScroll: true });
-      }
+      // The map just left now leads the list; the library opens at it.
+      if (!home.hidden) window.scrollTo(0, maps[0]?.id === closed ? 0 : libraryScroll);
     })
     .catch((error) => showMessage("Storage unavailable", String(error)));
 }
@@ -305,7 +264,6 @@ async function openMap(map: MapRecord) {
   viewer?.dispose();
   viewer = undefined;
   if (!home.hidden) libraryScroll = window.scrollY;
-  const fromLibrary = home.contains(document.activeElement);
   currentMap = map;
   map.opened = Date.now();
   void markOpened(map.id, map.opened).catch(() => {});
@@ -314,10 +272,6 @@ async function openMap(map: MapRecord) {
   if (history.state?.map) history.replaceState({ map: map.id }, "");
   else history.pushState({ map: map.id }, "");
   viewerSection.hidden = false;
-  // The keyboard carries on from the map, so arrows pan and +/− zoom straight
-  // away. Moving focus before the library hides its button keeps the focus
-  // ring to keyboard use.
-  if (fromLibrary) element("map-canvas").focus({ preventScroll: true });
   home.hidden = true;
   document.body.classList.add("viewing");
   element("viewer-error").hidden = true;
@@ -456,7 +410,6 @@ async function refresh() {
     more.title = "Map options";
     more.setAttribute("aria-label", `Options for ${name}`);
     const openButton = card.querySelector<HTMLButtonElement>(".map-open")!;
-    openButton.setAttribute("aria-keyshortcuts", "F2 Delete");
     openButton.addEventListener("click", () => {
       void openMap(map);
     });
@@ -519,19 +472,11 @@ async function refresh() {
           "Preview unavailable";
       });
   }
-  restoreLibraryFocus();
 }
 const importDialog = element<HTMLDialogElement>("import-dialog");
 element("import-open").addEventListener("click", () => showDialog(importDialog));
 // On first run the whole empty card is a target too; Import stays the labelled control.
 element("empty").addEventListener("click", () => element("import-open").click());
-// ⌘O or Ctrl+O imports from the library, as in desktop apps.
-document.addEventListener("keydown", (event) => {
-  if (event.key.toLowerCase() !== "o" || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
-  if (home.hidden || document.querySelector("dialog[open]")) return;
-  event.preventDefault();
-  showDialog(importDialog);
-});
 element("import-cancel").addEventListener("click", () => importDialog.close());
 // Each row only narrows the picker; the file's header decides how it is imported.
 for (const [id, accept] of [
@@ -688,34 +633,6 @@ element("delete-confirm").addEventListener("click", () => {
     .catch((error) => showMessage("Couldn’t delete map", String(error)));
 });
 element("back").addEventListener("click", closeViewer);
-document.addEventListener("keydown", (event) => {
-  // Keys a list already used (typing to jump to a row) are not shortcuts too.
-  if (
-    event.defaultPrevented ||
-    !viewer ||
-    document.querySelector("dialog:modal") ||
-    ["INPUT", "TEXTAREA", "SELECT"].includes(
-      (event.target as HTMLElement).tagName,
-    )
-  )
-    return;
-  if (event.key === "Escape" && !controls?.escape()) closeViewer();
-  // ⌘Z, Ctrl+Z or Backspace takes back the last route point.
-  const undo = event.key === "Backspace" ||
-    (event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey);
-  if (undo && controls?.undo()) {
-    event.preventDefault();
-    return;
-  }
-  // Leave browser shortcuts such as Find (⌘F) and reset zoom (⌘0) alone.
-  if (event.metaKey || event.ctrlKey || event.altKey) return;
-  if (event.key === "0" || event.key.toLowerCase() === "f") viewer.fit();
-  if (event.key === "/" && controls?.openSearch()) event.preventDefault();
-  // Enter on a button presses it; only from the map does it step through matches.
-  const free = event.target === document.body || (event.target as HTMLElement).id === "map-canvas";
-  if (event.key === "Enter" && free && controls?.stepSearch(event.shiftKey))
-    event.preventDefault();
-});
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;
   if (typeof data === "object" && data !== null && "type" in data && data.type === "annotations" &&
