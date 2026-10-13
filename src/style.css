@@ -170,7 +170,8 @@ svg {
   font-weight: 700;
   letter-spacing: -0.6px;
 }
-.update-app {
+.settings-open {
+  position: relative;
   font-size: var(--font-size-small);
   font-weight: 650;
   display: flex;
@@ -184,12 +185,12 @@ svg {
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
 }
-.update-app svg {
+.settings-open svg {
   width: 18px;
   height: 18px;
   color: var(--neon-view);
 }
-.update-app:active:not(:disabled) {
+.settings-open:active:not(:disabled) {
   background: color-mix(in srgb, var(--neon-view) 18%, #000);
 }
 .library-actions {
@@ -230,7 +231,7 @@ svg {
   .library-action:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--c) 70%, transparent);
   }
-  .update-app:hover:not(:disabled) {
+  .settings-open:hover:not(:disabled) {
     background: color-mix(in srgb, var(--neon-view) 12%, #000);
   }
 }
@@ -479,6 +480,181 @@ small {
 #offline-availability[data-state="unavailable"] {
   color: var(--danger);
 }
+.footer-updated {
+  padding: 0;
+  background: none;
+  text-align: left;
+}
+/* A ready update turns lime and pulses a dot on its icon until installed. */
+.footer-updated[data-state="ready"] {
+  --c: var(--neon-add);
+}
+.footer-icon,
+.settings-icon {
+  position: relative;
+}
+.update-dot {
+  display: none;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-round);
+  background: var(--neon-add);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--neon-add);
+  animation: update-dot 1.4s ease-in-out infinite;
+}
+[data-state="ready"] .update-dot {
+  display: block;
+}
+/* A due backup gets a steady dot in the backup color, on Settings and its row. */
+[data-state="due"] .update-dot {
+  display: block;
+  background: var(--neon-saved);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--neon-saved);
+  animation: none;
+}
+@keyframes update-dot {
+  50% {
+    opacity: 0.25;
+  }
+}
+/* ---------- Settings ---------- */
+.settings-page {
+  --home-top: calc(var(--space-20) + env(safe-area-inset-top));
+  width: var(--surface-width);
+  margin: 0 auto 0 var(--surface-left);
+  padding: var(--home-top) 0 calc(var(--space-16) + env(safe-area-inset-bottom));
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-8);
+}
+.page-header h1 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: 700;
+  letter-spacing: -0.6px;
+}
+.page-back {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  border-radius: var(--radius-round);
+  background: #000;
+  color: var(--neon-view);
+  border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
+}
+.page-back:active:not(:disabled) {
+  background: color-mix(in srgb, var(--neon-view) 18%, #000);
+}
+.page-back svg {
+  width: 22px;
+  height: 22px;
+}
+.settings-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: var(--space-24) 0 var(--space-8);
+  font-size: var(--font-size-small);
+  font-weight: 650;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.settings-heading svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.settings-page .share-summary {
+  margin-top: 0;
+}
+.settings-icon {
+  --k: var(--neon-view);
+}
+#settings-backup .settings-icon,
+#settings-restore .settings-icon {
+  --k: var(--neon-saved);
+}
+/* A choice opens the system picker from a pill at the row's end. */
+.settings-select {
+  position: relative;
+  flex-shrink: 0;
+  color: var(--neon-view);
+}
+.settings-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 40px;
+  padding: 0 var(--space-32) 0 var(--space-16);
+  border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--neon-view) 12%, #000);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-size-body);
+  cursor: pointer;
+}
+.settings-select svg {
+  position: absolute;
+  top: 50%;
+  right: var(--space-12);
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.settings-page .settings-erase {
+  margin-top: var(--space-24);
+}
+#settings-erase,
+#settings-erase .settings-icon {
+  --k: var(--danger);
+  color: var(--danger);
+}
+[data-state="ready"] > .settings-icon {
+  --k: var(--neon-add);
+}
+#settings-update[data-state="ready"] small {
+  color: var(--neon-add);
+}
+.settings-note,
+.settings-error {
+  margin: var(--space-8) 0 0;
+  font-size: var(--font-size-small);
+  line-height: 1.55;
+  color: var(--muted);
+}
+.settings-error {
+  color: var(--danger);
+}
+/* The nickname box sits at the row's end, like the choices above it. */
+#settings-name {
+  flex: 0 1 160px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--space-12);
+  border: 1px solid #ffffff26;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-size-body);
+  transition: border-color 0.15s;
+}
+#settings-name:focus {
+  border-color: var(--neon-view);
+  outline: none;
+}
+#settings-name::placeholder {
+  color: var(--muted);
+}
 @media (max-width: 360px) {
   .library-action {
     flex-direction: column;
@@ -579,11 +755,15 @@ dialog[open]::backdrop {
 #message-dialog {
   --accent: var(--neon-view);
 }
+#restore-dialog {
+  --accent: var(--neon-saved);
+}
 #rename-map-dialog,
 #name-dialog {
   --accent: var(--neon-saved);
 }
-#delete-dialog {
+#delete-dialog,
+#erase-dialog {
   --accent: var(--danger);
 }
 .delete-map {
@@ -1028,6 +1208,13 @@ dialog textarea {
 .map-callout-icon {
   width: 16px;
   height: 16px;
+}
+:root[data-labels="large"] .map-callout > text {
+  font-size: var(--font-size-body);
+}
+:root[data-labels="large"] .map-callout-icon {
+  width: 18px;
+  height: 18px;
 }
 .glass {
   background: var(--glass);

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { database, transact } from "./database";
 import {
   defaultNavigation,
@@ -79,6 +80,6 @@ export class NavigationPersistence {
   async flushForReload() {
     await this.flush();
     if (this.dirty)
-      throw new Error("Your latest changes could not be saved. Free some device storage and try again.");
+      throw new Error(t("Your latest changes could not be saved. Free some device storage and try again."));
   }
 }

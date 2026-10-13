@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { TILE_SIZE, tileKey, type MapRecord } from "../types";
 import { payloadStore } from "./payloads";
 export type VerificationReply =
@@ -12,7 +13,7 @@ onmessage = async (event: MessageEvent<MapRecord>) => {
   let checked = 0,
     last = 0;
   try {
-    if (!total) throw new Error("This map has no prepared tiles.");
+    if (!total) throw new Error(t("This map has no prepared tiles."));
     for (let index = 0; index < map.levels.length; index++) {
       const level = map.levels[index]!;
       for (let y = 0; y < level.rows; y++)
@@ -33,14 +34,14 @@ onmessage = async (event: MessageEvent<MapRecord>) => {
             new DataView(header.buffer).getUint32(16) !== expectedWidth ||
             new DataView(header.buffer).getUint32(20) !== expectedHeight
           )
-            throw new Error(`Tile ${key} is damaged.`);
+            throw new Error(t("Tile {key} is damaged.", { key }));
           const bitmap = await createImageBitmap(blob);
           try {
             if (
               bitmap.width !== expectedWidth ||
               bitmap.height !== expectedHeight
             )
-              throw new Error(`Tile ${key} has incorrect dimensions.`);
+              throw new Error(t("Tile {key} has incorrect dimensions.", { key }));
           } finally {
             bitmap.close();
           }

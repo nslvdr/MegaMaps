@@ -10,6 +10,7 @@ import { database, listMaps, saveMap } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { deleteStoredMap, payloadStore } from "../src/storage/payloads";
 import { loadPhoto, prunePhotos, savePhoto } from "../src/storage/photos";
+import { saveSetting } from "../src/storage/settings";
 import type { MapRecord } from "../src/types";
 
 // A container header is enough for image identity checks; decoding stays in the existing importer.
@@ -127,6 +128,21 @@ test("exports carry only the chosen places' photos; imports store photos of adde
 
   await deleteStoredMap(destination);
   assert.equal(await loadPhoto(destination.id, first), undefined, "deleting a map deletes its photos");
+});
+
+test("shares carry the sender's name from settings only when one is set", async () => {
+  const source = record("named-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", image());
+  const share = async () => (await readShare(exportFile(await prepareExport(source, defaultNavigation(source.id)),
+    { markers: [], routes: [], includeImage: true }))).manifest.from;
+  assert.equal(await share(), undefined);
+  await saveSetting("share-name", "  Alex  ");
+  assert.equal(await share(), "Alex");
+  await saveSetting("share-name", "");
+  const { manifest } = await fixture();
+  assert.throws(() => validateManifest({ ...manifest, from: "Alex\u0000" }), /invalid/);
+  assert.throws(() => validateManifest({ ...manifest, from: "x".repeat(101) }), /invalid/);
 });
 
 test("map north travels in shares, fills in an untuned map and never undoes local tuning", async () => {

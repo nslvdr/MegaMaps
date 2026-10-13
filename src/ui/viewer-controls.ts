@@ -27,6 +27,7 @@ import {
 import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
 import { icons } from "./icons";
 import { nextName, plural } from "./format";
+import { t } from "../i18n";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
@@ -41,9 +42,9 @@ type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const rotationModes: Record<RotationMode, { icon: string; label: string; help: string }> = {
-  free: { icon: icons.freeRotation, label: "Normal", help: "Twist with two fingers to turn the map." },
-  compass: { icon: icons.compass, label: "Auto", help: "The map turns with your phone, so it lines up with the world around you." },
-  locked: { icon: icons.rotationLock, label: "Locked", help: "The map keeps its current angle." },
+  free: { icon: icons.freeRotation, label: t("Normal"), help: t("Twist with two fingers to turn the map.") },
+  compass: { icon: icons.compass, label: t("Auto"), help: t("The map turns with your phone, so it lines up with the world around you.") },
+  locked: { icon: icons.rotationLock, label: t("Locked"), help: t("The map keeps its current angle.") },
 };
 /** Auto mode's compass: off, starting, turning the map, or not reaching it. */
 // Every passing message is one pill: a tone sets its icon and outline color.
@@ -59,9 +60,9 @@ const COMPASS_WAIT_MS = 3000;
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
-  inverted: "Colors inverted on pure black",
-  deepened: "Background deepened to black",
-  "already-dark": "Map is already dark",
+  inverted: t("Colors inverted on pure black"),
+  deepened: t("Background deepened to black"),
+  "already-dark": t("Map is already dark"),
 };
 
 // Owns map tools/dialogs and saves; the renderer only knows coordinates/appearance.
@@ -72,7 +73,7 @@ export class ViewerControls {
   > &
     Partial<Pick<Viewer, "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
   private ocr?: OcrIndex;
-  private ocrMessage = "Preparing text detection…";
+  private ocrMessage = t("Preparing text detection…");
   private searchMatches: MapSearchMatch[] = [];
   private searchPosition = -1;
   private searchTimer?: ReturnType<typeof setTimeout>;
@@ -143,7 +144,7 @@ export class ViewerControls {
   ) {
     this.persistence = new NavigationPersistence(
       () => this.state,
-      () => this.toast("Could not save. Free some device storage.", "error"),
+      () => this.toast(t("Could not save. Free some device storage."), "error"),
     );
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
@@ -207,7 +208,7 @@ export class ViewerControls {
       onLongPress: (point) => {
         if (this.tool !== "browse") return;
         navigator.vibrate?.(12);
-        this.openMarker("New place", point);
+        this.openMarker(t("New place"), point);
       },
       onDragStart: () => {
         const route = this.tool === "route" ? this.route() : undefined;
@@ -256,10 +257,10 @@ export class ViewerControls {
   }
   /** Deletes stay two taps, and a few seconds to change your mind after. */
   private deleted(label: string, restore: () => void) {
-    this.toast(`${label} deleted`, "removed", () => {
+    this.toast(t("{name} deleted", { name: label }), "removed", () => {
       restore();
       this.changed();
-      this.toast(`${label} restored`, "done");
+      this.toast(t("{name} restored", { name: label }), "done");
     });
   }
   private sheet(name: Sheet | undefined) {
@@ -432,8 +433,8 @@ export class ViewerControls {
       remove.type = "button";
       remove.className = "photo-remove";
       remove.innerHTML = icons.close;
-      remove.setAttribute("aria-label", `Remove photo ${index + 1}`);
-      remove.title = "Remove photo";
+      remove.setAttribute("aria-label", t("Remove photo {number}", { number: index + 1 }));
+      remove.title = t("Remove photo");
       this.on(remove, "click", () => {
         this.formPhotos = this.formPhotos.filter((photo) => photo !== id);
         this.renderFormPhotos();
@@ -444,7 +445,7 @@ export class ViewerControls {
     this.el("marker-photos-field").hidden = !count;
     const busy = this.photoJobs > 0;
     this.el<HTMLButtonElement>("marker-add-photos").disabled = busy;
-    this.el("marker-add-photos").querySelector("span")!.textContent = busy ? "Adding photos…" : "Add photos";
+    this.el("marker-add-photos").querySelector("span")!.textContent = busy ? t("Adding photos…") : t("Add photos");
     this.el<HTMLButtonElement>("marker-save").disabled = busy;
   }
   /** Photos are shrunk and stored as they are picked; the item keeps them on Save. */
@@ -469,11 +470,11 @@ export class ViewerControls {
       this.renderFormPhotos();
     }
     if (failed) this.toast(failed === files.length && failed === 1
-      ? "This photo could not be added." : `${plural(failed, "photo")} could not be added.`, "error");
+      ? t("This photo could not be added.") : t("{photos} could not be added.", { photos: plural(failed, "photo") }), "error");
   }
   private onTap(point: Point) {
     if (!insideImage(point, this.map)) return;
-    if (this.tool === "marker") this.openMarker("New place", point);
+    if (this.tool === "marker") this.openMarker(t("New place"), point);
     // Moving a place: a tap puts it there, as an alternative to dragging.
     const moving = this.movingPlace();
     if (moving) {
@@ -483,7 +484,7 @@ export class ViewerControls {
     if (this.tool === "route") {
       const route = this.route();
       if (route) {
-        // A new point means the pending "Discard?" no longer applies.
+        // A new point means the pending t("Discard?") no longer applies.
         if (this.confirming === "cancel-route") this.confirming = undefined;
         this.routeHistory.push(copyPoints(route.points));
         route.points.push(point);
@@ -517,14 +518,14 @@ export class ViewerControls {
       if (route.points.length < 2 && before) {
         route.points = before;
         route.draft = false;
-        this.toast(`${route.name} unchanged`, "quiet");
+        this.toast(t("{name} unchanged", { name: route.name }), "quiet");
       } else if (route.points.length >= 2) {
         route.draft = false;
-        this.toast(`${route.name} saved · ${plural(route.points.length, "point")}`, "done");
+        this.toast(t("{name} saved · {points}", { name: route.name, points: plural(route.points.length, "point") }), "done");
       } else {
         this.state.routes = this.state.routes.filter((r) => r.id !== route.id);
         if (route.points.length)
-          this.toast("Route discarded: it needs at least 2 points", "removed");
+          this.toast(t("Route discarded: it needs at least 2 points"), "removed");
       }
       this.changed();
     }
@@ -562,7 +563,7 @@ export class ViewerControls {
     }
     if (changed)
       this.toast(
-        start.points.length ? `${route.name} unchanged` : "Route discarded",
+        start.points.length ? t("{name} unchanged", { name: route.name }) : t("Route discarded"),
         start.points.length ? "quiet" : "removed",
       );
     this.changed();
@@ -591,7 +592,7 @@ export class ViewerControls {
       if (!keep) marker.point = from;
       if (moved) {
         this.toast(
-          keep ? `${marker.label} moved` : `${marker.label} not moved`,
+          keep ? t("{name} moved", { name: marker.label }) : t("{name} not moved", { name: marker.label }),
           keep ? "done" : "quiet",
         );
         this.changed();
@@ -600,7 +601,7 @@ export class ViewerControls {
     this.mode("browse");
   }
   private editMarker(marker: MapMarker) {
-    this.openMarker("Edit place", marker.point, marker);
+    this.openMarker(t("Edit place"), marker.point, marker);
     // Under the card's shade every pin looks alike; this one says it's the one.
     this.viewer?.pulse?.(marker.id);
   }
@@ -608,7 +609,7 @@ export class ViewerControls {
     const card = this.dialog("marker-dialog");
     this.editingMarker = undefined;
     this.markerPoint = undefined;
-    this.openForm("Edit route", route, route);
+    this.openForm(t("Edit route"), route, route);
     this.paintCard(this.routeIcon(route), routeColor(this.state, route.id));
     this.el("marker-delete").hidden = false;
     this.presentCard(true);
@@ -645,7 +646,7 @@ export class ViewerControls {
     this.el("marker-form").hidden = true;
     const edit = this.el("marker-edit");
     edit.hidden = false;
-    edit.title = place ? "Edit place" : "Edit route";
+    edit.title = place ? t("Edit place") : t("Edit route");
     edit.setAttribute("aria-label", edit.title);
     this.el("marker-dialog-title").textContent = "label" in item ? item.label : item.name;
     if ("label" in item) this.paintPlaceCard(item.kind);
@@ -657,7 +658,7 @@ export class ViewerControls {
     photos.replaceChildren(...(item.photos ?? []).map((id, index) => {
       const open = this.root.ownerDocument.createElement("button");
       open.type = "button";
-      open.title = "View full screen";
+      open.title = t("View full screen");
       open.append(this.root.ownerDocument.createElement("img"));
       this.on(open, "click", () => this.showPhotos(item.photos!, index));
       return this.photoImage(id, `Photo ${index + 1} of ${count}`, open);
@@ -665,7 +666,7 @@ export class ViewerControls {
     photos.hidden = !count;
     photos.scrollLeft = 0;
     const details = this.el("marker-details");
-    details.setAttribute("aria-label", place ? "Place details" : "Route details");
+    details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
     details.hidden = !item.description && !count;
     details.scrollTop = 0;
@@ -751,7 +752,7 @@ export class ViewerControls {
       return;
     }
     if (returnToDetails) this.showDetails(route);
-    this.toast(unchanged ? `${name} unchanged` : `${name} updated`, unchanged ? "quiet" : "done");
+    this.toast(unchanged ? t("{name} unchanged", { name }) : t("{name} updated", { name }), unchanged ? "quiet" : "done");
   }
   private spotlight() {
     const stage = this.el("map-stage");
@@ -879,7 +880,7 @@ export class ViewerControls {
     this.click("tool-rename", () => {
       const route = this.route();
       if (route)
-        this.name("Rename route", route.name, (name) => {
+        this.name(t("Rename route"), route.name, (name) => {
           route.name = name;
           this.changed();
         });
@@ -890,7 +891,7 @@ export class ViewerControls {
     this.click("add-route", () => {
       const route: PlannedRoute = {
         id: crypto.randomUUID(),
-        name: nextName("Route", this.state.routes.map((r) => r.name)),
+        name: nextName(t("Route"), this.state.routes.map((r) => r.name)),
         points: [],
         created: Date.now(),
         draft: true,
@@ -1035,7 +1036,7 @@ export class ViewerControls {
       }
       if (returnToDetails) this.showDetails(marker);
       else this.mode("browse");
-      this.toast(!existing ? `${label} saved` : unchanged ? `${label} unchanged` : `${label} updated`,
+      this.toast(!existing ? t("{name} saved", { name: label }) : unchanged ? t("{name} unchanged", { name: label }) : t("{name} updated", { name: label }),
         unchanged ? "quiet" : "done");
     });
     // Move or Edit points from the card keeps what was typed, then lifts the
@@ -1116,8 +1117,8 @@ export class ViewerControls {
       { icon, label, help } = rotationModes[mode];
     const chip = this.el("open-rotation");
     chip.innerHTML = icon;
-    chip.setAttribute("aria-label", `Rotation: ${label}`);
-    chip.title = `Rotation: ${label}`;
+    chip.setAttribute("aria-label", t("Rotation: {mode}", { mode: label }));
+    chip.title = t("Rotation: {mode}", { mode: label });
     if (this.openSheet === "rotation") {
       this.el("sheet-title-icon").innerHTML = icon;
       // Auto turns the map with the phone, so a reset would not hold.
@@ -1126,18 +1127,18 @@ export class ViewerControls {
     for (const each of Object.keys(rotationModes))
       this.input(`rotation-${each}`).checked = each === mode;
     const compassHelp: Partial<Record<CompassStatus, string>> = {
-      waiting: "Looking for the compass…",
+      waiting: t("Looking for the compass…"),
       missing: compassNeedsPermission()
-        ? "Tap Auto to turn on the compass."
-        : "No compass found. Auto needs a phone or tablet.",
-      blocked: "Compass access is off. Allow motion and orientation access for this site, then tap Auto.",
+        ? t("Tap Auto to turn on the compass.")
+        : t("No compass found. Auto needs a phone or tablet."),
+      blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap Auto."),
     };
     this.el("rotation-help").textContent =
       (mode === "compass" && compassHelp[this.compass]) || help;
     this.el("north-field").hidden = mode !== "compass";
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
-    wheel.setAttribute("aria-valuetext", `${north}° clockwise`);
+    wheel.setAttribute("aria-valuetext", t("{degrees}° clockwise", { degrees: north }));
     const row = north - NORTH_MIN;
     wheel.querySelector(".selected")?.classList.remove("selected");
     wheel.children[row]?.classList.add("selected");
@@ -1147,7 +1148,7 @@ export class ViewerControls {
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted
       ? darkMessages[this.darkKind]
-      : "Off: original colors";
+      : t("Off: original colors");
   }
   /** Backs out one level (sheet → tool → browse); false when already browsing. */
   escape() {
@@ -1179,20 +1180,20 @@ export class ViewerControls {
       browse: ["", "", ""],
       move: [
         icons.move,
-        this.movingPlace()?.label ?? "Place",
-        "Drag the pin, or tap where it goes",
+        this.movingPlace()?.label ?? t("Place"),
+        t("Drag the pin, or tap where it goes"),
       ],
-      marker: [icons.pin, "New place", "Tap the map where it goes"],
+      marker: [icons.pin, t("New place"), t("Tap the map where it goes")],
       route: [
         icons.route,
-        route?.name ?? "Route",
+        route?.name ?? t("Route"),
         discarding
           ? this.routeStart?.points.length
-            ? "Tap × again to undo your changes"
-            : "Tap × again to discard this route"
+            ? t("Tap × again to undo your changes")
+            : t("Tap × again to discard this route")
           // Done waits for a second point, so the hint asks for it.
-          : count > 1 ? `${plural(count, "point")} · Tap to add, drag to adjust`
-          : count ? "1 point · Tap where it goes next" : "Tap where the route starts",
+          : count > 1 ? t("{points} · Tap to add, drag to adjust", { points: plural(count, "point") })
+          : count ? t("1 point · Tap where it goes next") : t("Tap where the route starts"),
       ],
     };
     const [icon, title, message] = texts[this.tool];
@@ -1202,7 +1203,7 @@ export class ViewerControls {
     this.el("tool-rename").hidden = this.tool !== "route";
     const cancel = this.el("tool-cancel");
     cancel.classList.toggle("armed", discarding);
-    const cancelLabel = discarding ? "Discard?" : "Cancel";
+    const cancelLabel = discarding ? t("Discard?") : t("Cancel");
     cancel.setAttribute("aria-label", cancelLabel);
     cancel.title = cancelLabel;
     this.el("tool-actions").hidden = this.tool !== "route" && this.tool !== "move";
@@ -1278,7 +1279,7 @@ export class ViewerControls {
     const toggle = document.createElement("button");
     toggle.className = "row-more";
     toggle.innerHTML = icons.more;
-    toggle.setAttribute("aria-label", `Actions for ${options.label}`);
+    toggle.setAttribute("aria-label", t("Actions for {name}", { name: options.label }));
     toggle.setAttribute("aria-haspopup", "menu");
     toggle.setAttribute("aria-expanded", String(open));
     toggle.addEventListener("click", () => {
@@ -1386,10 +1387,10 @@ export class ViewerControls {
     // button fills red instead.
     const button = this.el("marker-delete");
     button.classList.toggle("armed", armed);
-    button.querySelector("span")!.textContent = armed ? "Tap again" : "Delete";
+    button.querySelector("span")!.textContent = armed ? t("Tap again") : t("Delete");
   }
   private deleteLabel(key: string) {
-    return this.confirming === key ? "Tap again to delete" : "Delete";
+    return this.confirming === key ? t("Tap again to delete") : t("Delete");
   }
   private render() {
     this.renderRotation();
@@ -1427,16 +1428,16 @@ export class ViewerControls {
         jump: () => this.showDetails(marker),
         actions: [
           {
-            label: "Edit",
+            label: t("Edit"),
             icon: icons.edit,
             action: () => this.editMarker(marker),
           },
           {
-            label: "Move",
+            label: t("Move"),
             icon: icons.move,
             action: () => this.moveMarker(marker),
           },
-          ...(this.onShare ? [{ label: "Share", icon: icons.share,
+          ...(this.onShare ? [{ label: t("Share"), icon: icons.share,
             action: () => this.onShare?.({ kind: "marker", id: marker.id }) }] : []),
           {
             label: this.deleteLabel(marker.id),
@@ -1466,16 +1467,16 @@ export class ViewerControls {
         jump: () => this.showDetails(route),
         actions: [
           {
-            label: "Edit",
+            label: t("Edit"),
             icon: icons.edit,
             action: () => this.editRouteDetails(route),
           },
           {
-            label: route.draft ? "Continue" : "Edit points",
+            label: route.draft ? t("Continue") : t("Edit points"),
             icon: icons.route,
             action: () => this.editRoute(route),
           },
-          ...(this.onShare && !route.draft ? [{ label: "Share", icon: icons.share,
+          ...(this.onShare && !route.draft ? [{ label: t("Share"), icon: icons.share,
             action: () => this.onShare?.({ kind: "route", id: route.id }) }] : []),
           {
             label: this.deleteLabel(route.id),
@@ -1491,8 +1492,8 @@ export class ViewerControls {
     }
     // Empty lists keep a short status message.
     for (const [container, empty] of [
-      [markers, "No places yet."],
-      [routes, "No routes yet."],
+      [markers, t("No places yet.")],
+      [routes, t("No routes yet.")],
     ] as const)
       if (!container.childElementCount) {
         const item = document.createElement("li");
@@ -1562,25 +1563,25 @@ export class ViewerControls {
     const count = this.searchMatches.length;
     const stepping = count > 1 && this.searchPosition >= 0;
     const message = active
-      ? stepping ? `Match ${this.searchPosition + 1} of ${count}`
-        : count ? `${count} ${count === 1 ? "match" : "matches"}`
-        : this.ocr ? "No matching text or saved places found." : "No matching saved places yet."
-      : "Search map text and saved places. Drag and zoom to explore.";
-    const progress = this.ocrMessage || (!this.ocr ? "Text detection is not ready. Open the map’s Advanced settings to retry." : "");
+      ? stepping ? t("Match {current} of {total}", { current: this.searchPosition + 1, total: count })
+        : count ? plural(count, "match")
+        : this.ocr ? t("No matching text or saved places found.") : t("No matching saved places yet.")
+      : t("Search map text and saved places. Drag and zoom to explore.");
+    const progress = this.ocrMessage || (!this.ocr ? t("Text detection is not ready. Open the map’s Advanced settings to retry.") : "");
     this.el("search-status").textContent = progress ? `${message} · ${progress}` : message;
     // The count doubles as Next, so a touch screen can step through matches
     // once Enter has put the keyboard away; it then shows where you are.
     const badge = this.el<HTMLButtonElement>("search-count");
     // A bare grey 0 is easy to miss; a miss says so in words.
     badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
-      : count ? `${count} ${count === 1 ? "match" : "matches"}` : "No matches";
+      : count ? plural(count, "match") : t("No matches");
     badge.insertAdjacentHTML("beforeend", icons.next);
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);
     badge.setAttribute("aria-label", stepping
-      ? `Match ${this.searchPosition + 1} of ${count}. Next match`
-      : `${count} ${count === 1 ? "result" : "results"}`);
+      ? t("Match {current} of {total}. Next match", { current: this.searchPosition + 1, total: count })
+      : plural(count, "result"));
     this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {

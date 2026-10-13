@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 // Prepare the offline shell automatically; explicit checks verify readiness.
 export async function registerOfflineShell() {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
@@ -19,7 +20,7 @@ export async function verifyOfflineShell(): Promise<{
   if (!("serviceWorker" in navigator))
     return {
       ready: false,
-      message: "Offline startup needs a browser with service-worker support.",
+      message: t("Offline startup needs a browser with service-worker support."),
     };
   const registration = await navigator.serviceWorker.getRegistration("/");
   const worker = navigator.serviceWorker.controller ?? registration?.active;
@@ -27,7 +28,7 @@ export async function verifyOfflineShell(): Promise<{
     return {
       ready: false,
       message:
-        "Use the production build over HTTPS (or localhost) and wait for the app to finish its offline setup.",
+        t("Use the production build over HTTPS (or localhost) and wait for the app to finish its offline setup."),
     };
   return new Promise((resolve) => {
     const channel = new MessageChannel();
@@ -41,7 +42,7 @@ export async function verifyOfflineShell(): Promise<{
         finish({
           ready: false,
           message:
-            "Close other Mega Maps windows and reopen to finish the app update, then check again.",
+            t("Close other Mega Maps windows and reopen to finish the app update, then check again."),
         }),
       5000,
     );
@@ -51,8 +52,8 @@ export async function verifyOfflineShell(): Promise<{
       finish({
         ready: event.data.ready,
         message: event.data.ready
-          ? "App shell checked offline."
-          : "Some application files are missing. Reopen online to prepare the app, then check again.",
+          ? t("App shell checked offline.")
+          : t("Some application files are missing. Reopen online to prepare the app, then check again."),
       });
     worker.postMessage({ type: "verify-shell" }, [channel.port2]);
   });

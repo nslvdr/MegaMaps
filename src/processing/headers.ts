@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { MAX_FILE_BYTES, MAX_PIXELS, type ImageHeader } from "../types";
 const text = (bytes: Uint8Array, start: number, count: number) =>
   String.fromCharCode(...bytes.subarray(start, start + count));
@@ -23,7 +24,7 @@ function exifOrientation(data: Uint8Array): number {
 // Read container headers without decoding pixels or loading the whole original.
 export async function readHeader(file: Blob): Promise<ImageHeader> {
   if (file.size > MAX_FILE_BYTES)
-    throw new Error("This version supports files up to 256 MB.");
+    throw new Error(t("This version supports files up to 256 MB."));
   const b = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const v = new DataView(b.buffer);
   let header: ImageHeader;
@@ -45,7 +46,7 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
     // JPEG segments have at most 64 KB each; don't assume SOF is in the first chunk.
     while (p < file.size) {
       const marker = new Uint8Array(await file.slice(p, p + 4).arrayBuffer());
-      if (marker[0] !== 0xff) throw new Error("Invalid JPEG marker.");
+      if (marker[0] !== 0xff) throw new Error(t("Invalid JPEG marker."));
       if (marker[1] === 0xff) {
         p++;
         continue;
@@ -56,10 +57,10 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
         p += 2;
         continue;
       }
-      if (marker.length < 4) throw new Error("Truncated JPEG header.");
+      if (marker.length < 4) throw new Error(t("Truncated JPEG header."));
       const length = (marker[2]! << 8) | marker[3]!;
       if (length < 2 || p + 2 + length > file.size)
-        throw new Error("Invalid JPEG segment.");
+        throw new Error(t("Invalid JPEG segment."));
       if (code === 0xe1) {
         const segment = new Uint8Array(
           await file.slice(p + 4, p + 2 + length).arrayBuffer(),
@@ -78,12 +79,12 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
       }
       p += 2 + length;
     }
-    if (!found) throw new Error("Unsupported or invalid JPEG.");
+    if (!found) throw new Error(t("Unsupported or invalid JPEG."));
     header = { ...found, orientation };
   } else if (text(b, 0, 4) === "RIFF" && text(b, 8, 4) === "WEBP") {
     const kind = text(b, 12, 4);
     if (kind === "VP8X" && b[20]! & 2)
-      throw new Error("Animated WebP is not supported. Choose a still image.");
+      throw new Error(t("Animated WebP is not supported. Choose a still image."));
     if (kind === "VP8X")
       header = {
         width: 1 + b[24]! + (b[25]! << 8) + (b[26]! << 16),
@@ -111,8 +112,8 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
         format: "webp",
         orientation: 1,
       };
-    } else throw new Error("Unsupported WebP header.");
-  } else throw new Error("Choose a JPEG, PNG, or WebP image.");
+    } else throw new Error(t("Unsupported WebP header."));
+  } else throw new Error(t("Choose a JPEG, PNG, or WebP image."));
   if (
     !header.width ||
     !header.height ||
@@ -120,7 +121,7 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
     Math.max(header.width, header.height) > 32768
   )
     throw new Error(
-      "Image exceeds the 300 megapixel / 32,768 pixel per side limit.",
+      t("Image exceeds the 300 megapixel / 32,768 pixel per side limit."),
     );
   return header;
 }

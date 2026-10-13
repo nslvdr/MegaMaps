@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ImageHeader } from "../types";
 export type RowConsumer = (rgba: Uint8ClampedArray, y: number) => Promise<void>;
 interface PNGInfo {
@@ -21,21 +22,21 @@ async function inspect(file: Blob): Promise<PNGInfo> {
     (color !== 0 && color !== 3 && depth < 8) ||
     (color === 3 && depth === 16)
   )
-    throw new Error("Unsupported PNG pixel format.");
+    throw new Error(t("Unsupported PNG pixel format."));
   const info: PNGInfo = { depth, color, ranges: [] };
   for (let p = 8; p < file.size; ) {
     const chunk = new Uint8Array(await file.slice(p, p + 8).arrayBuffer());
-    if (chunk.length !== 8) throw new Error("Truncated PNG chunk.");
+    if (chunk.length !== 8) throw new Error(t("Truncated PNG chunk."));
     const length = new DataView(chunk.buffer).getUint32(0);
     const kind = nameOf(chunk.subarray(4));
-    if (p + 12 + length > file.size) throw new Error("Truncated PNG data.");
+    if (p + 12 + length > file.size) throw new Error(t("Truncated PNG data."));
     if (kind === "IDAT" && length) {
       if (info.ranges.length > 100_000)
-        throw new Error("PNG has too many data chunks.");
+        throw new Error(t("PNG has too many data chunks."));
       info.ranges.push([p + 8, length]);
     }
     if (kind === "PLTE" || kind === "tRNS") {
-      if (length > 768) throw new Error("Invalid PNG palette.");
+      if (length > 768) throw new Error(t("Invalid PNG palette."));
       const data = new Uint8Array(
         await file.slice(p + 8, p + 8 + length).arrayBuffer(),
       );
@@ -43,12 +44,12 @@ async function inspect(file: Blob): Promise<PNGInfo> {
       else info.transparency = data;
     }
     if (kind === "acTL")
-      throw new Error("Animated PNG is not supported. Choose a still image.");
+      throw new Error(t("Animated PNG is not supported. Choose a still image."));
     if (kind === "IEND") break;
     p += length + 12;
   }
   if (!info.ranges.length || (color === 3 && !info.palette))
-    throw new Error("PNG pixel data is missing.");
+    throw new Error(t("PNG pixel data is missing."));
   return info;
 }
 export function unfilter(
@@ -57,7 +58,7 @@ export function unfilter(
   bpp: number,
   filter: number,
 ) {
-  if (filter > 4) throw new Error("Invalid PNG row filter.");
+  if (filter > 4) throw new Error(t("Invalid PNG row filter."));
   for (let i = 0; i < row.length; i++) {
     const a = i >= bpp ? row[i - bpp]! : 0,
       b = previous[i]!,
@@ -124,7 +125,7 @@ export async function decodePNG(
     while (written < target.length) {
       if (cursor === chunk.length) {
         const next = await reader.read();
-        if (next.done) throw new Error("Truncated PNG pixel stream.");
+        if (next.done) throw new Error(t("Truncated PNG pixel stream."));
         chunk = next.value;
         cursor = 0;
       }
@@ -163,7 +164,7 @@ export async function decodePNG(
           a = sample(s);
         if (info.color === 3) {
           if (a * 3 + 2 >= info.palette!.length)
-            throw new Error("Invalid PNG palette index.");
+            throw new Error(t("Invalid PNG palette index."));
           rgba[p] = info.palette![a * 3]!;
           rgba[p + 1] = info.palette![a * 3 + 1]!;
           rgba[p + 2] = info.palette![a * 3 + 2]!;
@@ -196,7 +197,7 @@ export async function decodePNG(
       [row, previous] = [previous, row];
     }
     if (cursor !== chunk.length || !(await reader.read()).done)
-      throw new Error("PNG has extra pixel data.");
+      throw new Error(t("PNG has extra pixel data."));
   } finally {
     await reader.cancel().catch(() => {});
   }

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { TILE_SIZE, type ImportProgress } from "../types";
 import { OcrTileCache } from "./tiles";
 import { addOcrLine, OCR_VERSION, type OcrIndex, type OcrLine } from "./index";
@@ -255,7 +256,7 @@ export async function scanMap(
     const fraction = parts.reduce((sum, done) => sum + done) / crops.length;
     onProgress({
       fraction,
-      message: `Finding text · ${Math.floor(fraction * 100)}%`,
+      message: t("Finding text · {percent}%", { percent: Math.floor(fraction * 100) }),
     });
   };
   let next = 0,

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { MapRecord } from "../types";
 let opening: Promise<IDBDatabase> | undefined;
 export function database() {
@@ -36,7 +37,7 @@ export function database() {
     };
     request.onblocked = () => {
       opening = undefined;
-      reject(new Error("Close other Mega Maps tabs to update local storage."));
+      reject(new Error(t("Close other Mega Maps tabs to update local storage.")));
     };
   }));
 }
@@ -53,7 +54,7 @@ export async function transact<T>(
     tx.oncomplete = () => resolve(request.result);
     tx.onabort = () =>
       reject(
-        tx.error ?? request.error ?? new Error("Storage transaction aborted."),
+        tx.error ?? request.error ?? new Error(t("Storage transaction aborted.")),
       );
     tx.onerror = () => reject(tx.error ?? request.error);
   });
@@ -80,17 +81,17 @@ function patchMap(id: string, patch: Partial<MapRecord>, failure: string) {
     };
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(missing
-      ? new Error("This map is no longer available.")
+      ? new Error(t("This map is no longer available."))
       : tx.error ?? new Error(failure));
   }));
 }
 export async function renameMap(id: string, name: string) {
   const trimmed = name.trim();
-  if (!trimmed) throw new Error("Enter a map name.");
-  return patchMap(id, { name: trimmed }, "Could not save the map name.");
+  if (!trimmed) throw new Error(t("Enter a map name."));
+  return patchMap(id, { name: trimmed }, t("Could not save the map name."));
 }
 // The library lists the maps in use first.
 export const markOpened = (id: string, opened = Date.now()) =>
-  patchMap(id, { opened }, "Could not note when the map was opened.");
+  patchMap(id, { opened }, t("Could not note when the map was opened."));
 export const removeRecord = (id: string) =>
   transact("maps", "readwrite", (s) => s.delete(id));

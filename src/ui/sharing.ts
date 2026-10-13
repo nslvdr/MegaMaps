@@ -8,20 +8,22 @@ import { exportFile, matchingMaps, prepareExport, type ImportMode, type Prepared
 import { loadNavigation } from "../storage/navigation";
 import { displayName, formatBytes, plural } from "./format";
 import { icons } from "./icons";
+import { t } from "../i18n";
+import { downloadFile } from "./save-file";
 import { placeIcon } from "./place-icon";
 
 export const sharingMarkup = `
-<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main">${dialogHeader("share-title", "Share map", icons.share, "share-cancel")}<p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">Preparing share…</p>
-<div id="share-content" hidden><div class="share-summary"><button id="share-places" class="share-row" data-kind="marker"><span class="share-row-icon share-place">${icons.pin}</span><span class="share-row-label">Places</span><span id="share-places-count" class="share-row-value"></span>${icons.arrow}</button><button id="share-routes" class="share-row" data-kind="route"><span class="share-row-icon share-route">${icons.route}</span><span class="share-row-label">Routes</span><span id="share-routes-count" class="share-row-value"></span>${icons.arrow}</button>
-<label class="share-row"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">Map image<small>Your friend won’t need the original</small></span><input id="share-image" class="switch" type="checkbox" role="switch"></label></div><p id="share-size" class="share-size" role="status" aria-live="polite"></p></div>
-<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>Share file</span></button></div></div>
-<div id="share-picker" hidden>${dialogHeader("share-picker-title", "", icons.pin, "share-picker-close")}<button id="share-back" class="share-back">${icons.arrow}<span>Share map</span></button><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>All</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>None</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
-<div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>Done</span></button></div></div></dialog>
-<dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title">${dialogHeader("receive-title", "Import shared map", icons.download, "receive-cancel")}<p id="receive-summary"></p><p id="receive-loading" role="status">Looking for a matching map…</p>
-<div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">Add to</h3><div id="receive-destinations" class="share-summary" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
-<div id="receive-mode-field" hidden><h3 id="receive-mode-title" class="share-heading">Your places and routes</h3><div class="share-segments" role="radiogroup" aria-labelledby="receive-mode-title"><label><input type="radio" name="receive-mode" value="merge" checked>${icons.merge}<span>Merge</span></label><label class="share-segment-danger"><input type="radio" name="receive-mode" value="replace">${icons.rotateRight}<span>Replace</span></label></div></div>
-<p id="receive-note" class="dialog-note"></p><label id="receive-image-field" class="share-field" hidden>Original map image<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>Choose the exact original image used by the sender.</small></label></div>
-<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>Import</span></button></div></dialog>`;
+<dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main">${dialogHeader("share-title", t("Share map"), icons.share, "share-cancel")}<p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">${t("Preparing share…")}</p>
+<div id="share-content" hidden><div class="share-summary"><button id="share-places" class="share-row" data-kind="marker"><span class="share-row-icon share-place">${icons.pin}</span><span class="share-row-label">${t("Places")}</span><span id="share-places-count" class="share-row-value"></span>${icons.arrow}</button><button id="share-routes" class="share-row" data-kind="route"><span class="share-row-icon share-route">${icons.route}</span><span class="share-row-label">${t("Routes")}</span><span id="share-routes-count" class="share-row-value"></span>${icons.arrow}</button>
+<label class="share-row"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">${t("Map image")}<small>${t("Your friend won’t need the original")}</small></span><input id="share-image" class="switch" type="checkbox" role="switch"></label></div><p id="share-size" class="share-size" role="status" aria-live="polite"></p></div>
+<p id="share-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="share-send" class="primary" disabled>${icons.share}<span>${t("Share file")}</span></button></div></div>
+<div id="share-picker" hidden>${dialogHeader("share-picker-title", "", icons.pin, "share-picker-close")}<button id="share-back" class="share-back">${icons.arrow}<span>${t("Share map")}</span></button><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>${t("All")}</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>${t("None")}</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
+<div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>${t("Done")}</span></button></div></div></dialog>
+<dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title">${dialogHeader("receive-title", t("Import shared map"), icons.download, "receive-cancel")}<p id="receive-summary"></p><p id="receive-loading" role="status">${t("Looking for a matching map…")}</p>
+<div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">${t("Add to")}</h3><div id="receive-destinations" class="share-summary" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
+<div id="receive-mode-field" hidden><h3 id="receive-mode-title" class="share-heading">${t("Your places and routes")}</h3><div class="share-segments" role="radiogroup" aria-labelledby="receive-mode-title"><label><input type="radio" name="receive-mode" value="merge" checked>${icons.merge}<span>${t("Merge")}</span></label><label class="share-segment-danger"><input type="radio" name="receive-mode" value="replace">${icons.rotateRight}<span>${t("Replace")}</span></label></div></div>
+<p id="receive-note" class="dialog-note"></p><label id="receive-image-field" class="share-field" hidden>${t("Original map image")}<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>${t("Choose the exact original image used by the sender.")}</small></label></div>
+<p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>${t("Import")}</span></button></div></dialog>`;
 
 export interface ShareDestination { mapId?: string; image?: File; mode: ImportMode }
 export interface ShareImportResult { map: MapRecord; added: number; skipped: number; removed?: number }
@@ -79,12 +81,12 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("share-size").replaceChildren();
     for (const [id, kind] of [["share-places-count", "marker"], ["share-routes-count", "route"]] as const) {
       const inputs = kindInputs(kind), picked = inputs.filter((input) => input.checked).length;
-      el(id).textContent = !inputs.length ? "None saved" : picked === inputs.length ? `All ${picked}` : picked ? `${picked} of ${inputs.length}` : "None";
+      el(id).textContent = !inputs.length ? t("None saved") : picked === inputs.length ? t("All {count}", { count: picked }) : picked ? t("{picked} of {total}", { picked, total: inputs.length }) : t("None");
     }
     // One place or route on its own is named, confirming what Share picked.
     const chosen = [...kindInputs("marker"), ...kindInputs("route")].filter((input) => input.checked);
     el("share-title").textContent = chosen.length === 1 && !includeImage.checked
-      ? `Share ${chosen[0]!.dataset.name}` : "Share map";
+      ? t("Share {name}", { name: chosen[0]!.dataset.name! }) : t("Share map");
     if (picking) {
       const inputs = kindInputs(picking), picked = inputs.filter((input) => input.checked).length;
       el("share-all").setAttribute("aria-pressed", String(picked === inputs.length));
@@ -94,7 +96,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       try {
         file = exportFile(prepared, selection());
         const kind = root.ownerDocument.createElement("span"), size = root.ownerDocument.createElement("b");
-        kind.textContent = includeImage.checked ? "With map image" : "Annotations only";
+        kind.textContent = includeImage.checked ? t("With map image") : t("Annotations only");
         size.textContent = formatBytes(file.size);
         el("share-size").append(kind, size);
       } catch (error) {
@@ -110,22 +112,11 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("share-main").hidden = !!kind;
     el("share-picker").hidden = !kind;
     if (kind) {
-      el("share-picker-title").textContent = kind === "marker" ? "Places" : "Routes";
+      el("share-picker-title").textContent = kind === "marker" ? t("Places") : t("Routes");
       el("share-picker-title-icon").innerHTML = kind === "marker" ? icons.pin : icons.route;
       for (const label of items.children) (label as HTMLElement).hidden = label.querySelector("input")?.dataset.kind !== kind;
     }
     updateFile();
-  };
-  const download = () => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const link = root.ownerDocument.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    root.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
   el("share-send").addEventListener("click", async () => {
     if (!file || exporting) return;
@@ -133,8 +124,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     try {
       // Browsers without file sharing (e.g. desktop Firefox) get a download instead.
       if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
-        download();
-        el("share-size").textContent = "File saved. Send it from your files app.";
+        downloadFile(file, root);
+        el("share-size").textContent = t("File saved. Send it from your files app.");
         return;
       }
       exportBusy(true);
@@ -185,7 +176,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
   };
   const sharedItems = () => {
     const share = received!.manifest;
-    return `${plural(share.markers.length, "place")} and ${plural(share.routes.length, "route")}`;
+    return t("{places} and {routes}", { places: plural(share.markers.length, "place"), routes: plural(share.routes.length, "route") });
   };
   const setImportLabel = (icon: string, text: string) => {
     const button = el("receive-import"), label = root.ownerDocument.createElement("span");
@@ -207,16 +198,18 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     const own = counts.get(value);
     note.classList.toggle("dialog-error", replace);
     if (!map) {
-      note.textContent = `Creates a separate map with the shared ${sharedItems()}. Your existing maps stay as they are.`;
-      setImportLabel(icons.download, "Import as new map");
+      note.textContent = t("Creates a separate map with the shared {items}. Your existing maps stay as they are.", { items: sharedItems() });
+      setImportLabel(icons.download, t("Import as new map"));
     } else if (replace) {
       note.textContent = own && own.places + own.routes
-        ? `Deletes your ${plural(own.places, "place")} and ${plural(own.routes, "route")} on this map and keeps only the shared ones. This can’t be undone.`
-        : "Uses only the shared places and routes. This map has none of its own yet.";
-      setImportLabel(icons.rotateRight, `Replace on ${name}`);
+        ? t("Deletes your {places} and {routes} on this map and keeps only the shared ones. This can’t be undone.", { places: plural(own.places, "place"), routes: plural(own.routes, "route") })
+        : t("Uses only the shared places and routes. This map has none of its own yet.");
+      setImportLabel(icons.rotateRight, t("Replace on {name}", { name }));
     } else {
-      note.textContent = `${own && own.places + own.routes ? `Keeps your ${plural(own.places, "place")} and ${plural(own.routes, "route")}` : "Keeps this map as it is"} and adds the new ones. Items you already imported are skipped.`;
-      setImportLabel(icons.merge, `Merge into ${name}`);
+      note.textContent = own && own.places + own.routes
+        ? t("Keeps your {places} and {routes} and adds the new ones. Items you already imported are skipped.", { places: plural(own.places, "place"), routes: plural(own.routes, "route") })
+        : t("Keeps this map as it is and adds the new ones. Items you already imported are skipped.");
+      setImportLabel(icons.merge, t("Merge into {name}", { name }));
     }
   }
   /** One row per map made from the same image, plus a new map; nothing else can line up. */
@@ -257,8 +250,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
         thumbnail.replaceChildren(image);
       }, () => {});
     };
-    for (const map of maps) addRow(map.id, displayName(map.name), "Same map", map);
-    addRow("new", "New map", single ? "None of your maps match this one" : received?.image ? "Uses the image in the file" : "Needs the original map image");
+    for (const map of maps) addRow(map.id, displayName(map.name), t("Same map"), map);
+    addRow("new", t("New map"), single ? t("None of your maps match this one") : received?.image ? t("Uses the image in the file") : t("Needs the original map image"));
     const selected = destinations.querySelector<HTMLInputElement>(`input[value="${maps[0]?.id ?? "new"}"]`)!;
     selected.checked = true;
   }
@@ -311,7 +304,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("receive-content").hidden = true;
     el("receive-loading").hidden = false;
     el("receive-error").hidden = true;
-    el("receive-summary").textContent = "Reading shared file…";
+    el("receive-summary").textContent = t("Reading shared file…");
     suppliedImage.value = "";
     updateImport();
     if (!receiveDialog.open) showDialog(receiveDialog);
@@ -320,7 +313,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       if (version !== receiveVersion) return;
       const share = parsed.manifest;
       const photos = share.photos?.length ? ` · ${plural(share.photos.length, "photo")}` : "";
-      el("receive-summary").textContent = `${displayName(share.map.name)}\n${plural(share.markers.length, "place")}${photos} · ${plural(share.routes.length, "route")} · ${parsed.image ? "Map image included" : "Annotations only"}`;
+      const from = share.from ? `\n${t("Shared by {name}", { name: share.from })}` : "";
+      el("receive-summary").textContent = `${displayName(share.map.name)}${from}\n${plural(share.markers.length, "place")}${photos} · ${plural(share.routes.length, "route")} · ${parsed.image ? t("Map image included") : t("Annotations only")}`;
       const available = (await options.maps()).filter((map) => map.status === "ready" && map.width === share.map.width && map.height === share.map.height);
       const exact = await matchingMaps(share, available, controller.signal);
       const states = await Promise.all(exact.map((id) => loadNavigation(id)));
@@ -351,7 +345,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       el("share-main").hidden = false;
       el("share-picker").hidden = true;
       el("share-map-name").textContent = displayName(map.name);
-      el("share-title").textContent = "Share map";
+      el("share-title").textContent = t("Share map");
       el("share-loading").hidden = false;
       el("share-content").hidden = true;
       el("share-error").hidden = true;

@@ -94,3 +94,51 @@ test("footer reports offline use and connection separately and stamps the loaded
     }
   }
 });
+
+test("footer swaps the release stamp for a ready update only when the live site says so", async () => {
+  const { window, document } = parseHTML(`<html><head><meta name="app-built-at" content="${new Date(2026, 9, 8, 7, 5).toISOString()}"></head><body><main id="home">${libraryFooterMarkup}</main></body></html>`);
+  const browser = { onLine: true, serviceWorker: undefined };
+  const names = ["document", "window", "navigator", "fetch"] as const;
+  const previous = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+  Object.defineProperty(window, "setInterval", { value: () => 0, configurable: true });
+  let latest: boolean | Error = true;
+  let checks = 0;
+  const globals = { document, window, navigator: browser, fetch: async () => {
+    if (!browser.onLine) throw new TypeError("Network unavailable");
+    return Response.json({ app: "mega-maps" });
+  } };
+  for (const name of names)
+    Object.defineProperty(globalThis, name, { value: globals[name], configurable: true });
+  try {
+    const refresh = initLibraryFooter(document.querySelector<HTMLElement>("#home")!, async () => {
+      checks++;
+      if (latest instanceof Error) throw latest;
+      return latest;
+    });
+    const read = () => [
+      document.getElementById("app-update-status")!.dataset.state,
+      document.querySelector<HTMLElement>("#app-update-status strong > :not([hidden])")!.textContent,
+      document.getElementById("update-hint")!.textContent,
+    ];
+    await refresh();
+    assert.deepEqual(read(), ["ready", "Update ready", "Tap to install"]);
+
+    // Offline or a failed check can't tell, so the last answer stays.
+    browser.onLine = false;
+    await refresh();
+    assert.equal(checks, 1);
+    browser.onLine = true;
+    latest = new Error("Host unavailable");
+    await refresh();
+    assert.deepEqual(read(), ["ready", "Update ready", "Tap to install"]);
+
+    latest = false;
+    await refresh();
+    assert.deepEqual(read(), ["", "08/10 07:05", "Last update"]);
+  } finally {
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  }
+});

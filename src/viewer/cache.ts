@@ -1,5 +1,6 @@
 import { tileKey } from "../types";
 import type { PayloadStore } from "../storage/payloads";
+import { t } from "../i18n";
 export interface TileRequest {
   level: number;
   x: number;
@@ -101,7 +102,7 @@ export class TileCache {
       if (!this.disposed && this.wanted.has(key)) {
         this.failed.add(key);
         this.onError(
-          "A map tile could not be read. Reopen the map or reimport the original.",
+          t("A map tile could not be read. Reopen the map or reimport the original."),
         );
       }
     } finally {

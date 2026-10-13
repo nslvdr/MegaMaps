@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ImportProgress, MapRecord } from "../types";
 import { database } from "../storage/database";
 import { payloadStore, deleteStoredMap } from "../storage/payloads";
@@ -5,6 +6,7 @@ import { defaultNavigation, normalizeNavigation, type MapMarker, type Navigation
 import { importMap } from "../processing/import";
 import { readHeader } from "../processing/headers";
 import { loadPhotos, putPhotos } from "../storage/photos";
+import { loadSetting } from "../storage/settings";
 import { mergeAnnotations, replaceAnnotations } from "./annotations";
 import { fingerprint, encodeShare, shareFilename, verifyImage, type SharedMap, type ShareManifest } from "./format";
 
@@ -56,6 +58,7 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
   const image = { name: `map.${extension}`, type: `image/${header.format}`, bytes: original.size };
   const routes = state.routes.filter((route) => !route.draft && route.points.length >= 2);
   const photos = await loadPhotos(map.id, [...state.markers, ...routes].flatMap((item) => item.photos ?? []));
+  const from = (await loadSetting("share-name"))?.trim();
   // A photo missing from storage is dropped instead of breaking the share.
   const stored = <T extends MapMarker | PlannedRoute>(item: T) => {
     const copy = structuredClone(item);
@@ -70,6 +73,7 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
     photos,
     routes: routes.map(stored),
     northOffset: state.northOffset,
+    from,
     image, original,
   };
 }
@@ -88,6 +92,7 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
     ...(prepared.northOffset ? { northOffset: prepared.northOffset } : {}),
+    ...(prepared.from ? { from: prepared.from } : {}),
     ...(selection.includeImage ? { image: prepared.image } : {}) };
   return new File([encodeShare(manifest, selection.includeImage ? prepared.original : undefined, prepared.photos)],
     shareFilename(prepared.map.name), { type: "application/octet-stream" });
@@ -114,12 +119,12 @@ export async function importAnnotations(
     let failure: Error | undefined;
     stateRequest.onsuccess = () => {
       const map = mapRequest.result;
-      if (!map || map.status !== "ready") failure = new Error("This map is no longer available.");
+      if (!map || map.status !== "ready") failure = new Error(t("This map is no longer available."));
       else if (map.width !== manifest.map.width || map.height !== manifest.map.height)
-        failure = new Error("Choose a map with the same dimensions as the shared map.");
+        failure = new Error(t("Choose a map with the same dimensions as the shared map."));
       // Places are pixel positions, so only the exact same image keeps them aligned.
       else if (map.fingerprint !== manifest.map.fingerprint)
-        failure = new Error("This map doesn’t use the same image as the shared map.");
+        failure = new Error(t("This map doesn’t use the same image as the shared map."));
       if (failure) { tx.abort(); return; }
       const state = stateRequest.result ? normalizeNavigation(stateRequest.result) : defaultNavigation(mapId);
       const next = mode === "replace" ? replaceAnnotations(state, manifest) : { ...mergeAnnotations(state, manifest), removed: 0 };
@@ -132,7 +137,7 @@ export async function importAnnotations(
     tx.oncomplete = () => { finish(); resolve(result); };
     tx.onabort = () => {
       finish();
-      reject(signal?.aborted ? signal.reason : failure ?? tx.error ?? new Error("Could not import annotations."));
+      reject(signal?.aborted ? signal.reason : failure ?? tx.error ?? new Error(t("Could not import annotations.")));
     };
     // Request errors also bubble here before tx.error is final. Reject on abort.
   });
@@ -143,7 +148,7 @@ export async function importNewCopy(
   share: SharedMap, image: File, onProgress: (progress: ImportProgress) => void,
   signal: AbortSignal, create = importMap,
 ) {
-  onProgress({ fraction: 0, message: "Checking map image…" });
+  onProgress({ fraction: 0, message: t("Checking map image…") });
   await verifyImage(image, share.manifest, signal);
   let map: MapRecord | undefined;
   try {
