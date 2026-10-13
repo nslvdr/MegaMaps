@@ -557,20 +557,13 @@ small {
   width: 22px;
   height: 22px;
 }
+/* Groups breathe apart; a heading sits close to its own card. */
 .settings-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  margin: var(--space-24) 0 var(--space-8);
+  margin: var(--space-32) var(--space-12) var(--space-8);
   font-size: var(--font-size-small);
   font-weight: 650;
   letter-spacing: 0;
   color: var(--muted);
-}
-.settings-heading svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 .settings-page .share-summary {
   margin-top: 0;
@@ -611,7 +604,7 @@ small {
   pointer-events: none;
 }
 .settings-page .settings-erase {
-  margin-top: var(--space-24);
+  margin-top: var(--space-32);
 }
 #settings-erase,
 #settings-erase .settings-icon {
@@ -624,9 +617,10 @@ small {
 #settings-update[data-state="ready"] small {
   color: var(--neon-add);
 }
+/* Notes line up with the row labels above them. */
 .settings-note,
 .settings-error {
-  margin: var(--space-8) 0 0;
+  margin: var(--space-8) var(--space-12) 0;
   font-size: var(--font-size-small);
   line-height: 1.55;
   color: var(--muted);

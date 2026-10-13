@@ -8,22 +8,28 @@ import { backupDue, backupSummary, createBackup, readBackup, type Backup } from 
 import { listMaps } from "../storage/database";
 import { loadSetting, saveSetting } from "../storage/settings";
 
-const heading = (icon: string, text: string) => `<h2 class="settings-heading">${icon}${text}</h2>`;
+const heading = (text: string) => `<h2 class="settings-heading">${text}</h2>`;
+
+// Explanations sit under their group at full width, so rows stay one line beside their controls.
+const note = (text: string, id = "") => `<p class="settings-note"${id && ` id="${id}"`}>${text}</p>`;
 
 const row = (id: string, icon: string, label: string, description = "", tag = "button") =>
   `<${tag} class="share-row" id="${id}"><span class="share-row-icon settings-icon">${icon}<span class="update-dot" aria-hidden="true"></span></span><span class="share-row-label">${label}<small id="${id}-status">${description}</small></span>${tag === "button" ? icons.arrow : ""}</${tag}>`;
 
-const choice = <K extends keyof Preferences>(key: K, icon: string, label: string, description: string, options: [Preferences[K], string][]) =>
-  `<label class="share-row"><span class="share-row-icon settings-icon">${icon}</span><span class="share-row-label">${label}<small>${description}</small></span><span class="settings-select"><select name="${key}">${options.map(([value, text]) =>
+const choice = <K extends keyof Preferences>(key: K, icon: string, label: string, options: [Preferences[K], string][]) =>
+  `<label class="share-row"><span class="share-row-icon settings-icon">${icon}</span><span class="share-row-label">${label}</span><span class="settings-select"><select name="${key}">${options.map(([value, text]) =>
     `<option value="${value}"${value === preference(key) ? " selected" : ""}>${text}</option>`).join("")}</select>${icons.chevronDown}</span></label>`;
 
 // Language names stay in their own language, so either can be found.
 export const settingsMarkup = `<section id="settings" class="settings-page" aria-labelledby="settings-title" hidden><div class="top-edge" aria-hidden="true"></div>
 <header class="page-header"><button type="button" class="page-back" id="settings-back" aria-label="${t("Back")}" title="${t("Back")}">${icons.arrow}</button><h1 id="settings-title">${t("Settings")}</h1></header>
-${heading(icons.display, t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), t("Menus and messages. Names you typed stay as they are"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), t("Large reads better in the dark but covers more of the map"), [["standard", t("Standard")], ["large", t("Large")]])}</div>
-${heading(icons.share, t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}<small>${t("Appears as “Shared by …” on maps you send")}</small></span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
-${heading(icons.backups, t("Backup"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps from a .megabackup file and keeps the ones already here"))}</div><p class="settings-note" id="backup-note"></p><p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
-${heading(icons.about, t("About"))}<div class="share-summary">${row("settings-update", icons.rotateRight, t("Check for updates"))}${row("settings-storage", icons.storage, t("Storage"), "", "div")}</div><p class="settings-note">${t("No accounts and no servers: your maps, places and photos stay on this device.")}</p>
+${heading(t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), [["standard", t("Standard")], ["large", t("Large")]])}</div>
+${note(t("Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map."))}
+${heading(t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}</span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
+${note(t("Appears as “Shared by …” on maps you send."))}
+${heading(t("Backup"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps from a .megabackup file and keeps the ones already here"))}</div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
+${heading(t("About"))}<div class="share-summary">${row("settings-update", icons.rotateRight, t("Check for updates"))}<div class="share-row"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>
+${note(t("No accounts and no servers: your maps, places and photos stay on this device."))}
 <div class="share-summary settings-erase">${row("settings-erase", icons.trash, t("Delete everything"))}</div>
 </section>`;
 
@@ -109,7 +115,7 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     if (current !== version) return;
     name.value = shareName ?? "";
     showLastBackup(lastBackup, backupDue(maps, lastBackup));
-    status("settings-storage", estimate?.usage !== undefined ? t("{size} used on this device", { size: formatBytes(estimate.usage) }) : t("Unknown"));
+    status("settings-storage", estimate?.usage !== undefined ? formatBytes(estimate.usage) : t("Unknown"));
     status("settings-erase", maps.length ? t("{maps} on this device", { maps: plural(maps.length, "map") }) : t("Nothing saved yet"));
   }
 
