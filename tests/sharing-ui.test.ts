@@ -120,6 +120,8 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   }, configurable: true });
   click("share-send");
   assert.ok(shared, "native share is called synchronously within the click");
+  assert.deepEqual(Object.keys(shared), ["files"], "only the file, so iOS saves no extra text file");
+  assert.match(shared.files![0]!.name, /\.megamap$/);
   const decoded = await readShare(shared.files![0]!);
   assert.equal(decoded.manifest.markers.length, 1);
   assert.equal(decoded.manifest.routes.length, 1);

@@ -185,8 +185,6 @@ export const fr = {
   "Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place.": "Carte : faites glisser pour vous déplacer ; pincez ou touchez deux fois et glissez pour zoomer, touchez à deux doigts pour dézoomer ; appui long pour ajouter un lieu.",
   "Match {current} of {total}": "Résultat {current} sur {total}",
   "Match {current} of {total}. Next match": "Résultat {current} sur {total}. Résultat suivant",
-  "Mega Maps backup": "Sauvegarde Mega Maps",
-  "Mega Maps backup {date}": "Sauvegarde Mega Maps {date}",
   "Mega Maps is busy with a map. Let it finish, then try again.": "Mega Maps travaille sur une carte. Attendez la fin, puis réessayez.",
   "Mega Maps is busy with another map. Let it finish, then restore the backup.": "Mega Maps travaille sur une autre carte. Attendez la fin, puis restaurez la sauvegarde.",
   "Mega Maps is preparing a map in another window. Let it finish first.": "Mega Maps prépare une carte dans une autre fenêtre. Attendez d’abord la fin.",

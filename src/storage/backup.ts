@@ -67,8 +67,11 @@ export function backupDue(maps: { created: number; opened?: number }[], lastBack
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
+/** "Backup 12∕01∕2022 11∶11": file names can't hold / or :, so lookalikes stand in. */
 export function backupFilename(date: Date) {
-  return t("Mega Maps backup {date}", { date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` }) + ".megabackup";
+  const day = [pad(date.getDate()), pad(date.getMonth() + 1), date.getFullYear()].join("\u2215");
+  const time = `${pad(date.getHours())}\u2236${pad(date.getMinutes())}`;
+  return `Backup ${day} ${time}.megabackup`;
 }
 
 /** One file: a length-prefixed JSON manifest, then each map's original and photos. */

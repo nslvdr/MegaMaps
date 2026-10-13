@@ -44,8 +44,8 @@ test("a backup restores every map's places, routes, photos, view and text detect
     routes: [{ id: "r", name: "Way out", points: [{ x: 1, y: 2 }, { x: 3, y: 4 }], created: 2, draft: false }] });
   await saveOcr({ mapId: "north", version: 2, completedAt: 7, lines: [{ text: "Gallery", confidence: 0.9, words: [] }] });
 
-  const { file } = await createBackup(new Date(2026, 9, 13));
-  assert.equal(file.name, "Mega Maps backup 2026-10-13.megabackup");
+  const { file } = await createBackup(new Date(2022, 0, 12, 11, 11));
+  assert.equal(file.name, "Backup 12\u221501\u22152022 11\u223611.megabackup");
   assert.ok(await isBackupFile(file));
   const north = await loadNavigation("north");
 
