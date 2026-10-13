@@ -23,11 +23,9 @@ export interface CalloutPlacement {
   from: Point;
   to: Point;
   direction: (typeof directions)[number]["name"];
-  gap: number;
-  shift: number;
 }
 
-const CELL = 64, DOT = 8;
+const CELL = 64, GAP = 22;
 
 const center = (rect: CalloutBounds) => ({
   x: (rect.left + rect.right) / 2,
@@ -86,18 +84,14 @@ export function segmentCrossesBounds(from: Point, to: Point, rect: CalloutBounds
   return near < 1 - 1e-6 && far > 1e-6;
 }
 
-// One layout per frame coordinates search and saved labels around all anchors.
+// One layout per frame coordinates labels around all anchors.
 export class CalloutLayout {
-  private leaders: { from: Point; to: Point }[] = [];
-  // Pins and labels by 64px screen cell: crowded labels try 480 spots each,
-  // and a spot only needs what is in the few cells it covers.
+  // Pins, labels and leaders by 64px screen cell: a spot only needs what is
+  // in the few cells it covers.
   private cells: CalloutBounds[][] = [];
+  private lines: { from: Point; to: Point }[][] = [];
   private columns: number;
   private rows: number;
-  // Pins never move once labels start, so a summed count of the 8px dots
-  // they cover proves most crowded spots taken without walking any list.
-  private pins: CalloutBounds[] = [];
-  private dots?: Int32Array;
 
   constructor(private viewport: Size, obstacles: CalloutBounds[] = []) {
     this.columns = Math.max(1, Math.ceil(viewport.width / CELL));
@@ -107,48 +101,8 @@ export class CalloutLayout {
 
   addObstacle(rect: CalloutBounds) {
     if (rect.right >= 0 && rect.bottom >= 0 &&
-        rect.left <= this.viewport.width && rect.top <= this.viewport.height) {
-      this.index(rect);
-      this.pins.push(rect);
-      this.dots = undefined;
-    }
-  }
-
-  // dots[(row + 1) * (width + 1) + column + 1] counts the covered dots above
-  // and left of that corner. A dot counts when a pin overlaps its inside.
-  private countDots() {
-    const width = Math.ceil(this.viewport.width / DOT), height = Math.ceil(this.viewport.height / DOT);
-    const dots = new Int32Array((width + 1) * (height + 1));
-    for (const pin of this.pins) {
-      const left = Math.max(0, Math.floor(pin.left / DOT)), right = Math.min(width - 1, Math.ceil(pin.right / DOT) - 1);
-      const top = Math.max(0, Math.floor(pin.top / DOT)), bottom = Math.min(height - 1, Math.ceil(pin.bottom / DOT) - 1);
-      for (let row = top; row <= bottom; row++)
-        for (let column = left; column <= right; column++)
-          // Only dots whose inside the pin really reaches; zero-width pins on a dot's edge reach none.
-          if (pin.left < (column + 1) * DOT && pin.right > column * DOT && pin.top < (row + 1) * DOT && pin.bottom > row * DOT)
-            dots[(row + 1) * (width + 1) + column + 1] = 1;
-    }
-    for (let row = 1; row <= height; row++)
-      for (let column = 1; column <= width; column++)
-        dots[row * (width + 1) + column] = dots[row * (width + 1) + column]! + dots[(row - 1) * (width + 1) + column]! +
-          dots[row * (width + 1) + column - 1]! - dots[(row - 1) * (width + 1) + column - 1]!;
-    return dots;
-  }
-
-  // True only if a pin certainly overlaps: a covered dot lies wholly inside.
-  private surelyBlocked(left: number, top: number, right: number, bottom: number) {
-    const dots = this.dots ??= this.countDots(), width = Math.ceil(this.viewport.width / DOT) + 1;
-    const first = Math.max(0, Math.ceil(left / DOT)), last = Math.min(width - 1, Math.floor(right / DOT));
-    const firstRow = Math.max(0, Math.ceil(top / DOT)), lastRow = Math.min(dots.length / width - 1, Math.floor(bottom / DOT));
-    if (first >= last || firstRow >= lastRow) return false;
-    return dots[lastRow * width + last]! - dots[firstRow * width + last]! -
-      dots[lastRow * width + first]! + dots[firstRow * width + first]! > 0;
-  }
-
-  private occupy(placement: CalloutPlacement) {
-    this.leaders.push(placement);
-    this.index(placement.bounds);
-    return placement;
+        rect.left <= this.viewport.width && rect.top <= this.viewport.height)
+      this.index(this.cells, rect, rect);
   }
 
   private column(x: number) {
@@ -159,90 +113,53 @@ export class CalloutLayout {
     return Math.max(0, Math.min(this.rows - 1, Math.floor(y / CELL)));
   }
 
-  private index(rect: CalloutBounds) {
+  private index<T>(grid: T[][], rect: CalloutBounds, item: T) {
     for (let row = this.row(rect.top); row <= this.row(rect.bottom); row++)
       for (let column = this.column(rect.left); column <= this.column(rect.right); column++)
-        (this.cells[row * this.columns + column] ??= []).push(rect);
+        (grid[row * this.columns + column] ??= []).push(item);
   }
 
-  // Whether a pin or label overlaps this on-screen rectangle.
-  private blocked(left: number, top: number, right: number, bottom: number) {
-    for (let row = this.row(top); row <= this.row(bottom); row++)
-      for (let column = this.column(left); column <= this.column(right); column++)
-        for (const rect of this.cells[row * this.columns + column] ?? [])
-          if (left < rect.right && right > rect.left && top < rect.bottom && bottom > rect.top) return true;
+  private *near<T>(grid: T[][], rect: CalloutBounds) {
+    for (let row = this.row(rect.top); row <= this.row(rect.bottom); row++)
+      for (let column = this.column(rect.left); column <= this.column(rect.right); column++)
+        yield* grid[row * this.columns + column] ?? [];
+  }
+
+  // Whether a pin or label overlaps, or a leader runs under, this rectangle.
+  private blocked(rect: CalloutBounds) {
+    for (const other of this.near(this.cells, rect)) if (boundsOverlap(rect, other)) return true;
+    for (const line of this.near(this.lines, rect))
+      if (segmentCrossesBounds(line.from, line.to, rect)) return true;
     return false;
   }
 
   // Whether a leader would run through a pin or label.
   private crossed(from: Point, to: Point) {
-    for (let row = this.row(Math.min(from.y, to.y)); row <= this.row(Math.max(from.y, to.y)); row++)
-      for (let column = this.column(Math.min(from.x, to.x)); column <= this.column(Math.max(from.x, to.x)); column++)
-        for (const rect of this.cells[row * this.columns + column] ?? [])
-          if (segmentCrossesBounds(from, to, rect)) return true;
+    const rect = { left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
+      top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) };
+    for (const other of this.near(this.cells, rect))
+      if (segmentCrossesBounds(from, to, other)) return true;
     return false;
   }
 
-  // Prefer nearby free positions, retaining the previous direction when possible.
-  place(size: Size, target: CalloutBounds, anchor = center(target), previous?: CalloutPlacement) {
+  // A label sits at its normal spot above its target and turns to another
+  // side only when something is in the way. With every side taken, it has none.
+  place(size: Size, target: CalloutBounds, anchor = center(target)): CalloutPlacement | undefined {
     if (size.width > this.viewport.width - 16 || size.height > this.viewport.height - 16)
       return undefined;
-    let best: { placement: CalloutPlacement; score: number } | undefined;
-    const minimumDistance = 22 + Math.min(
-      (size.width + target.right - target.left) / 2,
-      (size.height + target.bottom - target.top) / 2,
-    );
-    // Every candidate stays within this reach of the target, so only leaders
-    // that pass through it can run under one.
-    const clampX = (x: number) => Math.max(8, Math.min(x, this.viewport.width - size.width - 8));
-    const clampY = (y: number) => Math.max(8, Math.min(y, this.viewport.height - size.height - 8));
-    const reach = {
-      left: Math.min(target.left, clampX(Math.min(target.left - 278 - size.width, anchor.x - size.width / 2 - 80))) - 5,
-      right: Math.max(target.right, clampX(Math.max(target.right + 278, anchor.x - size.width / 2 + 80)) + size.width) + 5,
-      top: Math.min(target.top, clampY(Math.min(target.top - 198 - size.height, anchor.y - size.height / 2 - 40))) - 5,
-      bottom: Math.max(target.bottom, clampY(Math.max(target.bottom + 198, anchor.y - size.height / 2 + 40)) + size.height) + 5,
-    };
-    const near = (rect: CalloutBounds) => rect.left <= reach.right && rect.right >= reach.left &&
-      rect.top <= reach.bottom && rect.bottom >= reach.top;
-    const clear = expand(target, 22);
-    const leaders = this.leaders.filter(({ from, to }) => near({
-      left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
-      top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y),
-    }));
-    // Further rings let dense clusters spread into nearby unused map space.
-    for (let gap = 22; gap <= 198; gap += 16) {
-      for (const direction of directions) {
-        for (const shift of [0, -40, 40, -80, 80]) {
-          const desiredX = direction.x < 0 ? target.left - gap - size.width
-            : direction.x > 0 ? target.right + gap : anchor.x - size.width / 2;
-          const desiredY = direction.y < 0 ? target.top - gap - size.height
-            : direction.y > 0 ? target.bottom + gap : anchor.y - size.height / 2;
-          const x = clampX(desiredX + (direction.y ? shift : 0));
-          const y = clampY(desiredY + (direction.y ? 0 : shift / 2));
-          const right = x + size.width, bottom = y + size.height;
-          if ((x < clear.right && right > clear.left && y < clear.bottom && bottom > clear.top) ||
-              this.surelyBlocked(x - 5, y - 5, right + 5, bottom + 5) ||
-              this.blocked(x - 5, y - 5, right + 5, bottom + 5)) continue;
-          const bounds = { left: x, right, top: y, bottom };
-          const padded = expand(bounds, 5);
-          if (leaders.some(line => segmentCrossesBounds(line.from, line.to, padded))) continue;
-          const { from, to } = leader(bounds, target);
-          if (this.crossed(from, to)) continue;
-          const sideX = bounds.left >= target.right ? 1 : bounds.right <= target.left ? -1 : 0;
-          const sideY = bounds.top >= target.bottom ? 1 : bounds.bottom <= target.top ? -1 : 0;
-          const actualDirection = directions.find(candidate => candidate.x === sideX && candidate.y === sideY)!.name;
-          const score = Math.hypot(center(bounds).x - anchor.x, center(bounds).y - anchor.y)
-            + (previous && previous.direction !== actualDirection ? 20 : 0)
-            + (previous && previous.gap !== gap ? 4 : 0)
-            + (previous && previous.shift !== shift ? 3 : 0);
-          if (!best || score < best.score)
-            best = { score, placement: { bounds, from, to, direction: actualDirection, gap, shift } };
-          // Most labels fit immediately; avoid scanning the other candidates then.
-          if (best.score <= minimumDistance + 1e-6) return this.occupy(best.placement);
-        }
-      }
+    for (const direction of directions) {
+      const left = direction.x < 0 ? target.left - GAP - size.width
+        : direction.x > 0 ? target.right + GAP : anchor.x - size.width / 2;
+      const top = direction.y < 0 ? target.top - GAP - size.height
+        : direction.y > 0 ? target.bottom + GAP : anchor.y - size.height / 2;
+      const bounds = { left, right: left + size.width, top, bottom: top + size.height };
+      if (this.blocked(expand(bounds, 5))) continue;
+      const { from, to } = leader(bounds, target);
+      if (this.crossed(from, to)) continue;
+      this.index(this.cells, bounds, bounds);
+      this.index(this.lines, { left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
+        top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) }, { from, to });
+      return { bounds, from, to, direction: direction.name };
     }
-    if (!best) return undefined;
-    return this.occupy(best.placement);
   }
 }

@@ -242,12 +242,8 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
     overlay.draw(camera, viewport);
   };
   settle({ x: 0, y: 0, scale: 1 });
-  assert.equal(labelPosition()[1], 67, "near the top edge, the callout moves below the text");
-  assert.equal(connector.getAttribute("y1"), "0", "a lower callout connects through its top edge");
-  settle({ x: 250, y: 80, scale: 1 });
-  const calloutWidth = Number(label.querySelector("rect")!.getAttribute("width"));
-  assert.ok(labelPosition()[0]! + calloutWidth <= viewport.width - 8,
-    "the callout stays inside the screen near the right edge");
+  assert.equal(labelPosition()[1], -28, "near the top edge, the callout keeps its spot above the text");
+  assert.equal(connector.getAttribute("y1"), "36", "it connects through its bottom edge");
   overlay.set([{ text: "W".repeat(60), polygons: [polygon(0)] }], true);
   const labelText = svg.querySelector<SVGTextElement>(".map-callout text")!;
   Object.defineProperty(labelText, "getComputedTextLength", {
@@ -258,17 +254,19 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   assert.ok(labelText.getComputedTextLength() + 51 <= 104,
     "wide proportional letters fit beside the text icon within the available callout width");
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
+  now += 1000;
+  overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   assert.equal(svg.querySelector(".search-selected-label")!.hasAttribute("hidden"), true,
     "offscreen matches do not leave a floating label over an unrelated location");
   const hole = svg.querySelector("mask polygon")!, onScreen = hole.getAttribute("points");
   assert.equal(hole.hasAttribute("hidden"), true, "an offscreen match does not cut into the shade");
-  assert.equal(svg.querySelector(".search-highlight")!.hasAttribute("hidden"), true);
+  assert.equal(svg.querySelector(".search-highlight line")!.hasAttribute("hidden"), true);
   overlay.draw({ x: -2000, y: -1000, scale: 1 }, viewport);
   assert.equal(hole.getAttribute("points"), onScreen, "offscreen matches are left alone while panning");
   overlay.draw({ x: 10, y: 80, scale: 1 }, viewport);
   assert.equal(hole.hasAttribute("hidden"), false, "a match back on screen cuts its hole again");
   assert.notEqual(hole.getAttribute("points"), onScreen);
-  assert.equal(svg.querySelector(".search-highlight")!.hasAttribute("hidden"), false);
+  assert.equal(svg.querySelector(".search-selected-label")!.hasAttribute("hidden"), false);
   overlay.set([], true);
   assert.equal(
     svg.hasAttribute("hidden"),

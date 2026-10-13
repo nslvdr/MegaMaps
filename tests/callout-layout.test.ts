@@ -35,7 +35,7 @@ test("callouts use all eight directions when the other spaces are occupied", () 
   }
 });
 
-test("crowded callouts share free space without covering labels, anchors, or panels", () => {
+test("crowded callouts without a free side show only their pins", () => {
   const panel = { left: 120, right: 480, top: 470, bottom: 600 };
   const targets = Array.from({ length: 8 }, (_, index) => ({
     left: 265 + (index % 4) * 25, right: 285 + (index % 4) * 25,
@@ -43,41 +43,34 @@ test("crowded callouts share free space without covering labels, anchors, or pan
   }));
   const layout = new CalloutLayout(viewport, [panel, ...targets]);
   const placed = targets.map(bounds => layout.place(size, bounds));
-  assert.ok(placed.every(Boolean), "a crowded cluster with free surrounding space keeps all labels");
-  for (const [index, placement] of placed.entries()) {
-    assert.ok(placement);
+  assert.ok(placed.some(Boolean) && !placed.every(Boolean), "labels do not wander off to find room");
+  const shown = placed.filter(placement => !!placement);
+  for (const [index, placement] of shown.entries()) {
     assert.equal(boundsOverlap(placement.bounds, panel), false);
     for (const bounds of targets) {
       assert.equal(boundsOverlap(placement.bounds, bounds), false);
       assert.equal(segmentCrossesBounds(placement.from, placement.to, bounds), false);
     }
-    for (const other of placed.slice(index + 1)) {
-      assert.ok(other);
+    for (const other of shown.slice(index + 1)) {
       assert.equal(boundsOverlap(placement.bounds, other.bounds), false);
       assert.equal(segmentCrossesBounds(placement.from, placement.to, other.bounds), false);
     }
   }
 });
 
-test("placement stays inside the viewport and keeps its direction during small pans", () => {
-  for (const [x, y] of [[8, 8], [590, 8], [8, 590], [590, 590]] as const) {
+test("a label keeps its normal spot above its pin, even past the screen's edge", () => {
+  for (const [x, y] of [[8, 8], [590, 8], [8, 590], [590, 590], [300, 300]] as const) {
     const bounds = { left: x - 6, right: x + 6, top: y - 6, bottom: y + 6 };
     const placement = new CalloutLayout(viewport).place(size, bounds);
-    assert.ok(placement);
-    assert.ok(placement.bounds.left >= 8 && placement.bounds.top >= 8);
-    assert.ok(placement.bounds.right <= 592 && placement.bounds.bottom <= 592);
-    assert.equal(boundsOverlap(placement.bounds, bounds), false);
+    assert.equal(placement?.direction, "above");
+    assert.deepEqual(placement?.bounds, { left: x - 50, right: x + 50, top: y - 64, bottom: y - 28 });
   }
-  const previous = new CalloutLayout(viewport).place(size, target);
-  assert.ok(previous);
-  const moved = { left: target.left + 1, right: target.right + 1,
-    top: target.top + 1, bottom: target.bottom + 1 };
-  const next = new CalloutLayout(viewport).place(size, moved, undefined, previous);
-  assert.ok(next);
-  assert.equal(next.direction, previous.direction);
-  assert.equal(next.gap, previous.gap);
-  assert.equal(next.bounds.left - previous.bounds.left, 1);
-  assert.equal(next.bounds.top - previous.bounds.top, 1);
+});
+
+test("a label turns only while another label is in its way", () => {
+  const above = { left: 250, right: 350, top: 220, bottom: 256 };
+  assert.equal(new CalloutLayout(viewport, [above]).place(size, target)?.direction, "below");
+  assert.equal(new CalloutLayout(viewport).place(size, target)?.direction, "above");
 });
 
 test("when no free space exists, the layout leaves anchors unobscured", () => {
@@ -96,7 +89,7 @@ test("crowded labels never land on or draw across anything already placed", () =
     const obstacles = Array.from({ length: Math.floor(random() * 400) }, () =>
       box(...spread(), random() < 0.02 ? 60 + random() * 200 : 6 + random() * 12));
     const layout = new CalloutLayout(view, obstacles);
-    // Pins wholly off screen are dropped; a leader may pass them on its way out.
+    // Pins wholly off screen are dropped; a label may reach over them.
     const kept = obstacles.filter(rect => rect.right >= 0 && rect.bottom >= 0 && rect.left <= view.width && rect.top <= view.height);
     const taken: CalloutBounds[] = [], leaders: { from: Point; to: Point }[] = [];
     for (let label = 0; label < 60; label++) {
@@ -106,8 +99,8 @@ test("crowded labels never land on or draw across anything already placed", () =
       placed++;
       const padded = { left: placement.bounds.left - 5, right: placement.bounds.right + 5,
         top: placement.bounds.top - 5, bottom: placement.bounds.bottom + 5 };
-      for (const rect of [...obstacles, ...taken])
-        assert.equal(boundsOverlap(padded, rect), false, "a label stays clear of pins and labels");
+      for (const rect of [...kept, ...taken])
+        assert.equal(boundsOverlap(padded, rect), false, "a label stays clear of pins and labels on screen");
       for (const rect of [...kept, ...taken])
         assert.equal(segmentCrossesBounds(placement.from, placement.to, rect), false, "its leader crosses nothing on screen");
       for (const line of leaders)
