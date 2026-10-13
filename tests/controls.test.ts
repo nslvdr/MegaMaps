@@ -907,19 +907,18 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").textContent, "No matches");
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
-    // Two alleys at once look for where they cross.
+    // A double search keeps the results of both searches that meet.
     input("map-search", "north; south");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
-    assert.equal(el("search-count").textContent, "No crossing");
-    assert.match(el("search-status").textContent!, /No crossing found/);
+    assert.equal(el("search-count").textContent, "No matches");
     const southPolygon = polygon.map(({ x, y }) => ({ x, y: y + 30 }));
     controls.updateOcr({ ...multiple, lines: [...multiple.lines,
       { text: "South", confidence: 90, words: [{ text: "South", polygon: southPolygon }] }] });
-    assert.equal(el("search-count").textContent, "1 crossing");
-    assert.deepEqual(highlights?.matches[0]?.crossing, { x: 140, y: 225 });
+    assert.equal(el("search-count").textContent, "1 match");
+    assert.deepEqual(highlights?.matches[0]?.midpoint, { x: 140, y: 225 });
     click("search-count");
-    assert.deepEqual(framed.at(-1), [...polygon, ...southPolygon, { x: 140, y: 225 }], "the crossing and both names come into view");
+    assert.deepEqual(framed.at(-1), [...polygon, ...southPolygon, { x: 140, y: 225 }], "both results come into view");
     controls.updateOcr(multiple);
     input("map-search", "");
     el("map-search").dispatchEvent(new window.Event("input"));

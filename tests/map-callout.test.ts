@@ -340,18 +340,18 @@ test("large labels draw a taller, wider chip for the same text", () => {
   assert.ok(large.width > standard.width);
 });
 
-test("a double search result reveals its crossing and the saved places in it", () => {
+test("a double search result reveals where its pair meets and the saved places in it", () => {
   const { document } = parseHTML('<html><body><svg></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const svg = document.querySelector<SVGSVGElement>("svg")!;
   const search = new SearchOverlay(svg);
-  const pin = { x: 300, y: 120 }, crossing = { x: 200, y: 110 };
-  search.set([{ text: "25 × Puits", crossing, pins: [pin],
+  const pin = { x: 300, y: 120 }, midpoint = { x: 200, y: 110 };
+  search.set([{ text: "25; Puits", midpoint, pins: [pin],
     polygons: [[{ x: 60, y: 100 }, { x: 110, y: 100 }, { x: 110, y: 120 }, { x: 60, y: 120 }]] }], true);
   search.draw({ x: 0, y: 0, scale: 1 }, { width: 600, height: 600 });
   const circles = [...svg.querySelectorAll("mask circle")].map(circle =>
     ({ x: Number(circle.getAttribute("cx")), y: Number(circle.getAttribute("cy")) }));
-  assert.deepEqual(circles, [crossing, pin]);
+  assert.deepEqual(circles, [midpoint, pin]);
   assert.equal(svg.querySelectorAll("mask polygon").length, 1);
   search.dispose();
 });

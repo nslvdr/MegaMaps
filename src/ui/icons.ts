@@ -123,7 +123,7 @@ export const icons = {
   route: svg(Route),
   sun: svg(Sun),
   text: svg(CaseSensitive),
-  crossing: svg(Crosshair),
+  pair: svg(Crosshair),
   merge: svg(Merge),
   download: svg(Download),
   rotationLock: svg(LockKeyhole),

@@ -35,7 +35,7 @@ import {
   ocrLabelAt,
   type OcrIndex,
 } from "../ocr/index";
-import { crossingTerms, matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
 const sheets = ["display", "rotation", "saved", "add"] as const;
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
@@ -1565,12 +1565,9 @@ export class ViewerControls {
     const active = !!normalizeText(this.searchQuery);
     const count = this.searchMatches.length;
     const stepping = count > 1 && this.searchPosition >= 0;
-    const crossing = !!this.searchMatches[0]?.crossing;
-    const noCrossing = !count && !!crossingTerms(this.searchQuery);
     const message = active
       ? stepping ? t("Match {current} of {total}", { current: this.searchPosition + 1, total: count })
-        : count ? plural(count, crossing ? "crossing" : "match")
-        : noCrossing ? t("No crossing found")
+        : count ? plural(count, "match")
         : this.ocr ? t("No matching text or saved places found.") : t("No matching saved places yet.")
       : t("Search map text and saved places. Drag and zoom to explore.");
     const progress = this.ocrMessage || (!this.ocr ? t("Text detection is not ready. Open the map’s Advanced settings to retry.") : "");
@@ -1580,15 +1577,14 @@ export class ViewerControls {
     const badge = this.el<HTMLButtonElement>("search-count");
     // A bare grey 0 is easy to miss; a miss says so in words.
     badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
-      : count ? plural(count, crossing ? "crossing" : "match")
-      : noCrossing ? t("No crossing") : t("No matches");
+      : count ? plural(count, "match") : t("No matches");
     badge.insertAdjacentHTML("beforeend", icons.next);
     badge.hidden = !active;
     badge.disabled = !count;
     badge.classList.toggle("empty", !count);
     badge.setAttribute("aria-label", stepping
       ? t("Match {current} of {total}. Next match", { current: this.searchPosition + 1, total: count })
-      : noCrossing ? t("No crossing found") : plural(count, crossing ? "crossing" : "result"));
+      : plural(count, "result"));
     this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {

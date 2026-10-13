@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { crossingTerms, searchMap } from "../src/viewer/map-search";
+import { doubleSearchTerms, searchMap } from "../src/viewer/map-search";
 import type { MapMarker } from "../src/viewer/navigation";
 import type { OcrIndex } from "../src/ocr/index";
 
@@ -48,10 +48,10 @@ test("numbers only match whole, in printed text and saved places", () => {
 });
 
 test("a double search keeps the results of both searches that meet", () => {
-  assert.deepEqual(crossingTerms("Allée 25 ; Allée 55"), ["allee 25", "allee 55"]);
-  assert.equal(crossingTerms("Allée 25 et 55"), undefined, "only a semicolon splits a query");
-  assert.equal(crossingTerms("Allée 25;"), undefined, "half-typed queries stay plain searches");
-  assert.equal(crossingTerms("25;55;75"), undefined);
+  assert.deepEqual(doubleSearchTerms("Allée 25 ; Allée 55"), ["allee 25", "allee 55"]);
+  assert.equal(doubleSearchTerms("Allée 25 et 55"), undefined, "only a semicolon splits a query");
+  assert.equal(doubleSearchTerms("Allée 25;"), undefined, "half-typed queries stay plain searches");
+  assert.equal(doubleSearchTerms("25;55;75"), undefined);
   // Words are 20 high, so results up to 200 apart meet.
   const line = (text: string, x: number, y: number) =>
     ({ text, confidence: 99, words: text.split(" ").map((part, i) => ({ text: part,
@@ -62,12 +62,12 @@ test("a double search keeps the results of both searches that meet", () => {
   ] };
   const found = searchMap(alleys, [], "Allée 25; Allée 55");
   assert.equal(found.length, 1, "each label pairs once, with its nearest partner");
-  assert.deepEqual(found[0]!.crossing, { x: 1055, y: 1085 });
-  assert.equal(found[0]!.text, "Allée 25 × Allée 55");
+  assert.deepEqual(found[0]!.midpoint, { x: 1055, y: 1085 });
+  assert.equal(found[0]!.text, "Allée 25; Allée 55");
   assert.equal(found[0]!.polygons.length, 4);
   assert.deepEqual(searchMap(alleys, [], "Allée 125; Allée 55"), [], "results far apart do not meet");
   const well = { ...places[0]!, label: "Puits", point: { x: 300, y: 10 } };
   const [withPlace] = searchMap(alleys, [well], "25; puits");
   assert.deepEqual(withPlace!.pins, [well.point], "saved places pair like printed text");
-  assert.deepEqual(withPlace!.crossing, { x: 192.5, y: 10 }, "between the word 25 and the place");
+  assert.deepEqual(withPlace!.midpoint, { x: 192.5, y: 10 }, "between the word 25 and the place");
 });

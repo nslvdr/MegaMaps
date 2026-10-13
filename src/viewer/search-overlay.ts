@@ -7,10 +7,10 @@ import { CalloutLayout } from "./callout-layout";
 
 const NS = "http://www.w3.org/2000/svg";
 
-// Project place symbols and crossings at a fixed screen size and detected text at its map size.
+// Project place symbols and pair midpoints at a fixed screen size and detected text at its map size.
 const project = (match: MapSearchMatch, camera: Camera) => {
   const polygons = match.polygons.map(polygon => polygon.map(point => worldToScreen(camera, point)));
-  const at = match.marker?.point ?? match.crossing;
+  const at = match.marker?.point ?? match.midpoint;
   const point = at && worldToScreen(camera, at);
   const points = point ? [{ x: point.x - 12, y: point.y - 12 }, { x: point.x + 12, y: point.y + 12 }] : polygons.flat();
   if (!points.length) return undefined;
@@ -60,8 +60,8 @@ export class SearchOverlay {
       mask.append(polygon);
       return polygon;
     }));
-    // Places, crossings, and the places in a crossing show through as circles.
-    this.placeHoles = matches.map(match => [...match.marker || match.crossing ? [0] : [], ...match.pins ?? []].map(() => {
+    // Places, pair midpoints, and the places in a pair show through as circles.
+    this.placeHoles = matches.map(match => [...match.marker || match.midpoint ? [0] : [], ...match.pins ?? []].map(() => {
       const hole = document.createElementNS(NS, "circle");
       hole.setAttribute("fill", "black");
       hole.setAttribute("r", "18");
@@ -77,7 +77,7 @@ export class SearchOverlay {
       const connector = document.createElementNS(NS, "line");
       connector.setAttribute("class", "search-match-connector");
       const callout = new MapCallout(match.marker ? markerCalloutIcon(match.marker.kind)
-        : match.crossing ? icons.crossing : icons.text,
+        : match.midpoint ? icons.pair : icons.text,
         match.marker ? markerKinds[match.marker.kind].color : undefined);
       callout.setText(match.text);
       this.callouts.push(callout);
@@ -135,7 +135,7 @@ export class SearchOverlay {
       for (const [polygonIndex, polygon] of target.polygons.entries())
         this.holes[index]![polygonIndex]!.setAttribute("points", polygon.map(p => `${p.x},${p.y}`).join(" "));
       const match = this.matches[index]!;
-      const circles = [...match.marker || match.crossing ? [target.anchor] : [],
+      const circles = [...match.marker || match.midpoint ? [target.anchor] : [],
         ...(match.pins ?? []).map(pin => worldToScreen(camera, pin))];
       for (const [circle, center] of circles.entries()) {
         this.placeHoles[index]![circle]!.setAttribute("cx", String(center.x));

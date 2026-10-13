@@ -205,8 +205,6 @@ export const fr = {
   "Nickname": "Pseudo",
   "No accounts and no servers: your maps, places and photos stay on this device.": "Pas de compte ni de serveur : vos cartes, lieux et photos restent sur cet appareil.",
   "No compass found. Auto needs a phone or tablet.": "Aucune boussole trouvée. Auto nécessite un téléphone ou une tablette.",
-  "No crossing": "Aucun croisement",
-  "No crossing found": "Aucun croisement trouvé",
   "No internet": "Pas d’internet",
   "No maps to back up yet": "Aucune carte à sauvegarder pour l’instant",
   "No maps, places or photos are left on this device.": "Plus aucune carte, lieu ni photo sur cet appareil.",
@@ -445,6 +443,5 @@ export const frNouns = {
   "shared item": ["élément partagé", "éléments partagés"],
   "detected label": ["texte détecté", "textes détectés"],
   match: ["résultat", "résultats"],
-  crossing: ["croisement", "croisements"],
   result: ["résultat", "résultats"],
 } as const;
