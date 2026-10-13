@@ -23,7 +23,7 @@ const project = (match: MapSearchMatch, camera: Camera) => {
 export class SearchOverlay {
   private matches: MapSearchMatch[] = [];
   private holes: SVGPolygonElement[][] = [];
-  private placeHoles: (SVGCircleElement | undefined)[] = [];
+  private placeHoles: SVGCircleElement[][] = [];
   private highlights: SVGGElement[] = [];
   private callouts: MapCallout[] = [];
   private shown: boolean[] = [];
@@ -49,7 +49,7 @@ export class SearchOverlay {
     this.matches = matches;
     this.shown = [];
     for (const hole of this.holes.flat()) hole.remove();
-    for (const hole of this.placeHoles) hole?.remove();
+    for (const hole of this.placeHoles.flat()) hole.remove();
     const mask = this.svg.querySelector("mask")!;
     this.holes = matches.map(match => match.polygons.map(() => {
       const polygon = document.createElementNS(NS, "polygon");
@@ -60,14 +60,14 @@ export class SearchOverlay {
       mask.append(polygon);
       return polygon;
     }));
-    this.placeHoles = matches.map(match => {
-      if (!match.marker && !match.crossing) return undefined;
+    // Places, crossings, and the places in a crossing show through as circles.
+    this.placeHoles = matches.map(match => [...match.marker || match.crossing ? [0] : [], ...match.pins ?? []].map(() => {
       const hole = document.createElementNS(NS, "circle");
       hole.setAttribute("fill", "black");
       hole.setAttribute("r", "18");
       mask.append(hole);
       return hole;
-    });
+    }));
     const highlights = this.svg.querySelector(".search-highlights")!;
     highlights.replaceChildren();
     this.callouts = [];
@@ -126,7 +126,7 @@ export class SearchOverlay {
       if (shown !== this.shown[index]) {
         this.shown[index] = shown;
         for (const hole of this.holes[index]!) hole.toggleAttribute("hidden", !shown);
-        this.placeHoles[index]?.toggleAttribute("hidden", !shown);
+        for (const hole of this.placeHoles[index]!) hole.toggleAttribute("hidden", !shown);
         if (!shown) connector.setAttribute("hidden", "");
       }
       // A label leaving with its match fades out; one already hidden returns at once.
@@ -134,10 +134,12 @@ export class SearchOverlay {
       if (!shown) continue;
       for (const [polygonIndex, polygon] of target.polygons.entries())
         this.holes[index]![polygonIndex]!.setAttribute("points", polygon.map(p => `${p.x},${p.y}`).join(" "));
-      const hole = this.placeHoles[index];
-      if (hole) {
-        hole.setAttribute("cx", String(target.anchor.x));
-        hole.setAttribute("cy", String(target.anchor.y));
+      const match = this.matches[index]!;
+      const circles = [...match.marker || match.crossing ? [target.anchor] : [],
+        ...(match.pins ?? []).map(pin => worldToScreen(camera, pin))];
+      for (const [circle, center] of circles.entries()) {
+        this.placeHoles[index]![circle]!.setAttribute("cx", String(center.x));
+        this.placeHoles[index]![circle]!.setAttribute("cy", String(center.y));
       }
       // Dense targets still have a visible locator when their callout cannot fit.
       connector.toggleAttribute("hidden", !!callout.bounds);

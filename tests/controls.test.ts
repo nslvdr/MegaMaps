@@ -916,7 +916,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const southPolygon = polygon.map(({ x, y }) => ({ x, y: y + 30 }));
     controls.updateOcr({ ...multiple, lines: [...multiple.lines,
       { text: "South", confidence: 90, words: [{ text: "South", polygon: southPolygon }] }] });
-    assert.equal(el("search-count").textContent, "Crossing");
+    assert.equal(el("search-count").textContent, "1 crossing");
     assert.deepEqual(highlights?.matches[0]?.crossing, { x: 140, y: 225 });
     click("search-count");
     assert.deepEqual(framed.at(-1), [...polygon, ...southPolygon, { x: 140, y: 225 }], "the crossing and both names come into view");

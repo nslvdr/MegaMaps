@@ -35,23 +35,39 @@ test("combined search never limits matches and uses the latest edited place data
   assert.deepEqual(searchMap(undefined, [edited], "south")[0]!.marker?.point, edited.point);
 });
 
-test("two alley names find where their labels meet", () => {
+test("numbers only match whole, in printed text and saved places", () => {
+  const numbered: OcrIndex = { mapId: "numbers", version: 1, completedAt: 1, lines: ["25", "125", "250", "A25", "25 25"].map((text, y) =>
+    ({ text, confidence: 99, words: text.split(" ").map((part, x) =>
+      ({ text: part, polygon: polygon.map(p => ({ x: p.x + x * 100, y: p.y + y * 100 })) })) })) };
+  assert.deepEqual(searchMap(numbered, [], "25").map(match => match.text), ["25", "A25", "25 25", "25 25"]);
+  assert.deepEqual(searchMap(numbered, [], "2"), []);
+  const well = { ...places[0]!, label: "Puits", description: "Niveau 125" };
+  assert.deepEqual(searchMap(undefined, [well], "25"), []);
+  assert.equal(searchMap(undefined, [well], "125").length, 1);
+  assert.equal(searchMap(undefined, [well], "niv").length, 1, "words still match from any part");
+});
+
+test("a double search keeps the results of both searches that meet", () => {
   assert.deepEqual(crossingTerms("Allée 25 ; Allée 55"), ["allee 25", "allee 55"]);
-  assert.deepEqual(crossingTerms("25;55"), ["25", "55"]);
   assert.equal(crossingTerms("Allée 25 et 55"), undefined, "only a semicolon splits a query");
   assert.equal(crossingTerms("Allée 25;"), undefined, "half-typed queries stay plain searches");
   assert.equal(crossingTerms("25;55;75"), undefined);
-  const word = (text: string, x: number, y: number) =>
+  // Words are 20 high, so results up to 200 apart meet.
+  const line = (text: string, x: number, y: number) =>
     ({ text, confidence: 99, words: text.split(" ").map((part, i) => ({ text: part,
       polygon: [{ x: x + i * 60, y }, { x: x + i * 60 + 50, y }, { x: x + i * 60 + 50, y: y + 20 }, { x: x + i * 60, y: y + 20 }] })) });
   const alleys: OcrIndex = { mapId: "alleys", version: 1, completedAt: 1, lines: [
-    word("Allée 25", 0, 0), word("Allée 125", 0, 40), word("Allée 55", 2000, 0),
-    word("Allée 25", 1000, 1000), word("Allée 55", 1000, 1050),
+    line("Allée 25", 0, 0), line("Allée 125", 0, 40), line("Allée 55", 2000, 0),
+    line("Allée 25", 1000, 1000), line("Allée 55", 1000, 1150), line("Allée 25", 1000, 1320),
   ] };
-  const [crossing] = searchMap(alleys, [], "Allée 25; Allée 55");
-  assert.deepEqual(crossing!.crossing, { x: 1055, y: 1035 }, "the closest pair of labels, ignoring Allée 125");
-  assert.equal(crossing!.text, "Allée 25 × Allée 55");
-  assert.equal(crossing!.polygons.length, 4);
-  assert.deepEqual(searchMap(alleys, [], "Allée 125; Allée 55"), [], "labels far apart do not cross");
-  assert.equal(searchMap(alleys, [], "25").length, 3, "a single name still finds every partial match");
+  const found = searchMap(alleys, [], "Allée 25; Allée 55");
+  assert.equal(found.length, 1, "each label pairs once, with its nearest partner");
+  assert.deepEqual(found[0]!.crossing, { x: 1055, y: 1085 });
+  assert.equal(found[0]!.text, "Allée 25 × Allée 55");
+  assert.equal(found[0]!.polygons.length, 4);
+  assert.deepEqual(searchMap(alleys, [], "Allée 125; Allée 55"), [], "results far apart do not meet");
+  const well = { ...places[0]!, label: "Puits", point: { x: 300, y: 10 } };
+  const [withPlace] = searchMap(alleys, [well], "25; puits");
+  assert.deepEqual(withPlace!.pins, [well.point], "saved places pair like printed text");
+  assert.deepEqual(withPlace!.crossing, { x: 192.5, y: 10 }, "between the word 25 and the place");
 });

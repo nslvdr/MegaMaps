@@ -84,8 +84,6 @@ export const fr = {
   "Couldn’t show this map": "Impossible d’afficher cette carte",
   "Couldn’t start text detection": "Impossible de lancer la détection de texte",
   "Couldn’t update Mega Maps": "Impossible de mettre à jour Mega Maps",
-  "Crossing": "Croisement",
-  "Crossing found": "Croisement trouvé",
   "Creates a separate map with the shared {items}. Your existing maps stay as they are.": "Crée une carte à part avec {items}. Vos cartes existantes restent inchangées.",
   "Dark map": "Carte sombre",
   "Dead end": "Cul-de-sac",
@@ -447,5 +445,6 @@ export const frNouns = {
   "shared item": ["élément partagé", "éléments partagés"],
   "detected label": ["texte détecté", "textes détectés"],
   match: ["résultat", "résultats"],
+  crossing: ["croisement", "croisements"],
   result: ["résultat", "résultats"],
 } as const;

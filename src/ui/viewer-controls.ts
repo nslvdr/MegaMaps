@@ -1540,13 +1540,12 @@ export class ViewerControls {
     }, SEARCH_DEBOUNCE_MS);
   }
   // Like find-in-page: when no result is anywhere on screen, typing brings the
-  // first one into view instead of leaving a dimmed map and a count. A crossing
-  // is the one place asked for, so it always comes into view.
+  // first one into view instead of leaving a dimmed map and a count.
   private bringMatchIntoView() {
     const showing = this.viewer?.showing;
     const first = this.searchMatches[0];
     if (!first || !showing) return;
-    if (!first.crossing && this.searchMatches.some((match) => showing.call(this.viewer, matchPoints(match)))) return;
+    if (this.searchMatches.some((match) => showing.call(this.viewer, matchPoints(match)))) return;
     this.frameMatch(first);
   }
   private frameMatch(match: MapSearchMatch) {
@@ -1570,8 +1569,7 @@ export class ViewerControls {
     const noCrossing = !count && !!crossingTerms(this.searchQuery);
     const message = active
       ? stepping ? t("Match {current} of {total}", { current: this.searchPosition + 1, total: count })
-        : crossing ? t("Crossing found")
-        : count ? plural(count, "match")
+        : count ? plural(count, crossing ? "crossing" : "match")
         : noCrossing ? t("No crossing found")
         : this.ocr ? t("No matching text or saved places found.") : t("No matching saved places yet.")
       : t("Search map text and saved places. Drag and zoom to explore.");
@@ -1582,7 +1580,7 @@ export class ViewerControls {
     const badge = this.el<HTMLButtonElement>("search-count");
     // A bare grey 0 is easy to miss; a miss says so in words.
     badge.textContent = stepping ? `${this.searchPosition + 1} / ${count}`
-      : crossing ? t("Crossing") : count ? plural(count, "match")
+      : count ? plural(count, crossing ? "crossing" : "match")
       : noCrossing ? t("No crossing") : t("No matches");
     badge.insertAdjacentHTML("beforeend", icons.next);
     badge.hidden = !active;
@@ -1590,7 +1588,7 @@ export class ViewerControls {
     badge.classList.toggle("empty", !count);
     badge.setAttribute("aria-label", stepping
       ? t("Match {current} of {total}. Next match", { current: this.searchPosition + 1, total: count })
-      : crossing ? t("Crossing found") : noCrossing ? t("No crossing found") : plural(count, "result"));
+      : noCrossing ? t("No crossing found") : plural(count, crossing ? "crossing" : "result"));
     this.viewer?.refreshLabels?.();
   }
   private focusSearch(delta: number) {
