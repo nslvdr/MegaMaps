@@ -355,6 +355,8 @@ export class ViewerControls {
     for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
       step.setAttribute("aria-pressed", String(Number(step.dataset.water) === water));
     this.paintPlaceCard(kind, water);
+    this.el("marker-kind-current").innerHTML =
+      `${placeIcon(kind, water)}<span>${(markerKinds[kind] ?? markerKinds.landmark).label}</span>`;
   }
   private markerName(kind: MapMarker["kind"]) {
     return this.mapLabel ??
@@ -640,7 +642,9 @@ export class ViewerControls {
     this.dialog("marker-dialog").style.setProperty("--c", color);
   }
   private paintPlaceCard(kind: MapMarker["kind"], water?: WaterLevel) {
-    this.paintCard(placeIcon(kind, water), (markerKinds[kind] ?? markerKinds.landmark).color);
+    const { color } = markerKinds[kind] ?? markerKinds.landmark;
+    this.paintCard(placeIcon(kind, water), color);
+    this.dialog("kind-dialog").style.setProperty("--c", color);
   }
   private routeIcon(route: PlannedRoute) {
     return icons.route.replace("<svg ", `<svg style="color:${routeColor(this.state, route.id)}" `);
@@ -986,9 +990,13 @@ export class ViewerControls {
       this.mode("browse");
       if (deleted) this.deleted(deleted.label, () => this.state.markers.splice(index, 0, deleted));
     });
+    this.click("marker-kind-toggle", () => showDialog(this.dialog("kind-dialog")));
+    this.click("kind-close", () => this.dialog("kind-dialog").close());
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
       'input[name="marker-kind"]',
-    ))
+    )) {
+      // Tapping a pin, even the chosen one, picks it and goes back to the form.
+      this.on(input, "click", () => this.dialog("kind-dialog").close());
       this.on(input, "change", () => {
         this.setFormWater(this.formWater);
         // Keep auto names in sync with the chosen kind until the user types.
@@ -1000,6 +1008,7 @@ export class ViewerControls {
         if (!this.editingMarker && this.markerPoint)
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
+    }
     for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
       this.on(step, "click", () => {
         const water = Number(step.dataset.water) as WaterLevel;

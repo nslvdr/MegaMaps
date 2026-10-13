@@ -391,20 +391,22 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     assert.equal(
-      el("marker-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
-      9,
+      el("kind-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
+      12,
       "kinds show the map's pins",
     );
     assert.deepEqual(
       Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
-      ["landmark", "entrance", "stairs", "squeeze", "dead-end", "unstable", "flooded", "graffiti", "new-room"],
+      ["landmark", "entrance", "stairs", "squeeze", "dead-end", "unstable", "flooded", "graffiti", "new-room", "tools", "photo", "ossuary"],
       "landmarks and bookmarks share one option",
     );
-    assert.equal(el("marker-dialog").querySelector(".kind-picker")!.textContent!.trim(), "", "pins carry no captions");
+    assert.equal(el("marker-kind-current").textContent, "Landmark", "the form shows only the chosen pin");
+    el("marker-kind-toggle").dispatchEvent(new window.Event("click"));
+    assert.equal(el("kind-dialog").hasAttribute("open"), true, "tapping it opens every pin in a modal");
     assert.equal(
-      root.querySelector('input[name="marker-kind"][value="dead-end"]')!.getAttribute("aria-label"),
+      root.querySelector('input[name="marker-kind"][value="dead-end"]')!.closest("label")!.textContent,
       "Dead end",
-      "each pin is still named for screen readers",
+      "each pin is named",
     );
     const entrance = root.querySelector<HTMLInputElement>(
       'input[name="marker-kind"][value="entrance"]',
@@ -414,7 +416,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       'input[name="marker-kind"]',
     ))
       radio.checked = radio === entrance;
+    entrance.dispatchEvent(new window.Event("click"));
     entrance.dispatchEvent(new window.Event("change"));
+    assert.equal(el("kind-dialog").hasAttribute("open"), false, "picking a pin goes back to the form");
+    assert.equal(el("marker-kind-current").textContent, "Entrance", "and the field shows it");
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
     assert.equal(el("marker-dialog").style.getPropertyValue("--c"), "#7dff8a", "the card takes the chosen pin's colour");

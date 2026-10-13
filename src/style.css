@@ -1882,9 +1882,64 @@ dialog.place-card::backdrop {
     opacity: 0;
   }
 }
+/* The icon field reads like the name field: the chosen pin and its name;
+   tapping it opens every pin, named, three a row, in a modal. */
+.kind-field {
+  margin: var(--space-16) 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+.kind-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-height: 50px;
+  margin-top: var(--space-8);
+  padding: var(--space-4) var(--space-16) var(--space-4) var(--space-12);
+  border: 1px solid #ffffff26;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-size-body);
+  text-align: start;
+}
+.kind-current {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+/* The water rim reaches past the pin's box; the margin keeps it inside. */
+.kind-current svg {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: calc(32px / 6);
+  overflow: visible;
+}
+/* Spelled out in the pin's colour so the choice reads as changeable; like
+   the settings rows, a chevron pointing on says it opens something. */
+.kind-change {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--c);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+.kind-change svg {
+  width: 18px;
+  height: 18px;
+  transform: rotate(180deg);
+}
+.kind-dialog {
+  --accent: var(--c);
+}
 .kind-picker {
   display: grid;
-  /* Nine pins, no captions, three a row. */
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
 }
@@ -1892,11 +1947,24 @@ dialog.place-card::backdrop {
   position: relative;
   display: grid;
   place-items: center;
+  gap: var(--space-4);
   min-width: 0;
-  height: 56px;
+  padding: var(--space-8) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1.5px solid transparent;
+  color: var(--text);
+  font-size: var(--font-size-small);
+  text-align: center;
   cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.kind-pick span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kind-pick input {
   position: absolute;
@@ -1904,15 +1972,8 @@ dialog.place-card::backdrop {
   pointer-events: none;
 }
 .kind-pick svg {
-  width: 40px;
-  height: 40px;
-}
-.kind-pick {
-  transition:
-    background-color 0.15s,
-    border-color 0.15s;
-}
-.kind-pick svg {
+  width: 36px;
+  height: 36px;
   transition: transform 0.2s var(--ease-out);
 }
 .kind-pick:has(input:checked) svg {
