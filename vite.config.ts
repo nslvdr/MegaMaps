@@ -1,6 +1,7 @@
 import { defineConfig, defaultClientConditions } from "vite";
 import { readFileSync } from "node:fs";
 import { prepareOcrAssets } from "./scripts/ocr-assets";
+import { devData } from "./scripts/dev-data";
 prepareOcrAssets();
 // A phone needs trusted HTTPS for service workers; localhost works on desktop.
 const cert = process.env.MAP_VIEWER_HTTPS_CERT,
@@ -12,6 +13,7 @@ const https =
     ? { cert: readFileSync(cert), key: readFileSync(key) }
     : undefined;
 export default defineConfig({
+  plugins: [devData()],
   // Resolve ONNX's external-WASM entry; one local runtime copy is precached below.
   resolve: {
     conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions],

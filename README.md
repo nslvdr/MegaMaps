@@ -11,6 +11,8 @@ npm run dev
 
 Development: **http://localhost:5173**. The development server intentionally does not install a service worker.
 
+Each port is its own origin with its own storage, so a dev server on another port or worktree starts empty. To keep test maps everywhere, save a backup in Settings and put the `.megabackup` file in `~/.megamaps-dev/` (or the folder in `MEGAMAPS_DEV_DATA`). On every load, a dev server restores any of those maps that its origin doesn't have yet.
+
 To test installation and offline use, run the production build:
 
 ```sh

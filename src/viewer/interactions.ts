@@ -47,12 +47,14 @@ export function attachInteractions(
     quickZoom: { anchor: Point; y: number; scale: number } | undefined,
     // Two fingers tapped together zoom out, the reverse of a double tap.
     pairTap: { time: number; center: Point } | undefined,
-    pressTimer: ReturnType<typeof setTimeout> | undefined;
+    pressTimer: ReturnType<typeof setTimeout> | undefined,
+    // Safari's trackpad pinch: its gesture scale counts from this camera scale.
+    trackpadPinch: number | undefined;
   const cancelPress = () => {
     clearTimeout(pressTimer);
     pressTimer = undefined;
   };
-  const point = (event: PointerEvent | MouseEvent) => {
+  const point = (event: { clientX: number; clientY: number }) => {
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
@@ -295,7 +297,8 @@ export function attachInteractions(
     "wheel",
     (event) => {
       event.preventDefault();
-      if (host.locked?.()) return;
+      // A Safari pinch may also send ctrl-wheels; its gesture already zooms.
+      if (host.locked?.() || (event.ctrlKey && trackpadPinch !== undefined)) return;
       stop();
       const p = point(event),
         camera = host.getCamera();
@@ -319,6 +322,39 @@ export function attachInteractions(
     },
     { signal, passive: false },
   );
+  // Safari sends a trackpad pinch only as gesture events, never as wheels.
+  // Touch pinches send them too, but those are already followed as pointers.
+  type GestureEvent = Event & { scale: number; clientX: number; clientY: number };
+  canvas.addEventListener(
+    "gesturestart",
+    (event) => {
+      event.preventDefault();
+      if (host.locked?.() || points.size) return;
+      stop();
+      trackpadPinch = host.getCamera().scale;
+    },
+    { signal, passive: false },
+  );
+  canvas.addEventListener(
+    "gesturechange",
+    (event) => {
+      event.preventDefault();
+      if (trackpadPinch === undefined || points.size) return;
+      const gesture = event as GestureEvent,
+        p = point(gesture);
+      host.setCamera(
+        zoomAt(host.getCamera(), clampScale(trackpadPinch * gesture.scale), p.x, p.y),
+      );
+    },
+    { signal, passive: false },
+  );
+  canvas.addEventListener(
+    "gestureend",
+    () => {
+      trackpadPinch = undefined;
+    },
+    { signal },
+  );
   canvas.addEventListener(
     "dblclick",
     (event) => {
@@ -339,6 +375,7 @@ export function attachInteractions(
       points.clear();
       quickZoom = undefined;
       pairTap = undefined;
+      trackpadPinch = undefined;
       lastTap.time = 0;
     },
     dispose() {

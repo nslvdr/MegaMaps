@@ -872,11 +872,19 @@ async function start() {
       if (map.status !== "ready") await deleteStoredMap(map);
   }).catch(() => {}); // Another tab may legitimately be importing; don't touch its files.
   await refresh();
+  if (import.meta.env.DEV) await restoreDevData().catch((error) => console.warn("Dev data", error));
   // Reloading on the Settings page stays there.
   if (history.state?.settings) return showSettings();
   const resume = await lastMap();
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
+}
+// A dev server on a new port starts empty; it brings back the shared dev maps.
+async function restoreDevData() {
+  const { devBackups, loadDevBackup } = await import("./dev-data");
+  for (const backup of await devBackups())
+    if (backup.maps.some((id) => !maps.some((map) => map.id === id)))
+      await restore(await loadDevBackup(backup.name));
 }
 void start().catch((error) =>
   showMessage(
