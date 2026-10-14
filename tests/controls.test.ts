@@ -455,10 +455,21 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-form").hidden, false);
     assert.equal(el("marker-details").hidden, true);
     input("marker-description", "Unsaved changes");
-    const cancelEdit = new window.Event("cancel", { cancelable: true });
-    el("marker-dialog").dispatchEvent(cancelEdit);
-    assert.equal(cancelEdit.defaultPrevented, true, "Escape returns to reading rather than closing the pane");
-    assert.equal(el("marker-form").hidden, true);
+    // Putting the keyboard away must never leave the form or drop the typing.
+    const blur = t.mock.method(el("marker-label"), "blur");
+    const doneKey = new window.Event("keydown", { cancelable: true });
+    Object.defineProperty(doneKey, "key", { value: "Enter" });
+    el("marker-label").dispatchEvent(doneKey);
+    assert.equal(doneKey.defaultPrevented, true, "Done on the name does not submit the form");
+    assert.equal(blur.mock.callCount(), 1, "Done on the name puts the keyboard away");
+    const closeRequest = new window.Event("cancel", { cancelable: true });
+    el("marker-dialog").dispatchEvent(closeRequest);
+    assert.equal(closeRequest.defaultPrevented, true, "a close request keeps the form open");
+    assert.equal(el("marker-form").hidden, false);
+    assert.equal((el("marker-description") as HTMLTextAreaElement).value, "Unsaved changes");
+    assert.equal(state.markers[0]?.description, "Left opening", "nothing is saved without Save");
+    click("marker-cancel");
+    assert.equal(el("marker-form").hidden, true, "X returns to reading");
     assert.equal(el("marker-detail-description").textContent, "Left opening", "canceling leaves the original description intact");
     assert.equal(state.markers[0]?.description, "Left opening");
     click("marker-edit");

@@ -1,4 +1,4 @@
-import { showDialog } from "./dialog";
+import { keepFormOpen, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import type { Point } from "../viewer/camera";
 import type { DarkMode } from "../viewer/appearance";
@@ -1059,10 +1059,14 @@ export class ViewerControls {
       this.showDetails(place);
       this.toast(t("Journal entry added to {name}", { name: place.label }), "done");
     });
-    this.on(this.dialog("marker-dialog"), "cancel", (event) => {
-      if (this.dialog("marker-dialog").dataset.mode !== "edit" || !this.viewedItem()) return;
-      event.preventDefault();
-      this.cancelMarkerEdit();
+    for (const id of ["marker-dialog", "entry-dialog", "name-dialog"])
+      this.on(this.dialog(id), "cancel", keepFormOpen);
+    // Done on the name puts the keyboard away; only Save saves the place.
+    this.on(this.input("marker-label"), "keydown", (event) => {
+      const key = event as KeyboardEvent;
+      if (key.key !== "Enter" || key.isComposing) return;
+      key.preventDefault();
+      this.input("marker-label").blur();
     });
     this.click("marker-add-photos", () => this.input("marker-photo-input").click());
     this.on(this.input("marker-photo-input"), "change", () => {

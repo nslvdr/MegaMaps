@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { dialogHeader, showDialog } from "./dialog";
+import { dialogHeader, keepFormOpen, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { icons } from "./icons";
 import { displayName } from "./format";
@@ -20,9 +20,7 @@ export function initMapRename(
   let saving = false;
 
   cancel.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("cancel", (event) => {
-    if (saving) event.preventDefault();
-  });
+  dialog.addEventListener("cancel", keepFormOpen);
   dialog.addEventListener("close", () => { mapId = undefined; });
   input.addEventListener("input", () => { error.hidden = true; });
   form.addEventListener("submit", async (event) => {
