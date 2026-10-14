@@ -101,6 +101,33 @@ test("saved places and routes have typed callouts that follow their anchors and 
   overlay.dispose();
 });
 
+test("zoomed out, saved items show only pins, except the selected one", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("zoomed-out");
+  state.markers = ["gate", "well"].map((id, index) =>
+    ({ id, kind: "landmark" as const, label: id, description: "", point: { x: 100 + index * 300, y: 300 }, created: 0 }));
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const shown = (named: boolean) => {
+    overlay.draw(camera, viewport, undefined, named);
+    now += 1000;
+    overlay.draw(camera, viewport, undefined, named);
+    return [...svg.querySelectorAll(".map-callout")].filter(callout => !callout.hasAttribute("hidden"))
+      .map(callout => callout.querySelector("text")!.textContent);
+  };
+  assert.deepEqual(shown(true), ["gate", "well"]);
+  assert.deepEqual(shown(false), []);
+  assert.equal(svg.querySelectorAll('[data-layer="places"] > g:not(.map-callout)').length, 2, "pins stay");
+  overlay.setSelected("well");
+  assert.deepEqual(shown(false), ["well"]);
+  overlay.dispose();
+});
+
 test("route outlines and pins follow the camera and drop out while off screen", () => {
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });

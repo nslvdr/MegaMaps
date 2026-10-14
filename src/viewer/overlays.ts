@@ -245,8 +245,9 @@ export class NavigationOverlay {
           reservePoint(point, route.id === this.editing ? 10 : 8);
     if (this.preview) reservePoint(this.preview.point, 18);
   }
-  /** Draws one frame; returns whether a label is still gliding or fading. */
-  draw(camera: Camera, viewport: Size, layout?: CalloutLayout) {
+  /** Draws one frame; returns whether a label is still gliding or fading.
+   * Zoomed out, `named` is false and only pins show. */
+  draw(camera: Camera, viewport: Size, layout?: CalloutLayout, named = true) {
     const labels = layout ?? new CalloutLayout(viewport);
     if (!layout) this.reserve(camera, labels);
     let gliding = false;
@@ -285,7 +286,7 @@ export class NavigationOverlay {
       }
       if (!outside) pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
     }
-    for (const { callout, point, padding, layer, markerId } of this.callouts) {
+    for (const { callout, point, padding, layer, priority, markerId } of this.callouts) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.hide();
         continue;
@@ -302,7 +303,8 @@ export class NavigationOverlay {
           if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
             bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
               top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
-      if (callout.draw(p, viewport, bounds, labels)) gliding = true;
+      // The selected, moving or edited item keeps its label when zoomed out.
+      if (callout.draw(p, viewport, bounds, labels, named || priority > 0)) gliding = true;
     }
     return gliding;
   }

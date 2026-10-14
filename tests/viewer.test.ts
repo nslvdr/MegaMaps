@@ -100,7 +100,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
   state.dimming = 0.4;
   state.view = {
     center: { x: 256, y: 256 },
-    scale: 0.5,
+    scale: 3,
     rotation: Math.PI / 2,
   };
   state.markers.push({
@@ -407,9 +407,10 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.equal(internals.cursorAt(mid), "");
     assert.equal(openedRoutes.length, routeCount);
 
-    // Name chips select the same route as its line.
+    // Name chips select the same route as its line, once zoomed in to show them.
     state.layers.routes = state.layers.labels = true;
     viewer.updateNavigation(state);
+    positioning.setCamera(cameraAt({ x: 256, y: 256 }, viewport, 2.5, Math.PI / 2));
     step(performance.now() + 300);
     const chip = [...overlay.querySelectorAll<SVGGElement>(".map-callout")]
       .find((callout) => callout.querySelector("text")!.textContent === "First")!;
