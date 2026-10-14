@@ -475,6 +475,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     input("marker-description", "");
     submit("marker-form");
     assert.equal(el("marker-details").hidden, true, "a place with nothing to read shows only its header");
+    assert.equal(el("marker-detail-seen").textContent, "Seen today", "the header still says how fresh it is");
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     // Saved list renders names as text, never markup.
@@ -1296,8 +1297,8 @@ test("place photos lead the details as a carousel and are removed from the edit 
     assert.equal(el("marker-dialog").hasAttribute("open"), true, "closing the photo returns to the place");
 
     el("marker-edit").dispatchEvent(new window.Event("click"));
-    assert.equal(el("marker-photos-field").hidden, false);
-    assert.equal(el("marker-photo-list").children.length, 2);
+    assert.equal(el("marker-photo-list").querySelectorAll("img").length, 2);
+    assert.equal(el("marker-photo-list").lastElementChild!.contains(el("marker-add-photos")), true, "adding is the last tile");
     el("marker-photo-list").querySelector<HTMLElement>(".photo-remove")!.dispatchEvent(new window.Event("click"));
     el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
     assert.deepEqual(state.markers[0]!.photos, [first], "only the removed photo is gone");
@@ -1306,7 +1307,8 @@ test("place photos lead the details as a carousel and are removed from the edit 
 
     el("marker-edit").dispatchEvent(new window.Event("click"));
     el("marker-photo-list").querySelector<HTMLElement>(".photo-remove")!.dispatchEvent(new window.Event("click"));
-    assert.equal(el("marker-photos-field").hidden, true, "an empty photo field folds away");
+    assert.deepEqual([...el("marker-photo-list").children].map((item) => item.contains(el("marker-add-photos"))), [true],
+      "with no photos only the add tile is left");
     el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
     assert.equal(state.markers[0]!.photos, undefined);
     assert.equal(carousel.hidden, true);
@@ -1376,6 +1378,96 @@ test("a flooded place's water level shows beside its pin and is picked in the ed
     assert.equal(state.markers[0]!.water, undefined, "a place that is no longer flooded drops its level");
     assert.equal(el("marker-detail-water").hidden, true);
     assert.equal(el("marker-list").querySelector(".water-gauge"), null);
+  } finally {
+    await controls.dispose();
+  }
+});
+
+test("a place shows when it was last seen and keeps a dated log, added from its card and pruned in Edit", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "place-log", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const day = 86_400_000;
+  const state = defaultNavigation(map.id);
+  state.markers = [{
+    id: "hall", point: { x: 500, y: 600 }, label: "Hall", description: "Big pillar room",
+    kind: "landmark", created: Date.now() - 400 * day,
+  }];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({ setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {} });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
+  const submit = (id: string) => el(id).dispatchEvent(new window.Event("submit", { cancelable: true }));
+  const entries = (list = "marker-log-list") => [...el(list).querySelectorAll("p")].map((p) => p.lastChild!.textContent);
+  const addEntry = (date: string, text: string) => {
+    click("marker-add-entry");
+    if (date) (el("entry-date") as HTMLInputElement).value = date;
+    (el("entry-text") as HTMLTextAreaElement).value = text;
+    submit("entry-form");
+  };
+  try {
+    controls.options().onMarker(state.markers[0]!);
+    assert.equal(el("marker-detail-seen").textContent, "Seen 13 months ago", "a place starts as seen when it was created");
+    assert.equal(el("marker-seen-ask").hidden, false);
+    click("marker-seen-no");
+    assert.equal(el("marker-seen-ask").hidden, true, "No only hides the question");
+    assert.equal(state.markers[0]!.lastSeen, undefined);
+    click("marker-cancel");
+    controls.options().onMarker(state.markers[0]!);
+    assert.equal(el("marker-seen-ask").hidden, false, "it asks again next time");
+    click("marker-seen-yes");
+    assert.equal(el("marker-detail-seen").textContent, "Seen today");
+    assert.equal(el("marker-seen-ask").hidden, true, "a place seen today isn't asked about");
+    assert.ok(Math.abs(state.markers[0]!.lastSeen! - Date.now()) < 1000);
+
+    state.markers[0]!.lastSeen = Date.now() - 30 * day;
+    addEntry("2024-03-04", "Water to the knees");
+    const place = () => state.markers[0]!;
+    assert.equal(place().log!.length, 1);
+    assert.equal(new Date(place().log![0]!.date).getFullYear(), 2024);
+    assert.ok(place().lastSeen! > Date.now() - 31 * day, "a backdated entry never moves last seen back");
+    addEntry("", "Dry");
+    assert.ok(place().lastSeen! > Date.now() - 1000, "an entry for today updates last seen");
+    assert.deepEqual(entries(), ["Dry", "Water to the knees"], "newest first");
+    assert.equal(el("marker-detail-description").textContent, "Big pillar room", "the description stays");
+    assert.equal(el("marker-log-list").querySelector("button"), null, "reading stays read-only");
+
+    click("marker-edit");
+    assert.equal(el("marker-add-entry").hidden, true, "editing has no journal button");
+    assert.equal(el("marker-detail-seen").hidden, true);
+    assert.equal(el("marker-seen-ask").hidden, true, "editing doesn't ask");
+    assert.deepEqual(entries("marker-log-edit"), ["Dry", "Water to the knees"]);
+    const removes = el("marker-log-edit").querySelectorAll<HTMLElement>(".log-remove");
+    assert.equal(removes.length, 2);
+    removes[1]!.dispatchEvent(new window.Event("click"));
+    const seenDate = el("marker-seen-date") as HTMLInputElement;
+    assert.equal(el("marker-seen-field").hidden, false);
+    seenDate.value = "2025-02-03";
+    submit("marker-form");
+    assert.deepEqual(place().log!.map((entry) => entry.text), ["Dry"]);
+    assert.equal(new Date(place().lastSeen!).toDateString(), new Date(2025, 1, 3).toDateString(),
+      "Edit can set last seen to an earlier day");
+    assert.ok(place().seenAt! > Date.now() - 1000, "the correction is newer than the visits it overrides");
+    assert.equal(place().deletedLog!.length, 1, "the deleted entry is remembered so a merge can't restore it");
+    assert.deepEqual(entries(), ["Dry"]);
   } finally {
     await controls.dispose();
   }

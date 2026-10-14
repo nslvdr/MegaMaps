@@ -13,6 +13,7 @@ import {
   DEFAULT_DIMMING,
   brightnessPercent,
   insideImage,
+  lastSeen,
   layerNames,
   markerKinds,
   routeColor,
@@ -21,6 +22,7 @@ import {
   type NavigationState,
   type Tool,
   type MapMarker,
+  type PlaceLogEntry,
   type PlannedRoute,
   type RotationMode,
   type WaterLevel,
@@ -28,7 +30,7 @@ import {
 } from "../viewer/navigation";
 import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
 import { icons } from "./icons";
-import { nextName, plural } from "./format";
+import { logDate, nextName, plural, seenAgo } from "./format";
 import { t } from "../i18n";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
@@ -39,6 +41,22 @@ import {
 } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
 const sheets = ["display", "rotation", "saved", "add"] as const;
+/** A day as a date input holds it, in local time. */
+const dayValue = (time: number) => {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+/** A picked day as a time: today keeps the hour, an earlier day is noon, so it reads the same day anywhere. */
+const dayTime = (day: string) => {
+  if (day === dayValue(Date.now())) return Date.now();
+  const [year, month, date] = day.split("-").map(Number);
+  return Math.min(Date.now(), new Date(year!, month! - 1, date, 12).getTime());
+};
+/** Latest visit first; entries for the same day keep the newest written on top. */
+const newestFirst = (log: PlaceLogEntry[]) =>
+  log.map((entry, index) => ({ entry, index }))
+    .sort((a, b) => b.entry.date - a.entry.date || b.index - a.index)
+    .map(({ entry }) => entry);
 const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
@@ -126,6 +144,10 @@ export class ViewerControls {
   private newMarkerKind: MapMarker["kind"] = "landmark";
   /** Photos in the place form, saved with the place on Save. */
   private formPhotos: string[] = [];
+  /** The place whose "Seen today?" got a No while its card stays open. */
+  private seenAskDismissed?: string;
+  /** The log in the place form; entries removed here are deleted on Save. */
+  private formLog: PlaceLogEntry[] = [];
   /** The water level picked in the form; kept only if the place is saved as flooded. */
   private formWater?: WaterLevel;
   /** Bumped per form so a photo still being prepared can't land on another place. */
@@ -375,6 +397,7 @@ export class ViewerControls {
     card.dataset.mode = "edit";
     this.el("marker-details").hidden = true;
     this.el("marker-edit").hidden = true;
+    this.renderPlaceLog();
     this.el("marker-form").hidden = false;
     this.el("marker-dialog-title").textContent = title;
     this.editingRoute = route?.id;
@@ -389,6 +412,9 @@ export class ViewerControls {
     this.formVersion++;
     this.formPhotos = [...(fields.photos ?? [])];
     this.renderFormPhotos();
+    this.formLog = [];
+    this.renderFormLog();
+    this.el("marker-seen-field").hidden = true;
   }
   private openMarker(title: string, point: Point, marker?: MapMarker) {
     const card = this.dialog("marker-dialog");
@@ -402,6 +428,12 @@ export class ViewerControls {
     this.openForm(title, { ...marker, name: marker?.label ?? this.autoMarkerName });
     this.setMarkerKind(kind);
     this.setFormWater(marker?.water);
+    this.formLog = [...marker?.log ?? []];
+    this.renderFormLog();
+    const seen = this.input("marker-seen-date");
+    seen.value = dayValue(marker ? lastSeen(marker) : Date.now());
+    seen.max = dayValue(Date.now());
+    this.el("marker-seen-field").hidden = false;
     this.el("marker-delete").hidden = !marker;
     this.el("marker-move").hidden = !marker;
     // A new place shows where it will go while it is named.
@@ -444,6 +476,9 @@ export class ViewerControls {
   }
   private renderFormPhotos() {
     const list = this.el("marker-photo-list"), count = this.formPhotos.length;
+    const add = this.el<HTMLButtonElement>("marker-add-photos");
+    // The add tile always comes after the photos.
+    const addItem = add.parentElement!;
     list.replaceChildren(...this.formPhotos.map((id, index) => {
       const item = this.root.ownerDocument.createElement("li");
       item.append(this.root.ownerDocument.createElement("img"));
@@ -459,12 +494,64 @@ export class ViewerControls {
       });
       item.append(remove);
       return this.photoImage(id, `Photo ${index + 1} of ${count}`, item);
-    }));
-    this.el("marker-photos-field").hidden = !count;
+    }), addItem);
     const busy = this.photoJobs > 0;
-    this.el<HTMLButtonElement>("marker-add-photos").disabled = busy;
-    this.el("marker-add-photos").querySelector("span")!.textContent = busy ? t("Adding photos…") : t("Add photos");
+    add.disabled = busy;
+    add.title = busy ? t("Adding photos…") : t("Add photos");
+    add.setAttribute("aria-label", add.title);
     this.el<HTMLButtonElement>("marker-save").disabled = busy;
+  }
+  /** Each entry as a dated line, newest first. */
+  /** The journal as a timeline, each entry one line after its date; editing can remove entries. */
+  private logItems(log: PlaceLogEntry[], remove?: (entry: PlaceLogEntry) => void) {
+    const document = this.root.ownerDocument;
+    return newestFirst(log).map((entry) => {
+      const item = document.createElement("li");
+      const date = document.createElement("time");
+      date.dateTime = new Date(entry.date).toISOString();
+      date.textContent = logDate(entry.date);
+      const text = document.createElement("p");
+      text.append(date, entry.text);
+      item.append(text);
+      if (remove) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "log-remove";
+        button.innerHTML = icons.close;
+        button.setAttribute("aria-label", t("Remove entry from {date}", { date: date.textContent }));
+        button.title = t("Remove entry");
+        this.on(button, "click", () => remove(entry));
+        item.append(button);
+      }
+      return item;
+    });
+  }
+  private renderFormLog() {
+    this.el("marker-log-edit").replaceChildren(...this.logItems(this.formLog, (entry) => {
+      this.formLog = this.formLog.filter((other) => other !== entry);
+      this.renderFormLog();
+    }));
+    this.el("marker-log-field").hidden = !this.formLog.length;
+  }
+  /** When the place was last seen, under its title, and its journal under the description. */
+  private renderPlaceLog(place?: MapMarker) {
+    this.el("marker-detail-seen").hidden = !place;
+    this.el("marker-add-entry").hidden = !place;
+    this.el("marker-detail-log").hidden = !place?.log?.length;
+    this.el("marker-seen-ask").hidden = true;
+    if (!place) return;
+    this.el("marker-detail-seen").textContent = seenAgo(lastSeen(place));
+    // Asked until the place is confirmed today, or until No for this reading.
+    this.el("marker-seen-ask").hidden = this.seenAskDismissed === place.id ||
+      dayValue(lastSeen(place)) === dayValue(Date.now());
+    this.el("marker-log-list").replaceChildren(...this.logItems(place.log ?? []));
+  }
+  private openLogEntry() {
+    const today = dayValue(Date.now());
+    const date = this.input("entry-date");
+    date.value = date.max = today;
+    this.el<HTMLTextAreaElement>("entry-text").value = "";
+    showDialog(this.dialog("entry-dialog"));
   }
   /** Photos are shrunk and stored as they are picked; the item keeps them on Save. */
   private async addPhotos(files: File[]) {
@@ -645,6 +732,7 @@ export class ViewerControls {
     const { color } = markerKinds[kind] ?? markerKinds.landmark;
     this.paintCard(placeIcon(kind, water), color);
     this.dialog("kind-dialog").style.setProperty("--c", color);
+    this.dialog("entry-dialog").style.setProperty("--c", color);
   }
   private routeIcon(route: PlannedRoute) {
     return icons.route.replace("<svg ", `<svg style="color:${routeColor(this.state, route.id)}" `);
@@ -689,10 +777,11 @@ export class ViewerControls {
     const waterLine = this.el("marker-detail-water");
     waterLine.textContent = water ? t("Water level: {level}", { level: waterLevels[water] }) : "";
     waterLine.hidden = !water;
+    this.renderPlaceLog(place);
     const details = this.el("marker-details");
     details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
-    details.hidden = !item.description && !count && !water;
+    details.hidden = !item.description && !count && !water && !place?.log?.length;
     details.scrollTop = 0;
     // Measured at its natural height, up to half the screen.
     details.dataset.expandable = "false";
@@ -942,6 +1031,37 @@ export class ViewerControls {
       if (item && "label" in item) this.editMarker(item);
       else if (item) this.editRouteDetails(item);
     });
+    this.click("marker-seen-yes", () => {
+      const place = this.viewedItem();
+      if (!place || !("label" in place)) return;
+      place.lastSeen = place.seenAt = Date.now();
+      this.changed();
+      this.renderPlaceLog(place);
+      this.toast(t("{name} seen today", { name: place.label }), "done");
+    });
+    this.click("marker-seen-no", () => {
+      this.seenAskDismissed = this.viewingMarker;
+      this.el("marker-seen-ask").hidden = true;
+    });
+    this.click("marker-add-entry", () => this.openLogEntry());
+    this.click("entry-cancel", () => this.dialog("entry-dialog").close());
+    this.on(this.el("entry-form"), "submit", (event) => {
+      event.preventDefault();
+      const place = this.viewedItem();
+      const text = this.el<HTMLTextAreaElement>("entry-text").value.trim();
+      const day = this.input("entry-date").value;
+      if (!place || !("label" in place) || !text || !day) return;
+      const time = dayTime(day);
+      place.log = [...place.log ?? [], { id: crypto.randomUUID(), date: time, text }];
+      if (time > lastSeen(place)) {
+        place.lastSeen = time;
+        place.seenAt = Date.now();
+      }
+      this.dialog("entry-dialog").close();
+      this.changed();
+      this.showDetails(place);
+      this.toast(t("Journal entry added to {name}", { name: place.label }), "done");
+    });
     const details = this.el("marker-details");
     this.on(details, "scroll", () => {
       const card = this.dialog("marker-dialog");
@@ -1021,7 +1141,7 @@ export class ViewerControls {
         return;
       }
       this.dialog("photo-viewer").close();
-      this.viewingMarker = this.viewingRoute = undefined;
+      this.viewingMarker = this.viewingRoute = this.seenAskDismissed = undefined;
       this.viewer?.select?.();
       this.formVersion++;
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
@@ -1042,6 +1162,12 @@ export class ViewerControls {
       const existing = this.state.markers.find(
         (m) => m.id === this.editingMarker,
       );
+      const created = existing?.created ?? Date.now();
+      // Last seen only changes when its day was changed here, and then to any day, even earlier.
+      const seenDay = this.input("marker-seen-date").value;
+      const seen = seenDay && seenDay !== dayValue(existing ? lastSeen(existing) : created)
+        ? { lastSeen: dayTime(seenDay), seenAt: Date.now() }
+        : { ...(existing?.lastSeen ? { lastSeen: existing.lastSeen } : {}), ...(existing?.seenAt ? { seenAt: existing.seenAt } : {}) };
       const marker: MapMarker = {
         id: existing?.id ?? crypto.randomUUID(),
         point: this.markerPoint,
@@ -1050,11 +1176,17 @@ export class ViewerControls {
         ...(this.formPhotos.length ? { photos: [...this.formPhotos] } : {}),
         kind: this.markerKind(),
         ...(this.markerKind() === "flooded" && this.formWater ? { water: this.formWater } : {}),
-        created: existing?.created ?? Date.now(),
+        created,
+        ...seen,
+        ...(this.formLog.length ? { log: [...this.formLog] } : {}),
       };
+      const kept = new Set(this.formLog.map((entry) => entry.id));
+      const removed = (existing?.log ?? []).filter((entry) => !kept.has(entry.id)).map((entry) => entry.id);
+      if (existing?.deletedLog || removed.length) marker.deletedLog = [...existing?.deletedLog ?? [], ...removed];
       const unchanged = !!existing && existing.label === marker.label &&
         existing.description === marker.description && existing.kind === marker.kind &&
         existing.water === marker.water &&
+        existing.lastSeen === marker.lastSeen && !removed.length &&
         (existing.photos ?? []).join() === (marker.photos ?? []).join() &&
         existing.point.x === marker.point.x && existing.point.y === marker.point.y;
       // An edit keeps the place where it was in the Saved list.
