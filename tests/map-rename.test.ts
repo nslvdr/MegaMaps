@@ -56,6 +56,8 @@ test("rename dialog cancels without saving, rejects blank names and waits for on
   assert.equal(ui.dialog.querySelector(".dialog-actions #rename-map-cancel"), null);
   assert.equal(ui.input.value, "First map");
   ui.input.value = "Discard this";
+  assert.equal(ui.escape(), false, "a close request keeps the typed name");
+  assert.equal(ui.dialog.open, true);
   ui.cancel();
   assert.equal(ui.dialog.open, false);
   assert.deepEqual(calls, []);
@@ -72,7 +74,7 @@ test("rename dialog cancels without saving, rejects blank names and waits for on
   assert.equal(ui.dialog.open, true);
   assert.equal(ui.input.disabled, true);
   assert.equal(ui.dialog.querySelector<HTMLButtonElement>("#rename-map-cancel")!.disabled, true, "the header cross is blocked while saving");
-  assert.equal(ui.escape(), false, "Escape is blocked during persistence");
+  assert.equal(ui.escape(), false, "close requests are blocked during persistence");
   finish();
   await settle();
   assert.equal(ui.dialog.open, false);
