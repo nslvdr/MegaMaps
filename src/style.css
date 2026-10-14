@@ -1097,6 +1097,15 @@ dialog textarea:focus {
 dialog textarea {
   resize: vertical;
 }
+/* iOS sizes native date inputs to their own content, ignoring width: 100%. */
+dialog input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+dialog input[type="date"]::-webkit-date-and-time-value {
+  text-align: start;
+}
 
 /* ---------- Viewer ---------- */
 /* Map first: Back and View controls sit in the top corners; Saved, Search and
