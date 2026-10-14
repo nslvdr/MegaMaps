@@ -15,7 +15,7 @@ import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { prunePhotos } from "./storage/photos";
 import { darkMode, measureTone } from "./viewer/appearance";
 import { initLibraryFooter, libraryFooterMarkup } from "./ui/library-footer";
-import { initKeyboardInset } from "./ui/keyboard-inset";
+import { initKeyboardInset, initTapAway } from "./ui/keyboard-inset";
 import { lockPageZoom } from "./ui/page-zoom";
 import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
@@ -864,6 +864,7 @@ element("rerun-ocr").addEventListener("click", () => {
     .finally(() => void renderOcrSettings());
 });
 initKeyboardInset();
+initTapAway("dialog, #settings");
 lockPageZoom();
 void registerOfflineShell().then(refreshFooter);
 async function start() {

@@ -1094,8 +1094,12 @@ dialog textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
+/* Notes grow with the text from three lines, then scroll past ten. */
 dialog textarea {
-  resize: vertical;
+  field-sizing: content;
+  min-height: calc(3lh + 2 * var(--space-12) + 2px);
+  max-height: calc(10lh + 2 * var(--space-12) + 2px);
+  resize: none;
 }
 
 /* ---------- Viewer ---------- */
@@ -1691,7 +1695,7 @@ button.glass:active:not(:disabled) {
   }
 }
 /* Armed for a second tap, like Delete: filled red so it reads as final. */
-.tool-bar .dialog-close.armed {
+.dialog-close.armed {
   --accent: var(--danger);
   background: var(--danger);
   color: #1a0703;
@@ -1707,6 +1711,27 @@ button.glass:active:not(:disabled) {
 /* Reading a place sizes the card to what there is to read, up to 70% of the
    screen so the place stays visible above it; longer details scroll under the
    fixed header. The map stays full size behind it, the place centered above. */
+/* Editing pins Save to the card's bottom edge, in reach with the keyboard up;
+   the form scrolls under it. Delete, Move and Edit points share a row above. */
+.place-card[data-mode="edit"] {
+  padding-bottom: 0;
+}
+.place-save {
+  position: sticky;
+  bottom: 0;
+  margin-top: var(--space-8);
+  padding: var(--space-12) 0 max(var(--space-20), env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+.place-save > button {
+  width: 100%;
+}
+#marker-form > .dialog-actions > :first-child {
+  flex-basis: 0;
+}
+#marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
 .place-card[data-mode="view"] {
   /* Not modal, so not in the top layer: lift it over the map's controls. */
   position: fixed;

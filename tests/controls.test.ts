@@ -40,6 +40,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   }
   const root = document.querySelector<HTMLElement>("#viewer")!;
   const focus = t.mock.method(window.HTMLElement.prototype, "focus");
+  // Linkedom has no text selection either.
+  Object.defineProperty(window.HTMLInputElement.prototype, "select", { value() {}, configurable: true });
   const map: MapRecord = {
     id: "controls",
     name: "cave.png",
@@ -389,6 +391,23 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       el("marker-label"),
       "no keyboard just to accept the prefilled name",
     );
+    // The first tap on the suggestion selects it to type over; a typed name stays put.
+    const select = t.mock.method(el("marker-label") as HTMLInputElement, "select");
+    const tapLabel = () => {
+      el("marker-label").dispatchEvent(new window.Event("pointerdown"));
+      el("marker-label").dispatchEvent(new window.Event("click"));
+    };
+    tapLabel();
+    assert.equal(select.mock.callCount(), 1, "a suggested name is selected on the first tap");
+    input("marker-label", "");
+    el("marker-label").dispatchEvent(new window.Event("input"));
+    assert.equal((el("marker-save") as HTMLButtonElement).disabled, true, "Save waits for a name");
+    input("marker-label", "Landmark 1 bis");
+    el("marker-label").dispatchEvent(new window.Event("input"));
+    assert.equal((el("marker-save") as HTMLButtonElement).disabled, false);
+    tapLabel();
+    assert.equal(select.mock.callCount(), 1, "a typed name is not selected");
+    input("marker-label", "Landmark 1");
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     assert.equal(
       el("kind-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
@@ -456,12 +475,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-details").hidden, true);
     input("marker-description", "Unsaved changes");
     // Putting the keyboard away must never leave the form or drop the typing.
-    const blur = t.mock.method(el("marker-label"), "blur");
-    const doneKey = new window.Event("keydown", { cancelable: true });
-    Object.defineProperty(doneKey, "key", { value: "Enter" });
-    el("marker-label").dispatchEvent(doneKey);
-    assert.equal(doneKey.defaultPrevented, true, "Done on the name does not submit the form");
-    assert.equal(blur.mock.callCount(), 1, "Done on the name puts the keyboard away");
+    const nextKey = new window.Event("keydown", { cancelable: true });
+    Object.defineProperty(nextKey, "key", { value: "Enter" });
+    el("marker-label").dispatchEvent(nextKey);
+    assert.equal(nextKey.defaultPrevented, true, "Next on the name does not submit the form");
+    assert.equal(focus.mock.calls.at(-1)?.this, el("marker-description"), "Next on the name moves to the description");
     const closeRequest = new window.Event("cancel", { cancelable: true });
     el("marker-dialog").dispatchEvent(closeRequest);
     assert.equal(closeRequest.defaultPrevented, true, "a close request keeps the form open");
@@ -469,7 +487,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("marker-description") as HTMLTextAreaElement).value, "Unsaved changes");
     assert.equal(state.markers[0]?.description, "Left opening", "nothing is saved without Save");
     click("marker-cancel");
-    assert.equal(el("marker-form").hidden, true, "X returns to reading");
+    assert.equal(el("marker-form").hidden, false, "X with changes asks first");
+    assert.equal(el("marker-cancel").classList.contains("armed"), true);
+    assert.equal(el("marker-cancel").getAttribute("aria-label"), "Discard?");
+    click("marker-cancel");
+    assert.equal(el("marker-form").hidden, true, "a second X discards and returns to reading");
+    assert.equal(el("marker-cancel").getAttribute("aria-label"), "Close", "and X is plain again");
     assert.equal(el("marker-detail-description").textContent, "Left opening", "canceling leaves the original description intact");
     assert.equal(state.markers[0]?.description, "Left opening");
     click("marker-edit");
@@ -1376,7 +1399,7 @@ test("a flooded place's water level shows beside its pin and is picked in the ed
   }
 });
 
-test("a place shows when it was last seen and keeps a dated log, added from its card and pruned in Edit", async () => {
+test("a place shows when it was last seen and keeps a dated log, added from its card and pruned in Edit", async (t) => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -1442,6 +1465,24 @@ test("a place shows when it was last seen and keeps a dated log, added from its 
     assert.deepEqual(entries(), ["Dry", "Water to the knees"], "newest first");
     assert.equal(el("marker-detail-description").textContent, "Big pillar room", "the description stays");
     assert.equal(el("marker-log-list").querySelector("button"), null, "reading stays read-only");
+
+    // A new entry opens ready to type, and X asks before dropping a typed note.
+    const focus = t.mock.method(el("entry-text"), "focus");
+    click("marker-add-entry");
+    assert.equal(focus.mock.callCount(), 1, "the note gets the keyboard");
+    const add = el("entry-add") as HTMLButtonElement;
+    assert.equal(add.disabled, true, "Add waits for a note");
+    (el("entry-text") as HTMLTextAreaElement).value = "Half-written";
+    el("entry-text").dispatchEvent(new window.Event("input"));
+    assert.equal(add.disabled, false);
+    click("entry-cancel");
+    assert.equal(el("entry-dialog").hasAttribute("open"), true, "X with a note asks first");
+    click("entry-cancel");
+    assert.equal(el("entry-dialog").hasAttribute("open"), false);
+    assert.equal(place().log!.length, 2, "the discarded note isn't added");
+    click("marker-add-entry");
+    click("entry-cancel");
+    assert.equal(el("entry-dialog").hasAttribute("open"), false, "an empty entry closes at once");
 
     click("marker-edit");
     assert.equal(el("marker-add-entry").hidden, true, "editing has no journal button");
@@ -1548,6 +1589,8 @@ test("a route reads and edits like a place: name, description and photos", async
     click("marker-edit");
     (el("marker-label") as HTMLInputElement).value = "Discarded name";
     (el("marker-description") as HTMLTextAreaElement).value = "Discarded description";
+    click("marker-cancel");
+    assert.equal(el("marker-dialog").dataset.mode, "edit", "X with changes asks first");
     click("marker-cancel");
     assert.equal(el("marker-dialog").dataset.mode, "view");
     assert.equal(el("marker-dialog-title").textContent, "North gallery");
