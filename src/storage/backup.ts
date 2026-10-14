@@ -67,10 +67,10 @@ export function backupDue(maps: { created: number; opened?: number }[], lastBack
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
-/** "Backup 12∕01∕2022 11∶11": file names can't hold / or :, so lookalikes stand in. */
+/** Sortable local date and time with filename-safe ASCII separators. */
 export function backupFilename(date: Date) {
-  const day = [pad(date.getDate()), pad(date.getMonth() + 1), date.getFullYear()].join("\u2215");
-  const time = `${pad(date.getHours())}\u2236${pad(date.getMinutes())}`;
+  const day = [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join("-");
+  const time = `${pad(date.getHours())}-${pad(date.getMinutes())}`;
   return `Backup ${day} ${time}.megabackup`;
 }
 
