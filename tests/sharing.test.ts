@@ -60,9 +60,11 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   const legacy = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "bookmark" }] };
   const decoded = await readShare(rawFile(legacy));
   assert.deepEqual(decoded.manifest.markers, [{ ...manifest.markers[0]!, kind: "landmark" }]);
-  for (const kind of ["junction", "note", "shaft", "machinery"]) {
+  const retiredKinds = { junction: "landmark", note: "landmark", shaft: "landmark", machinery: "landmark",
+    "dead-end": "landmark", "new-room": "landmark", stairs: "passage", squeeze: "passage" };
+  for (const [kind, now] of Object.entries(retiredKinds)) {
     const retired = { ...manifest, markers: [{ ...manifest.markers[0]!, kind }] };
-    assert.equal((await readShare(rawFile(retired))).manifest.markers[0]!.kind, "landmark", `retired ${kind} places become landmarks`);
+    assert.equal((await readShare(rawFile(retired))).manifest.markers[0]!.kind, now, `retired ${kind} places become ${now}`);
   }
   assert.deepEqual((await readShare(encodeShare(decoded.manifest))).manifest, decoded.manifest);
 
@@ -122,7 +124,7 @@ test("exports carry only the chosen places' photos; imports store photos of adde
   const second = await savePhoto(source.id, new Blob(["shaft"], { type: "image/jpeg" }));
   state.markers = [
     { id: "gate", label: "Gate", description: "Rusty", photos: [first, "gone"], point: { x: 1, y: 1 }, kind: "entrance", created: 1 },
-    { id: "shaft", label: "Shaft", description: "", photos: [second], point: { x: 2, y: 2 }, kind: "stairs", created: 2 },
+    { id: "shaft", label: "Shaft", description: "", photos: [second], point: { x: 2, y: 2 }, kind: "passage", created: 2 },
   ];
   const prepared = await prepareExport(source, state);
   assert.deepEqual(prepared.markers[0]!.photos, [first], "a photo missing from storage is left out");

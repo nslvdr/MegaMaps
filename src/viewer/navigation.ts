@@ -115,8 +115,13 @@ export function defaultNavigation(mapId: string): NavigationState {
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
 // A draft with no points only survives when the page went away mid-draw; drop it.
-// Kinds that were folded into Landmark (shaft and machinery on 2026-10-12); old saves and shared files still use them.
-export const legacyMarkerKinds = ["bookmark", "junction", "note", "shaft", "machinery"] as const;
+// Retired kinds (shaft and machinery on 2026-10-12, four more on 2026-10-14); old saves and shared files still use them.
+export const legacyMarkerKinds = ["bookmark", "junction", "note", "shaft", "machinery", "stairs", "squeeze", "dead-end", "new-room"] as const;
+// Retired kinds that clearly became another; the rest become points of interest.
+const retiredKindMoves: Partial<Record<(typeof legacyMarkerKinds)[number], MapMarker["kind"]>> = {
+  stairs: "passage",
+  squeeze: "passage",
+};
 // Places saved before descriptions had a plain-text `note` instead.
 type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
   kind: MapMarker["kind"] | (typeof legacyMarkerKinds)[number];
@@ -130,9 +135,10 @@ type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   checkpoints?: LegacyCheckpoint[];
   rotationLocked?: boolean;
 };
-/** Keep saved points and shared files compatible with the merged landmark type. */
+/** Keep saved points and shared files compatible with retired kinds. */
 export const normalizeMarkerKind = (kind: StoredMarker["kind"]): MapMarker["kind"] =>
-  Object.hasOwn(markerKinds, kind) ? kind as MapMarker["kind"] : "landmark";
+  Object.hasOwn(markerKinds, kind) ? kind as MapMarker["kind"] :
+    retiredKindMoves[kind as keyof typeof retiredKindMoves] ?? "landmark";
 export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const defaults = defaultNavigation(stored.mapId);
   const current: StoredNavigation = { ...stored };
@@ -174,18 +180,15 @@ export const routeColor = (state: NavigationState, id: string) =>
       routeColors.length
   ]!;
 export const markerKinds = {
-  landmark: { label: t("Landmark"), color: "#ff9a5c" },
+  landmark: { label: t("Point of interest"), color: "#ff9a5c" },
   entrance: { label: t("Entrance"), color: "#7dff8a" },
-  stairs: { label: t("Stairs"), color: "#ffd23f" },
-  squeeze: { label: t("Squeeze"), color: "#3ef0c8" },
-  "dead-end": { label: t("Dead end"), color: "#9aa4b2" },
-  unstable: { label: t("Unstable"), color: "#ff4d4d" },
+  passage: { label: t("Passage"), color: "#3ef0c8" },
+  unstable: { label: t("Danger"), color: "#ff4d4d" },
   flooded: { label: t("Flooded"), color: "#5aa9ff" },
+  ossuary: { label: t("Ossuary"), color: "#e05bff" },
   graffiti: { label: t("Graffiti"), color: "#ff5fa2" },
-  "new-room": { label: t("New room"), color: "#e3e3e3" },
   tools: { label: t("Tools"), color: "#d9a066" },
   photo: { label: t("Photo spot"), color: "#b18cff" },
-  ossuary: { label: t("Ossuary"), color: "#e05bff" },
 } as const satisfies Record<string, { label: string; color: string }>;
 /** Three steps of water depth, shallowest first; a place stores the step number. */
 export const waterLevels = { 1: t("Ankle"), 2: t("Knee"), 3: t("Waist+") } as const;

@@ -382,7 +382,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(root.dataset.tool, "marker");
     tap(500, 600);
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
-    assert.equal((el("marker-label") as HTMLInputElement).value, "Landmark 1");
+    assert.equal((el("marker-label") as HTMLInputElement).value, "Point of interest 1");
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "landmark" }, "the new pin shows where it goes");
     assert.deepEqual(reveals.at(-1), { x: 500, y: 600 }, "the map keeps the spot clear of the card");
     assert.equal(el("marker-dialog").style.getPropertyValue("--spot-y"), "300px", "and the scrim lights it");
@@ -402,29 +402,29 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     input("marker-label", "");
     el("marker-label").dispatchEvent(new window.Event("input"));
     assert.equal((el("marker-save") as HTMLButtonElement).disabled, true, "Save waits for a name");
-    input("marker-label", "Landmark 1 bis");
+    input("marker-label", "Point of interest 1 bis");
     el("marker-label").dispatchEvent(new window.Event("input"));
     assert.equal((el("marker-save") as HTMLButtonElement).disabled, false);
     tapLabel();
     assert.equal(select.mock.callCount(), 1, "a typed name is not selected");
-    input("marker-label", "Landmark 1");
+    input("marker-label", "Point of interest 1");
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     assert.equal(
       el("kind-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
-      12,
+      9,
       "kinds show the map's pins",
     );
     assert.deepEqual(
       Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
-      ["landmark", "entrance", "stairs", "squeeze", "dead-end", "unstable", "flooded", "graffiti", "new-room", "tools", "photo", "ossuary"],
+      ["landmark", "entrance", "passage", "unstable", "flooded", "ossuary", "graffiti", "tools", "photo"],
       "landmarks and bookmarks share one option",
     );
-    assert.equal(el("marker-kind-current").textContent, "Landmark", "the form shows only the chosen pin");
+    assert.equal(el("marker-kind-current").textContent, "Point of interest", "the form shows only the chosen pin");
     el("marker-kind-toggle").dispatchEvent(new window.Event("click"));
     assert.equal(el("kind-dialog").hasAttribute("open"), true, "tapping it opens every pin in a modal");
     assert.equal(
-      root.querySelector('input[name="marker-kind"][value="dead-end"]')!.closest("label")!.textContent,
-      "Dead end",
+      root.querySelector('input[name="marker-kind"][value="unstable"]')!.closest("label")!.textContent,
+      "Danger",
       "each pin is named",
     );
     const entrance = root.querySelector<HTMLInputElement>(
