@@ -32,9 +32,11 @@ import { NavigationOverlay } from "./overlays";
 import {
   darkMode,
   measureTone,
+  type DarkLook,
   type DarkMode,
   type MapTone,
 } from "./appearance";
+import { Darkener } from "./darkener";
 import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import type { MapSearchMatch } from "./map-search";
@@ -80,7 +82,13 @@ export class Viewer {
   private target?: string;
   private dragging?: { point: Point; from: Point };
   private tone?: MapTone;
+  /** Tiles wait for the overview's tone, so they load in their final look once. */
+  private measured = false;
   private dark = darkMode(undefined);
+  /** The look baked into the loaded tiles; null before the first. */
+  private look: DarkLook | undefined | null = null;
+  private darkener = new Darkener();
+  private baseBlob?: Blob;
   private camera: Camera = { x: 0, y: 0, scale: 1 };
   private width = 1;
   private height = 1;
@@ -122,6 +130,7 @@ export class Viewer {
       map.id,
       () => this.invalidate(),
       onError,
+      (blob) => this.decode(blob),
     );
     this.observer = new ResizeObserver(() => this.resize());
     this.interactions = attachInteractions(canvas, {
@@ -228,8 +237,8 @@ export class Viewer {
           this.camera.rotation ?? 0,
         ),
       );
-    // Repaint before the browser shows the cleared canvas: the dark filter
-    // turns it light grey until the next frame, which a busy thread delays.
+    // Repaint before the browser shows the cleared canvas, rather than on the
+    // next frame, which a busy thread delays.
     if (cleared) this.drawNow();
   }
   private drawNow() {
@@ -240,25 +249,43 @@ export class Viewer {
   }
   private async loadBase() {
     try {
-      const index = this.map.levels.length - 1;
-      const bitmap = await createImageBitmap(
-        await payloadStore(this.map.backend).get(
-          this.map.id,
-          tileKey(index, 0, 0),
-        ),
+      const blob = await payloadStore(this.map.backend).get(
+        this.map.id,
+        tileKey(this.map.levels.length - 1, 0, 0),
       );
-      if (this.disposed) bitmap.close();
-      else {
-        this.base = bitmap;
-        this.tone = measureTone(bitmap);
-        this.applyAppearance();
-        this.invalidate();
-      }
+      const bitmap = await createImageBitmap(blob);
+      this.tone = measureTone(bitmap);
+      bitmap.close();
+      this.baseBlob = blob;
     } catch {
       if (!this.disposed)
         this.onError(t("The map preview is missing. Reimport this map."));
     }
+    if (this.disposed) return;
+    this.measured = true;
+    this.applyAppearance();
+    this.invalidate();
   }
+  private decode(blob: Blob) {
+    return this.look ? this.darkener.decode(blob, this.look) : createImageBitmap(blob);
+  }
+  private async paintBase() {
+    const blob = this.baseBlob,
+      look = this.look;
+    if (!blob) return;
+    try {
+      const bitmap = await this.decode(blob);
+      if (this.disposed || look !== this.look) bitmap.close();
+      else {
+        this.base = bitmap;
+        this.invalidate();
+      }
+    } catch {
+      if (!this.disposed && look === this.look)
+        this.onError(t("The map preview is missing. Reimport this map."));
+    }
+  }
+
   private setCamera(camera: Camera) {
     const { min, max } = this.limits(camera.rotation ?? 0);
     const scale = Math.max(min, Math.min(max, camera.scale));
@@ -329,14 +356,16 @@ export class Viewer {
   }
   private applyAppearance() {
     this.dark = darkMode(this.tone);
-    const filter = [
-      this.navigation.inverted ? this.dark.filter : "",
-      this.navigation.dimming < 1 ? `brightness(${this.navigation.dimming})` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    // Appearance adjustments affect only the map; annotations stay fully opaque.
-    this.canvas.style.filter = filter;
+    const look = this.navigation.inverted ? this.dark.look : undefined;
+    // A new look decodes every tile again; brightness is drawn per frame.
+    if (this.measured && (this.look === null || this.look?.invert !== look?.invert ||
+        this.look?.contrast !== look?.contrast || this.look?.brightness !== look?.brightness)) {
+      this.look = look;
+      this.cache.reset();
+      this.base?.close();
+      this.base = undefined;
+      void this.paintBase();
+    }
     this.options?.onAppearance?.(this.dark);
   }
   zoomBy(factor: number) {
@@ -704,15 +733,12 @@ export class Viewer {
     this.turn(now);
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    // Margins and unloaded areas become pure black after the display filter.
-    const black = this.navigation.inverted ? this.dark.black : "#000";
-    ctx.fillStyle = black;
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.translate(this.camera.x, this.camera.y);
     ctx.rotate(this.camera.rotation ?? 0);
     ctx.scale(this.camera.scale, this.camera.scale);
-    ctx.fillStyle = black;
     ctx.fillRect(0, 0, this.map.width, this.map.height);
     let level = chooseLevel(this.map.levels, this.camera.scale, this.dpr);
     let tiles = visibleTiles(
@@ -727,7 +753,7 @@ export class Viewer {
         this.camera,
         this.viewport(),
       );
-    this.cache.plan(tiles.map((t) => ({ ...t, level })));
+    if (this.measured) this.cache.plan(tiles.map((t) => ({ ...t, level })));
     // The overview stays beneath everything: it hides hairline seams where
     // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
     // ones load.
@@ -762,6 +788,14 @@ export class Viewer {
         width,
         height,
       );
+    }
+    // Dimming is a black veil, the same as brightness(), drawn only on frames
+    // that change. Annotations are a separate layer and stay fully opaque.
+    if (this.navigation.dimming < 1) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1 - this.navigation.dimming;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.globalAlpha = 1;
     }
     const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
     this.searchOverlay?.reserve(this.camera, labels);
@@ -807,6 +841,7 @@ export class Viewer {
     this.observer.disconnect();
     this.interactions.dispose();
     this.cache.dispose();
+    this.darkener.dispose();
     this.base?.close();
     this.overlay?.dispose();
     this.searchOverlay?.dispose();

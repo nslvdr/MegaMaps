@@ -23,11 +23,14 @@ export class TileCache {
   private bytes = 0;
   private active = 0;
   private disposed = false;
+  /** Bumped when the look changes, so earlier decodes are dropped. */
+  private generation = 0;
   constructor(
     private store: PayloadStore,
     private mapId: string,
     private invalidate: () => void,
     private onError: (message: string) => void,
+    private decode: (blob: Blob) => Promise<ImageBitmap> = (blob) => createImageBitmap(blob),
   ) {}
   get decodedBytes() {
     return this.bytes;
@@ -80,13 +83,22 @@ export class TileCache {
       void this.load(request, key);
     }
   }
+  /** Drops every tile so the next plan decodes them again, in a new look. */
+  reset() {
+    this.generation++;
+    this.queue = [];
+    this.pending.clear();
+    this.failed.clear();
+    for (const entry of this.entries.values()) entry.bitmap.close();
+    this.entries.clear();
+    this.bytes = 0;
+  }
   private async load(request: TileRequest, key: string) {
+    const generation = this.generation;
     try {
-      const bitmap = await createImageBitmap(
-        await this.store.get(this.mapId, key),
-      );
+      const bitmap = await this.decode(await this.store.get(this.mapId, key));
       const bytes = bitmap.width * bitmap.height * 4;
-      if (this.disposed || !this.wanted.has(key) || !this.evict(bytes))
+      if (this.disposed || generation !== this.generation || !this.wanted.has(key) || !this.evict(bytes))
         bitmap.close();
       else {
         this.entries.set(key, {
@@ -99,7 +111,7 @@ export class TileCache {
         this.invalidate();
       }
     } catch {
-      if (!this.disposed && this.wanted.has(key)) {
+      if (!this.disposed && generation === this.generation && this.wanted.has(key)) {
         this.failed.add(key);
         this.onError(
           t("A map tile could not be read. Reopen the map or reimport the original."),
@@ -107,7 +119,7 @@ export class TileCache {
       }
     } finally {
       this.active--;
-      this.pending.delete(key);
+      if (generation === this.generation) this.pending.delete(key);
       this.pump();
     }
   }

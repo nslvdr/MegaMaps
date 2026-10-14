@@ -269,7 +269,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal((el("dark-map") as HTMLInputElement).checked, true);
     controls.options().onAppearance?.({
       filter: "",
-      black: "#000",
       kind: "already-dark",
     });
     assert.equal(el("dark-status").textContent, "Map is already dark");
@@ -324,6 +323,14 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
+    // Sensor jitter leaves the map still, so it is not redrawn nonstop.
+    const following = orientations.length;
+    heading(91.5);
+    heading(88.5);
+    assert.equal(orientations.length, following);
+    heading(93);
+    assert.ok(Math.abs(orientations.at(-1)! + (93 * Math.PI) / 180) < 1e-9);
+    heading(90);
 
     // Its north can sit anywhere on the map; the wheel turns it as each degree passes.
     assert.equal(el("north-field").hidden, false);
