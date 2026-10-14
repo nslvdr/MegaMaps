@@ -1073,7 +1073,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   assert.equal(stage.classList.contains("spotlight"), false);
 });
 
-test("place details read long descriptions safely and expand while scrolling", async () => {
+test("place details read long descriptions safely", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -1104,27 +1104,20 @@ test("place details read long descriptions safely and expand while scrolling", a
   };
   state.markers = [marker];
   const original = structuredClone(marker);
-  const centered: { point: Point; animated: boolean | undefined }[] = [];
   const covers: (number | undefined)[] = [];
   const controls = new ViewerControls(root, map, state);
   controls.attach({
-    setTool() {}, updateNavigation() {}, fitPoints() {},
-    jumpTo(point, _minimumScale, animated) { centered.push({ point, animated }); },
+    setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {},
     cover(edge) { covers.push(edge); },
   });
   const details = document.getElementById("marker-details")!,
     noteElement = document.getElementById("marker-detail-description")!,
     editor = document.getElementById("marker-form")!;
-  let contentHeight = 2000;
-  Object.defineProperty(details.querySelector(".place-detail-content")!, "scrollHeight", {
-    get: () => contentHeight,
-  });
-  Object.defineProperty(details, "clientHeight", { value: 200 });
   Object.defineProperty(card, "offsetTop", { value: 420 });
-  // Linkedom lacks layout; these are the pane's collapsed/maximum CSS heights.
-  Object.defineProperty(globalThis, "getComputedStyle", {
-    value: () => ({ minHeight: "400px", maxHeight: "700px" }), configurable: true,
-  });
+  // Linkedom lacks layout: the details are 2000px tall in a 500px window.
+  let contentHeight = 2000;
+  Object.defineProperty(details, "scrollHeight", { get: () => contentHeight });
+  Object.defineProperty(details, "clientHeight", { value: 500 });
   const scroll = (top: number) => {
     details.scrollTop = top;
     details.dispatchEvent(new window.Event("scroll"));
@@ -1132,40 +1125,29 @@ test("place details read long descriptions safely and expand while scrolling", a
   try {
     controls.options().onMarker(marker);
     assert.equal(covers.at(-1), 420, "the map stays full size; the pane only covers it");
+    assert.equal(details.dataset.more, "true", "longer details hint there is more below");
+    scroll(1000);
+    assert.equal(details.dataset.more, "true");
+    scroll(1500);
+    assert.equal(details.dataset.more, "false", "the hint goes once the end is reached");
+    scroll(1200);
+    assert.equal(details.dataset.more, "true", "and returns when scrolling back up");
     assert.equal(editor.hidden, true);
     assert.equal(noteElement.textContent, note, "long notes retain every line");
     assert.equal(noteElement.querySelector("img"), null, "notes cannot inject markup");
     assert.deepEqual(state.markers[0], original, "reading does not modify the place");
-    assert.equal(details.dataset.expandable, "true");
-    scroll(20);
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "20px", "a small scroll only unfolds that distance");
-    assert.deepEqual(centered.at(-1), { point: marker.point, animated: false }, "the map follows pane movement without a separate glide");
-    scroll(35);
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "35px", "growth follows subsequent scroll distance");
-    scroll(300);
-    const centeredAtMaximum = centered.length;
-    scroll(500);
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "300px", "the pane stays at its maximum while notes keep scrolling");
-    assert.equal(centered.length, centeredAtMaximum, "ordinary note scrolling does not move the map");
-    scroll(450);
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "300px");
-    scroll(240);
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "240px", "scrolling back unfolds the pane in reverse");
-    scroll(0);
-    for (const type of ["wheel", "touchmove"]) {
-      const event = new window.Event(type, { cancelable: true });
-      details.dispatchEvent(event);
-      assert.equal(event.defaultPrevented, false, "native input and touch momentum are not intercepted");
-    }
-    contentHeight = 80;
+    contentHeight = 300;
+    marker.description = "A short note.";
+    controls.options().onMarker(marker);
+    assert.equal(details.scrollTop, 0, "reopening starts at the top");
+    assert.equal(details.dataset.more, "false", "details that fit need no hint");
     marker.description = "";
     controls.options().onMarker(marker);
-    assert.equal(details.dataset.expandable, "false", "short notes need no extra scroll distance");
+    assert.equal(details.hidden, true, "a place with nothing to read is just its header");
     assert.equal(noteElement.hidden, true, "a place without a description shows none");
     document.getElementById("marker-cancel")!.dispatchEvent(new window.Event("click"));
     assert.equal(card.hasAttribute("open"), false);
     assert.equal(covers.at(-1), undefined, "closing the pane uncovers the map");
-    assert.equal(root.style.getPropertyValue("--place-pane-scroll"), "");
   } finally {
     await controls.dispose();
   }

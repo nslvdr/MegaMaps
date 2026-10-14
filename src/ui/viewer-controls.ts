@@ -746,7 +746,6 @@ export class ViewerControls {
   private showDetails(item: MapMarker | PlannedRoute) {
     this.sheet(undefined);
     const card = this.dialog("marker-dialog");
-    this.root.style.removeProperty("--place-pane-scroll");
     const place = "label" in item ? item : undefined;
     this.viewingMarker = place?.id;
     this.viewingRoute = place ? undefined : item.id;
@@ -783,11 +782,8 @@ export class ViewerControls {
     // With nothing to read, the card shrinks to its header.
     details.hidden = !item.description && !count && !water && !place?.log?.length;
     details.scrollTop = 0;
-    // Measured at its natural height, up to half the screen.
-    details.dataset.expandable = "false";
     this.presentCard(false);
-    const overflowing = details.querySelector<HTMLElement>(".place-detail-content")!.scrollHeight > details.clientHeight;
-    details.dataset.expandable = String(overflowing);
+    this.markMoreDetails();
     // The map stays full size behind the pane; the item centers above it.
     this.viewer?.cover?.(card.offsetTop);
     this.frame(item);
@@ -795,10 +791,15 @@ export class ViewerControls {
     this.viewer?.pulse?.(item.id);
     this.viewer?.refreshLabels?.();
   }
+  /** Flags details that continue below the card's edge, for the pulsing hint. */
+  private markMoreDetails() {
+    const details = this.el("marker-details");
+    details.dataset.more = String(details.scrollHeight - details.scrollTop - details.clientHeight > 1);
+  }
   /** A place centers without zooming out; a route fits whole. */
-  private frame(item: MapMarker | PlannedRoute, animated = true) {
-    if ("label" in item) this.viewer?.jumpTo(item.point, 1, animated);
-    else this.viewer?.fitPoints(item.points, animated);
+  private frame(item: MapMarker | PlannedRoute) {
+    if ("label" in item) this.viewer?.jumpTo(item.point, 1);
+    else this.viewer?.fitPoints(item.points);
   }
   private presentCard(modal: boolean) {
     const card = this.dialog("marker-dialog");
@@ -823,11 +824,6 @@ export class ViewerControls {
   }
   private modalOpen() {
     return !!this.root.querySelector('dialog[open]:not(.place-card[data-mode="view"])');
-  }
-  /** The initial native scroll distance unfolds the pane before the notes scroll. */
-  private markerExpansionRange() {
-    const style = getComputedStyle(this.dialog("marker-dialog"));
-    return Math.max(0, parseFloat(style.maxHeight) - parseFloat(style.minHeight));
   }
   /** Cancel an edit back to its unchanged detail view, or close a form opened elsewhere. */
   private cancelMarkerEdit() {
@@ -1044,6 +1040,7 @@ export class ViewerControls {
       this.el("marker-seen-ask").hidden = true;
     });
     this.click("marker-add-entry", () => this.openLogEntry());
+    this.on(this.el("marker-details"), "scroll", () => this.markMoreDetails());
     this.click("entry-cancel", () => this.dialog("entry-dialog").close());
     this.on(this.el("entry-form"), "submit", (event) => {
       event.preventDefault();
@@ -1061,18 +1058,6 @@ export class ViewerControls {
       this.changed();
       this.showDetails(place);
       this.toast(t("Journal entry added to {name}", { name: place.label }), "done");
-    });
-    const details = this.el("marker-details");
-    this.on(details, "scroll", () => {
-      const card = this.dialog("marker-dialog");
-      if (!card.hasAttribute("open") || card.dataset.mode !== "view") return;
-      const offset = Math.min(Math.max(0, details.scrollTop), this.markerExpansionRange());
-      const height = `${offset}px`;
-      if (this.root.style.getPropertyValue("--place-pane-scroll") === height) return;
-      this.root.style.setProperty("--place-pane-scroll", height);
-      this.viewer?.cover?.(card.offsetTop);
-      const item = this.viewedItem();
-      if (item) this.frame(item, false);
     });
     this.on(this.dialog("marker-dialog"), "cancel", (event) => {
       if (this.dialog("marker-dialog").dataset.mode !== "edit" || !this.viewedItem()) return;
@@ -1146,7 +1131,6 @@ export class ViewerControls {
       this.formVersion++;
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
       this.photoURLs.clear();
-      this.root.style.removeProperty("--place-pane-scroll");
       this.viewer?.cover?.();
       this.viewer?.previewPlace?.();
       this.viewer?.refreshLabels?.();
