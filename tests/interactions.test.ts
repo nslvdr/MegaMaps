@@ -299,3 +299,39 @@ test("while editing, a finger on a point drags it instead of the map", () => {
   assert.deepEqual(log, ["drag 150,100", "cancel"], "no drop after a cancel");
   interactions.dispose();
 });
+test("a Safari trackpad pinch zooms in and out around the cursor", () => {
+  Object.defineProperty(globalThis, "cancelAnimationFrame", {
+    value: () => {},
+    configurable: true,
+  });
+  const canvas = new Canvas(),
+    h = host(canvas);
+  const anchor = screenToWorld(h.camera(), { x: 120, y: 80 });
+  const at = { clientX: 120, clientY: 80 };
+  emit(canvas, "gesturestart", { ...at, scale: 1 });
+  emit(canvas, "gesturechange", { ...at, scale: 2 });
+  assert.equal(h.camera().scale, 2);
+  // Its own ctrl-wheels must not zoom a second time.
+  emit(canvas, "wheel", { ...at, deltaY: -50, deltaMode: 0, ctrlKey: true });
+  assert.equal(h.camera().scale, 2);
+  emit(canvas, "gesturechange", { ...at, scale: 0.5 });
+  assert.equal(h.camera().scale, 0.5);
+  const after = screenToWorld(h.camera(), { x: 120, y: 80 });
+  assert.ok(Math.abs(anchor.x - after.x) < 1e-9 && Math.abs(anchor.y - after.y) < 1e-9);
+  emit(canvas, "gestureend", {});
+  h.interactions.dispose();
+});
+test("a touch pinch's gesture events don't zoom on top of the pointers", () => {
+  Object.defineProperty(globalThis, "cancelAnimationFrame", {
+    value: () => {},
+    configurable: true,
+  });
+  const canvas = new Canvas(),
+    h = host(canvas);
+  emit(canvas, "pointerdown", pointer(1, 100, 100));
+  emit(canvas, "pointerdown", pointer(2, 200, 100));
+  emit(canvas, "gesturestart", { clientX: 150, clientY: 100, scale: 1 });
+  emit(canvas, "gesturechange", { clientX: 150, clientY: 100, scale: 3 });
+  assert.equal(h.camera().scale, 1);
+  h.interactions.dispose();
+});
