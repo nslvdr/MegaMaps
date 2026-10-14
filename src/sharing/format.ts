@@ -3,7 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -14,11 +14,12 @@ const MAX_POINTS = 100_000;
 const MAX_PHOTOS = 2_000;
 const MAX_PHOTO_BYTES = 16 * 1024 * 1024;
 const MAX_PHOTOS_PER_ITEM = 50;
+const MAX_LOG_PER_PLACE = 500;
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export interface SharePhoto { id: string; type: string; bytes: number }
 export interface ShareManifest {
   format: "megamap";
-  version: 3;
+  version: 4;
   map: { name: string; width: number; height: number; fingerprint: string };
   image?: { name: string; type: string; bytes: number };
   markers: MapMarker[];
@@ -72,8 +73,9 @@ function invalid(): never {
 /** Treat shared files as untrusted; construct only the fields this version accepts. */
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
-  // Version 1 predates photos and named descriptions `note`; version 2 routes have neither.
-  if (value.version !== 1 && value.version !== 2 && value.version !== 3) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
+  // Version 1 predates photos and named descriptions `note`; version 2 routes have neither;
+  // version 3 places have no last seen date or log.
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -117,15 +119,32 @@ export function validateManifest(value: unknown): ShareManifest {
     return own.length ? { photos: own } : {};
   };
   const version = value.version;
+  const time = (value: unknown) => integer(value, 0, Number.MAX_SAFE_INTEGER);
+  const log = (value: unknown) => {
+    if (value === undefined) return {};
+    if (!Array.isArray(value) || value.length > MAX_LOG_PER_PLACE) invalid();
+    const entryIds = new Set<string>();
+    const entries = value.map((entry: unknown): PlaceLogEntry => {
+      if (!object(entry) || !name(entry.id, 200) || entryIds.has(entry.id) ||
+          !time(entry.date) || !text(entry.text, 2000) || !entry.text.trim()) invalid();
+      entryIds.add(entry.id);
+      return { id: entry.id, date: entry.date, text: entry.text };
+    });
+    return entries.length ? { log: entries } : {};
+  };
   const markers = value.markers.map((value: unknown): MapMarker => {
     if (!object(value)) invalid();
     const description = version === 1 ? value.note : value.description;
     if (!name(value.label, 100) || !text(description, 2000) ||
         typeof value.kind !== "string" ||
         (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind)) ||
-        (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water)))) invalid();
+        (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water))) ||
+        (value.lastSeen !== undefined && !time(value.lastSeen)) ||
+        (value.seenAt !== undefined && !time(value.seenAt))) invalid();
     return { ...identity(value, "marker"), label: value.label, description,
       ...ownPhotos(value),
+      ...(time(value.lastSeen) ? { lastSeen: value.lastSeen } : {}),
+      ...(time(value.seenAt) ? { seenAt: value.seenAt } : {}), ...log(value.log),
       kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]),
       ...(isWaterLevel(value.water) ? { water: value.water } : {}), point: point(value.point) };
   });
@@ -154,7 +173,7 @@ export function validateManifest(value: unknown): ShareManifest {
   if (value.from !== undefined && !name(value.from, 100)) invalid();
   if (!image && markers.length + routes.length === 0)
     throw new Error(t("Select at least one place or route, or include the map image."));
-  return { format: "megamap", version: 3,
+  return { format: "megamap", version: 4,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
     ...(north !== undefined ? { northOffset: north } : {}),

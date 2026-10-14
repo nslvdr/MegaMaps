@@ -42,3 +42,22 @@ export function nextName(base: string, names: Iterable<string>) {
   }
   return `${base} ${highest + 1}`;
 }
+
+/** "Seen today", "Seen 3 weeks ago", "Seen 14 months ago": how fresh a place's information is. */
+export function seenAgo(time: number, now = Date.now()) {
+  const day = (t: number) => {
+    const date = new Date(t);
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+  };
+  const days = Math.max(0, day(now) - day(time));
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const when = days < 14 ? relative.format(-days, "day")
+    : days < 60 ? relative.format(-Math.round(days / 7), "week")
+    : days < 730 ? relative.format(-Math.round(days / 30.44), "month")
+    : relative.format(-Math.round(days / 365.25), "year");
+  return t("Seen {when}", { when });
+}
+
+/** A log entry's day, with its year: logs reach back further than this year. */
+export const logDate = (time: number) =>
+  new Date(time).toLocaleDateString(locale, { year: "numeric", month: "short", day: "2-digit" });

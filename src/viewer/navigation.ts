@@ -17,7 +17,22 @@ export interface MapMarker {
   /** How deep the water is; only flooded places have one. */
   water?: WaterLevel;
   created: number;
+  /** When someone last confirmed the place; absent means since it was created. */
+  lastSeen?: number;
+  /** When last seen was set; the later change wins a merge, so it can be corrected to an earlier day. */
+  seenAt?: number;
+  /** Dated notes on how the place has changed, in the order they were added. */
+  log?: PlaceLogEntry[];
+  /** IDs of log entries deleted here, so a merge can't bring them back. Never shared. */
+  deletedLog?: string[];
 }
+export interface PlaceLogEntry {
+  id: string;
+  /** The day of the visit, as a timestamp; it can be earlier than when it was written. */
+  date: number;
+  text: string;
+}
+export const lastSeen = (marker: MapMarker) => marker.lastSeen ?? marker.created;
 /** Saved by older versions; now loaded as places. */
 interface LegacyCheckpoint {
   id: string;

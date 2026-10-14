@@ -25,7 +25,7 @@ function image(width = 512, height = 256, salt = "original") {
 }
 async function fixture() {
   const original = image();
-  const manifest: ShareManifest = { format: "megamap", version: 3,
+  const manifest: ShareManifest = { format: "megamap", version: 4,
     map: { name: "Survey <2026>", width: 512, height: 256, fingerprint: await fingerprint(original) },
     markers: [{ id: "place-a", label: "Entrance <west>", description: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
     routes: [{ id: "route-a", name: "Way out", points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], draft: false, created: 2 }] };
@@ -96,7 +96,7 @@ test("place photos travel with their place, and version 1 notes arrive as descri
   const { description, ...place } = manifest.markers[0]!;
   const legacy = await readShare(rawFile({ ...manifest, version: 1, markers: [{ ...place, note: description }] }));
   assert.equal(legacy.manifest.markers[0]!.description, description);
-  assert.equal(legacy.manifest.version, 3, "older shares re-export in the current format");
+  assert.equal(legacy.manifest.version, 4, "older shares re-export in the current format");
 
   const encoded = (value: unknown, tail: Blob) => readShare(rawFile(value, tail));
   const bytes = new Blob(["first jpeg", "second"]);
@@ -239,7 +239,7 @@ test("route descriptions and ordered photos survive sharing, import and pruning"
   const { manifest } = await fixture();
   const legacy = await readShare(rawFile({ ...manifest, version: 2 }));
   assert.deepEqual(legacy.manifest.routes, manifest.routes, "version 2 routes remain readable");
-  assert.equal(legacy.manifest.version, 3);
+  assert.equal(legacy.manifest.version, 4);
 });
 
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
@@ -270,7 +270,7 @@ test("import routing recognizes the shared header regardless of filename or MIME
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
   const { manifest, original } = await fixture();
   await assert.rejects(readShare(new Blob(["not a MegaMaps file"])), /exported by MegaMaps/);
-  await assert.rejects(readShare(rawFile({ ...manifest, version: 4 })), /not supported/);
+  await assert.rejects(readShare(rawFile({ ...manifest, version: 5 })), /not supported/);
   await assert.rejects(readShare(rawFile({ ...manifest, map: { ...manifest.map, width: 0 } })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], point: { x: 513, y: 2 } }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], kind: "__proto__" }] })), /invalid/);
@@ -305,6 +305,57 @@ test("repeat imports preserve edits and deleted items while later shares add new
   assert.equal(second.state.routes.length, 0, "locally deleted imports stay deleted");
   assert.equal(second.state.markers.find((item) => item.id === "local")!.label, "My own place");
   assert.equal(state.markers.length, 1, "merging does not mutate the original snapshot");
+});
+
+test("last seen and log entries travel in shares; older files fall back to the creation date", async () => {
+  const { manifest } = await fixture();
+  const place = { ...manifest.markers[0]!, lastSeen: 50, seenAt: 60,
+    log: [{ id: "visit", date: 40, text: "Water to the knees" }], deletedLog: ["gone"] };
+  const decoded = await readShare(encodeShare({ ...manifest, markers: [place] }));
+  const { deletedLog, ...shared } = place;
+  assert.deepEqual(decoded.manifest.markers[0], shared, "deleted entry IDs stay on this device");
+  const older = await readShare(rawFile({ ...manifest, version: 3 }));
+  assert.equal(older.manifest.markers[0]!.lastSeen, undefined);
+  const invalid = (marker: object) => readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], ...marker }] }));
+  await assert.rejects(invalid({ lastSeen: -1 }), /invalid/);
+  await assert.rejects(invalid({ seenAt: "yesterday" }), /invalid/);
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, text: " " }] }), /invalid/, "an entry says something");
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, text: "x" }, { id: "a", date: 2, text: "y" }] }), /invalid/);
+});
+
+test("merging a place already here keeps local text and adds newer visits and log entries", async () => {
+  const { manifest } = await fixture();
+  const state = defaultNavigation("map");
+  state.markers = [{ ...manifest.markers[0]!, label: "My name", lastSeen: 100,
+    log: [{ id: "mine", date: 90, text: "Dry" }, { id: "both", date: 80, text: "Shared" }], deletedLog: ["removed"] }];
+  const theirs = { ...manifest, markers: [{ ...manifest.markers[0]!, label: "Their name", lastSeen: 200,
+    log: [{ id: "both", date: 80, text: "Shared" }, { id: "theirs", date: 200, text: "Ceiling down" },
+      { id: "removed", date: 70, text: "Deleted here" }] }] };
+  const merged = mergeAnnotations(state, theirs);
+  const place = merged.state.markers[0]!;
+  assert.equal(place.label, "My name");
+  assert.equal(place.lastSeen, 200);
+  assert.deepEqual(place.log!.map((entry) => entry.id), ["mine", "both", "theirs"], "an entry deleted here stays deleted");
+  assert.deepEqual([merged.added, merged.updated, merged.skipped], [1, 1, 0]);
+
+  const again = mergeAnnotations(merged.state, { ...theirs, markers: [{ ...theirs.markers[0]!, lastSeen: 10 }] });
+  assert.equal(again.state.markers[0], place, "an older visit changes nothing");
+  assert.deepEqual([again.updated, again.skipped], [0, 2]);
+});
+
+test("visits and log entries made in another window survive a stale save", () => {
+  const stored = defaultNavigation("map");
+  stored.markers = [{ id: "p", label: "P", description: "", kind: "landmark", point: { x: 1, y: 1 }, created: 1,
+    lastSeen: 300, log: [{ id: "other", date: 300, text: "From the other window" }] }];
+  const next = defaultNavigation("map");
+  next.markers = [{ ...stored.markers[0]!, lastSeen: 100, log: [{ id: "here", date: 100, text: "Here" }],
+    deletedLog: ["other"] }];
+  const saved = preserveUnseenImports(next, stored).markers[0]!;
+  assert.equal(saved.lastSeen, 300);
+  const corrected = preserveUnseenImports({ ...next, markers: [{ ...next.markers[0]!, seenAt: 400 }] },
+    { ...stored, markers: [{ ...stored.markers[0]!, seenAt: 350 }] }).markers[0]!;
+  assert.equal(corrected.lastSeen, 100, "a later correction to an earlier day sticks");
+  assert.deepEqual(saved.log!.map((entry) => entry.id), ["here"], "a deletion here wins over the stale copy");
 });
 
 test("matching hashes originals rather than trusting filenames or dimensions; export selections stay independent", async () => {
@@ -342,7 +393,7 @@ test("transactional imports preserve existing navigation and survive stale saves
   state.view = { center: { x: 40, y: 30 }, scale: 2, rotation: 1 };
   await saveNavigation(state);
   const results = await Promise.all([importAnnotations(map.id, manifest), importAnnotations(map.id, manifest)]);
-  assert.deepEqual(results, [{ added: 2, skipped: 0, removed: 0 }, { added: 0, skipped: 2, removed: 0 }]);
+  assert.deepEqual(results, [{ added: 2, updated: 0, skipped: 0, removed: 0 }, { added: 0, updated: 0, skipped: 2, removed: 0 }]);
   state.dimming = 0.6;
   await saveNavigation(state); // Old viewer snapshot has not seen the import yet.
   const saved = await loadNavigation(map.id);
@@ -384,13 +435,13 @@ test("replace swaps places and finished routes for the shared ones but keeps dra
   ];
   state.importedItems = ["marker:theirs-edited", "marker:deleted-earlier"];
   await saveNavigation(state);
-  assert.deepEqual(await importAnnotations(map.id, manifest, "replace"), { added: 2, skipped: 0, removed: 3 });
+  assert.deepEqual(await importAnnotations(map.id, manifest, "replace"), { added: 2, updated: 0, skipped: 0, removed: 3 });
   const saved = await loadNavigation(map.id);
   assert.deepEqual(saved.markers, manifest.markers);
   assert.deepEqual(saved.routes.map((route) => route.id), ["drawing", ...manifest.routes.map((route) => route.id)]);
   assert.deepEqual(saved.importedItems, [...manifest.markers.map((item) => `marker:${item.id}`), ...manifest.routes.map((item) => `route:${item.id}`)]);
   assert.equal(saved.dimming, 0.3);
-  assert.deepEqual(await importAnnotations(map.id, manifest), { added: 0, skipped: 2, removed: 0 }, "a later merge skips replaced items");
+  assert.deepEqual(await importAnnotations(map.id, manifest), { added: 0, updated: 0, skipped: 2, removed: 0 }, "a later merge skips replaced items");
   // A queued save from an older window must not resurrect the removed annotations.
   state.dimming = 0.6;
   await saveNavigation(state);

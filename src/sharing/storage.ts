@@ -87,7 +87,7 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     const blob = prepared.photos.get(id)!;
     return { id, type: blob.type || "image/jpeg", bytes: blob.size };
   });
-  const manifest: ShareManifest = { format: "megamap", version: 3, map: prepared.map,
+  const manifest: ShareManifest = { format: "megamap", version: 4, map: prepared.map,
     markers: chosen,
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
@@ -107,7 +107,7 @@ export async function importAnnotations(
   signal?.throwIfAborted();
   const db = await database();
   signal?.throwIfAborted();
-  return new Promise<{ added: number; skipped: number; removed: number }>((resolve, reject) => {
+  return new Promise<{ added: number; updated: number; skipped: number; removed: number }>((resolve, reject) => {
     const tx = db.transaction(["maps", "navigation", "photos"], "readwrite");
     const abort = () => tx.abort();
     signal?.addEventListener("abort", abort, { once: true });
@@ -115,7 +115,7 @@ export async function importAnnotations(
     const maps = tx.objectStore("maps"), navigation = tx.objectStore("navigation");
     const mapRequest: IDBRequest<MapRecord | undefined> = maps.get(mapId);
     const stateRequest: IDBRequest<NavigationState | undefined> = navigation.get(mapId);
-    let result = { added: 0, skipped: 0, removed: 0 };
+    let result = { added: 0, updated: 0, skipped: 0, removed: 0 };
     let failure: Error | undefined;
     stateRequest.onsuccess = () => {
       const map = mapRequest.result;
@@ -128,7 +128,7 @@ export async function importAnnotations(
       if (failure) { tx.abort(); return; }
       const state = stateRequest.result ? normalizeNavigation(stateRequest.result) : defaultNavigation(mapId);
       const next = mode === "replace" ? replaceAnnotations(state, manifest) : { ...mergeAnnotations(state, manifest), removed: 0 };
-      result = { added: next.added, skipped: next.skipped, removed: next.removed };
+      result = { added: next.added, updated: next.updated, skipped: next.skipped, removed: next.removed };
       navigation.put(next.state);
       // Only places and routes that were added bring their photos along.
       const used = new Set([...next.state.markers, ...next.state.routes].flatMap((item) => item.photos ?? []));
