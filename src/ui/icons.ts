@@ -3,26 +3,21 @@ import {
   Archive,
   ArchiveRestore,
   ArrowRight,
-  Ban,
-  Bone,
+  BetweenHorizontalStart,
   Bookmark,
   Camera,
   CaseSensitive,
   Check,
   ChevronDown,
   ChevronLeft,
-  ChevronsUp,
   Circle,
   CircleAlert,
   CirclePlus,
   Compass,
-  Construction,
   Contrast,
   Crosshair,
-  DoorOpen,
   Download,
   Ellipsis,
-  Flag,
   Folder,
   HardDrive,
   ImagePlus,
@@ -39,6 +34,7 @@ import {
   NotebookPen,
   Pencil,
   Pickaxe,
+  Pin,
   Plus,
   RefreshCcwDot,
   RotateCw,
@@ -47,7 +43,7 @@ import {
   Search,
   Settings,
   Share2,
-  Shrink,
+  Skull,
   SlidersHorizontal,
   Sparkles,
   SprayCan,
@@ -78,20 +74,23 @@ const svg = (nodes: typeof X) => {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${lucideMarkup(nodes)}</svg>`;
 };
 
+// Lucide has no cave; this redraws Energy Icons' cave-20 (MIT, Sam Passmore) in Lucide's stroke style.
+const CaveEntrance: typeof X = [
+  ["path", { d: "m2 21 6-14 3.5 4L15.5 4 22 21Z" }],
+  ["path", { d: "M9 21v-2.5a3 3 0 0 1 6 0V21" }],
+];
+
 // One symbol per place kind, shared by pins, pickers, lists, and callouts.
 export const placeSymbols = {
-  landmark: Flag,
-  entrance: DoorOpen,
-  stairs: ChevronsUp,
-  squeeze: Shrink,
-  "dead-end": Ban,
+  landmark: Pin,
+  entrance: CaveEntrance,
+  passage: BetweenHorizontalStart,
   unstable: TriangleAlert,
   flooded: Waves,
+  ossuary: Skull,
   graffiti: SprayCan,
-  "new-room": Construction,
   tools: Pickaxe,
   photo: Camera,
-  ossuary: Bone,
 } satisfies Record<MapMarker["kind"], typeof X>;
 
 export const markerCalloutIcon = (kind: MapMarker["kind"]) =>

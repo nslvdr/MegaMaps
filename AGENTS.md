@@ -9,7 +9,7 @@
 ## UI
 
 - Mobile first, touch only: no keyboard controls, shortcuts or focus outlines.
-- Use only **Lucide icons**, except for the app logo.
+- Use only **Lucide icons**, except for the app logo and the cave entrance place icon (a Lucide-style redraw).
 - Use only **three font sizes**, with **14px as the minimum**.
 - Modal header buttons (Close, Edit, Share) share one tinted, outlined circle holding a Lucide icon at one size: **X**, **Pencil**, **Share2**. Edit sits beside Close.
 - No handles on modals. Show a scroll indicator only when content overflows.
