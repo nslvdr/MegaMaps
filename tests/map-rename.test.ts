@@ -28,16 +28,14 @@ function setup(save: (id: string, name: string) => Promise<void>) {
 }
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-test("opening rename leaves the name unselected and gives native focus to the heading", (t) => {
+test("opening rename brings up the keyboard with the name selected to type over", (t) => {
   const ui = setup(async () => {});
   const focus = t.mock.method(ui.input, "focus");
   const select = t.mock.method(ui.input, "select");
   ui.open({ id: "map", name: "My map" });
   assert.equal(ui.input.value, "My map");
-  assert.equal(focus.mock.callCount(), 0);
-  assert.equal(select.mock.callCount(), 0);
-  assert.ok(ui.dialog.querySelector("[autofocus]") === ui.dialog.querySelector("h2"), "autofocus on the heading");
-  assert.equal(ui.dialog.querySelector("h2")!.tabIndex, -1);
+  assert.equal(focus.mock.callCount(), 1);
+  assert.equal(select.mock.callCount(), 1);
   // The library hides the file extension, so Rename does too.
   ui.dialog.close();
   ui.open({ id: "map", name: "Cave survey.png" });

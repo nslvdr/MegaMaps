@@ -39,3 +39,22 @@ export function initKeyboardInset(root = document.documentElement) {
   document.addEventListener("focusin", update);
   document.addEventListener("focusout", update);
 }
+
+const controls = "input, textarea, select, button, label, a";
+
+// iOS keeps the keyboard up when empty space is tapped. Within `scope`, a tap
+// on anything but a control puts it away. Only a tap: a drag that scrolls
+// leaves it up, so the page never jumps under the finger.
+export function initTapAway(scope: string, doc = document) {
+  let start: { x: number; y: number } | undefined;
+  doc.addEventListener("pointerdown", (event) => {
+    start = { x: event.clientX, y: event.clientY };
+  });
+  doc.addEventListener("pointerup", (event) => {
+    const active = doc.activeElement as HTMLElement | null;
+    const target = event.target as Element;
+    const moved = !start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10;
+    if (moved || !isTextEntry(active) || target.closest(controls) || !target.closest(scope)) return;
+    active!.blur();
+  });
+}

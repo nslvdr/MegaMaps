@@ -132,6 +132,11 @@ export class ViewerControls {
   /** Move (a place) or Edit points (a route) saves the form first. */
   private moveAfterSave = false;
   private cardDeleteArmed = false;
+  /** The X armed to discard a form's typing on its second tap. */
+  private discarding?: string;
+  private discardTimer?: ReturnType<typeof setTimeout>;
+  /** The edit form as it opened, to tell whether X would throw anything away. */
+  private formStart = "";
   private cardDeleteTimer?: ReturnType<typeof setTimeout>;
   private confirmTimer?: ReturnType<typeof setTimeout>;
   private confirming?: string;
@@ -355,6 +360,9 @@ export class ViewerControls {
     this.el("name-title").textContent = title;
     this.input("name-input").value = initial;
     showDialog(this.dialog("name-dialog"));
+    // Ready to type over the name; a tap places the cursor instead.
+    this.input("name-input").focus();
+    this.input("name-input").select();
   }
   private markerKind() {
     for (const input of this.root.querySelectorAll<HTMLInputElement>(
@@ -499,7 +507,43 @@ export class ViewerControls {
     add.disabled = busy;
     add.title = busy ? t("Adding photos…") : t("Add photos");
     add.setAttribute("aria-label", add.title);
-    this.el<HTMLButtonElement>("marker-save").disabled = busy;
+    this.renderSave();
+  }
+  /** Save waits for a name and for photos still being prepared. */
+  private renderSave() {
+    this.el<HTMLButtonElement>("marker-save").disabled =
+      this.photoJobs > 0 || !this.input("marker-label").value.trim();
+  }
+  /** What the edit form holds, compared with how it opened. */
+  private formState() {
+    return JSON.stringify([
+      this.input("marker-label").value, this.el<HTMLTextAreaElement>("marker-description").value,
+      this.markerKind(), this.formWater, this.input("marker-seen-date").value,
+      this.formPhotos, this.formLog.map((entry) => entry.id),
+    ]);
+  }
+  /** X on a form with work in it asks once: it fills red, and a second tap discards. */
+  private confirmDiscard(id: string, dirty: boolean) {
+    if (dirty && this.discarding !== id) {
+      this.armDiscard(id);
+      return false;
+    }
+    this.armDiscard();
+    return true;
+  }
+  private armDiscard(id?: string) {
+    if (this.discarding) this.paintClose(this.discarding, false);
+    this.discarding = id;
+    clearTimeout(this.discardTimer);
+    if (!id) return;
+    this.paintClose(id, true);
+    this.discardTimer = setTimeout(() => this.armDiscard(), 3000);
+  }
+  private paintClose(id: string, armed: boolean) {
+    const button = this.el(id), label = armed ? t("Discard?") : t("Close");
+    button.classList.toggle("armed", armed);
+    button.setAttribute("aria-label", label);
+    button.title = label;
   }
   /** Each entry as a dated line, newest first. */
   /** The journal as a timeline, each entry one line after its date; editing can remove entries. */
@@ -551,7 +595,11 @@ export class ViewerControls {
     const date = this.input("entry-date");
     date.value = date.max = today;
     this.el<HTMLTextAreaElement>("entry-text").value = "";
+    this.el<HTMLButtonElement>("entry-add").disabled = true;
+    this.armDiscard();
     showDialog(this.dialog("entry-dialog"));
+    // The date is already today, so the note is all there is to type.
+    this.el("entry-text").focus();
   }
   /** Photos are shrunk and stored as they are picked; the item keeps them on Save. */
   private async addPhotos(files: File[]) {
@@ -803,6 +851,8 @@ export class ViewerControls {
   }
   private presentCard(modal: boolean) {
     const card = this.dialog("marker-dialog");
+    this.armDiscard();
+    if (modal) this.formStart = this.formState();
     if (card.hasAttribute("open") && this.cardModal === modal) {
       this.el("marker-dialog-title").focus({ preventScroll: true });
       return;
@@ -1021,7 +1071,11 @@ export class ViewerControls {
       else return;
       this.changed();
     });
-    this.click("marker-cancel", () => this.cancelMarkerEdit());
+    this.click("marker-cancel", () => {
+      const editing = this.dialog("marker-dialog").dataset.mode === "edit";
+      if (editing && !this.confirmDiscard("marker-cancel", this.formState() !== this.formStart)) return;
+      this.cancelMarkerEdit();
+    });
     this.click("marker-edit", () => {
       const item = this.viewedItem();
       if (item && "label" in item) this.editMarker(item);
@@ -1041,7 +1095,13 @@ export class ViewerControls {
     });
     this.click("marker-add-entry", () => this.openLogEntry());
     this.on(this.el("marker-details"), "scroll", () => this.markMoreDetails());
-    this.click("entry-cancel", () => this.dialog("entry-dialog").close());
+    this.click("entry-cancel", () => {
+      const typed = !!this.el<HTMLTextAreaElement>("entry-text").value.trim();
+      if (this.confirmDiscard("entry-cancel", typed)) this.dialog("entry-dialog").close();
+    });
+    this.on(this.el("entry-text"), "input", () => {
+      this.el<HTMLButtonElement>("entry-add").disabled = !this.el<HTMLTextAreaElement>("entry-text").value.trim();
+    });
     this.on(this.el("entry-form"), "submit", (event) => {
       event.preventDefault();
       const place = this.viewedItem();
@@ -1061,12 +1121,22 @@ export class ViewerControls {
     });
     for (const id of ["marker-dialog", "entry-dialog", "name-dialog"])
       this.on(this.dialog(id), "cancel", keepFormOpen);
-    // Done on the name puts the keyboard away; only Save saves the place.
-    this.on(this.input("marker-label"), "keydown", (event) => {
+    const label = this.input("marker-label");
+    // Next on the name moves on to the description; only Save saves the place.
+    this.on(label, "keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key !== "Enter" || key.isComposing) return;
       key.preventDefault();
-      this.input("marker-label").blur();
+      this.el("marker-description").focus();
+    });
+    this.on(label, "input", () => this.renderSave());
+    // The first tap on a suggested name selects it, so typing replaces it.
+    let labelFocused = false;
+    this.on(label, "pointerdown", () => {
+      labelFocused = this.root.ownerDocument.activeElement === label;
+    });
+    this.on(label, "click", () => {
+      if (!labelFocused && this.autoMarkerName && label.value === this.autoMarkerName) label.select();
     });
     this.click("marker-add-photos", () => this.input("marker-photo-input").click());
     this.on(this.input("marker-photo-input"), "change", () => {
@@ -1782,6 +1852,7 @@ export class ViewerControls {
     clearTimeout(this.spotlightTimer);
     clearTimeout(this.cardDeleteTimer);
     clearTimeout(this.confirmTimer);
+    clearTimeout(this.discardTimer);
     this.stopCompass();
     this.el("map-stage").classList.remove("spotlight");
     this.showToast(false);
