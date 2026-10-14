@@ -40,6 +40,12 @@ class CanvasAdapter {
   getContext() {
     return this.canvas.getContext("2d");
   }
+  // Hands over the drawing as a bitmap and starts a blank one, like browsers.
+  transferToImageBitmap() {
+    const drawn = this.canvas;
+    this.canvas = createCanvas(drawn.width, drawn.height);
+    return Object.assign(drawn, { close() {} });
+  }
   async convertToBlob() {
     return new Blob([new Uint8Array(await this.canvas.encode("png"))]);
   }

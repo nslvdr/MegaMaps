@@ -135,22 +135,24 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     },
   );
   try {
-    // Before the overview is measured, assume a light sheet: invert + stretch.
-    assert.equal(
-      canvas.style.filter,
-      "invert(1) hue-rotate(180deg) contrast(1.471) brightness(0.92) brightness(0.4)",
-    );
+    // Dark mode and brightness are drawn into the map, never a CSS filter
+    // that recolors the whole screen on every frame.
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+    const pixel = (x: number, y: number) => {
+      step();
+      return [...backing.getContext("2d").getImageData(x, y, 1, 1).data];
+    };
+    assert.equal(canvas.style.filter, "");
     assert.equal(overlay.style.filter, "");
     assert.equal(Number(overlay.style.opacity || "1"), 1, "annotations start fully opaque even on a dim map");
+    assert.deepEqual(pixel(0, 0), [0, 0, 0, 255], "margins are black");
+    await settle();
     step();
-    // The margin is painted white so the inverting filter turns it pure black.
-    assert.deepEqual(
-      [...backing.getContext("2d").getImageData(0, 0, 1, 1).data],
-      [255, 255, 255, 255],
-    );
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await settle();
     assert.equal(viewer.diagnostics().darkMode, "inverted");
-    assert.match(canvas.style.filter, /^invert\(1\) hue-rotate\(180deg\) contrast\([\d.]+\) brightness\([\d.]+\) brightness\(0\.4\)$/);
+    assert.ok(viewer.diagnostics().decodedTileBytes > 0);
+    assert.deepEqual(pixel(195, 422), [0, 0, 0, 255], "white paper turns black");
+    assert.equal(canvas.style.filter, "");
     assert.equal(overlay.querySelector("text")!.textContent, "<Entrance>");
     assert.equal(
       overlay.querySelector("text")!.parentElement!.classList.contains("overlay-label"),
@@ -216,27 +218,19 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.deepEqual(state.view, saved);
     state.inverted = false;
     viewer.updateNavigation(state);
-    assert.equal(canvas.style.filter, "brightness(0.4)");
-    assert.equal(Number(overlay.style.opacity || "1"), 1);
-    // Map brightness never changes annotation opacity, in either display mode.
-    for (const inverted of [true, false]) {
-      state.inverted = inverted;
-      for (const dimming of BRIGHTNESS_LEVELS) {
-        state.dimming = dimming;
-        viewer.updateNavigation(state);
-        const filter: string = canvas.style.filter;
-        assert.equal(Number(overlay.style.opacity || "1"), 1, `annotations stay opaque at ${dimming} brightness`);
-        assert.equal(overlay.style.filter, "");
-        if (inverted) assert.match(filter, /^invert\(1\)/);
-        else assert.equal(filter, dimming < 1 ? `brightness(${dimming})` : "");
-        if (dimming < 1) assert.ok(filter.endsWith(`brightness(${dimming})`));
-      }
+    step();
+    await settle();
+    // Brightness dims the map itself; annotations never fade.
+    for (const dimming of BRIGHTNESS_LEVELS) {
+      state.dimming = dimming;
+      viewer.updateNavigation(state);
+      assert.ok(Math.abs(pixel(195, 422)[0]! - 255 * dimming) <= 1, `paper at ${dimming} brightness`);
+      assert.equal(Number(overlay.style.opacity || "1"), 1, `annotations stay opaque at ${dimming} brightness`);
+      assert.equal(canvas.style.filter, "");
     }
     state.dimming = defaultNavigation(map.id).dimming;
     assert.ok(state.dimming < 1);
     viewer.updateNavigation(state);
-    assert.equal(canvas.style.filter, `brightness(${state.dimming})`);
-    assert.equal(Number(overlay.style.opacity || "1"), 1);
 
     // Editing a route: its points drag; a point snapped onto a place moves
     // alone, and dropping one on a place snaps it there.

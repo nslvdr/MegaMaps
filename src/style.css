@@ -1204,7 +1204,6 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   fill: #080c0c;
   stroke: #445354;
   stroke-width: 1px;
-  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.6));
 }
 .map-callout > text {
   fill: var(--text);
@@ -1774,7 +1773,7 @@ button.glass:active:not(:disabled) {
   user-select: text;
   -webkit-user-select: text;
 }
-/* Longer details pulse a chevron over a fade at the bottom until read to the end. */
+/* Longer details show a chevron over a fade at the bottom until read to the end. */
 .place-more {
   position: absolute;
   inset: auto 0 0;
@@ -1796,6 +1795,9 @@ button.glass:active:not(:disabled) {
   height: 32px;
   stroke-width: 3;
   color: var(--c);
+}
+/* Pulses only while shown: a hidden pulse still keeps the screen redrawing. */
+.place-card[data-mode="view"] > .place-details:not([hidden])[data-more="true"] + .place-more svg {
   animation: highlight-pulse 1.6s ease-in-out infinite;
 }
 

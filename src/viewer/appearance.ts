@@ -1,6 +1,6 @@
 // Smart dark map: light maps are inverted, every map has its background pushed
 // to pure black (OLED pixels off underground) and its ink stretched for contrast.
-// Only GPU-friendly CSS filter functions are used; no tile is re-encoded.
+// The viewer bakes the look into each tile once as it loads; nothing is stored.
 export interface MapTone {
   /** Dominant luminance, normally the paper/background, 0–1. */
   background: number;
@@ -8,10 +8,17 @@ export interface MapTone {
   ink: number;
   light: boolean;
 }
+/** The CSS filter `[invert(1) hue-rotate(180deg)] contrast() brightness()`, as numbers. */
+export interface DarkLook {
+  invert: boolean;
+  contrast: number;
+  brightness: number;
+}
 export interface DarkMode {
+  /** The look as a CSS filter, for still previews. */
   filter: string;
-  /** Canvas fill that the filter turns into pure black. */
-  black: string;
+  /** None when the map is already dark. */
+  look?: DarkLook;
   kind: "inverted" | "deepened" | "already-dark";
 }
 const BINS = 64;
@@ -72,16 +79,55 @@ export function darkMode(tone: MapTone | undefined): DarkMode {
   // Cap the stretch so dense maps keep their mid-tones.
   const cutoff = Math.min(0.35, bg + 0.06);
   if (!light && cutoff <= 0.08 && fg > 0.6)
-    return { filter: "", black: "#000", kind: "already-dark" };
+    return { filter: "", kind: "already-dark" };
   const contrast = 0.5 / (0.5 - cutoff);
   const stretchedInk = Math.max(0.05, Math.min(1, (fg - 0.5) * contrast + 0.5));
   // Keep the brightest content slightly below white to limit glare in the dark.
-  const brightness = Math.min(2.5, 0.92 / stretchedInk);
-  const tail = `contrast(${round(contrast)}) brightness(${round(brightness)})`;
+  const look = { invert: light, contrast: round(contrast), brightness: round(Math.min(2.5, 0.92 / stretchedInk)) };
+  const tail = `contrast(${look.contrast}) brightness(${look.brightness})`;
   return light
     ? // hue-rotate after invert restores the approximate original hues.
-      { filter: `invert(1) hue-rotate(180deg) ${tail}`, black: "#fff", kind: "inverted" }
-    : { filter: tail, black: "#000", kind: "deepened" };
+      { filter: `invert(1) hue-rotate(180deg) ${tail}`, look, kind: "inverted" }
+    : { filter: tail, look, kind: "deepened" };
+}
+
+/** Recolors RGBA pixels in place, the way the look's CSS filter would. */
+export function darken(rgba: Uint8ClampedArray, look: DarkLook) {
+  // contrast() then brightness(), each clamped; the array clamps the last step.
+  const slope = look.contrast / 255,
+    offset = 0.5 - 0.5 * look.contrast,
+    scale = 255 * look.brightness;
+  const tone = (value: number) => Math.min(1, Math.max(0, value * slope + offset)) * scale;
+  for (let i = 0; i < rgba.length; i += 4) {
+    let r = rgba[i]!,
+      g = rgba[i + 1]!,
+      b = rgba[i + 2]!;
+    if (look.invert) {
+      // invert(1) then the hue-rotate(180deg) matrix, whose rows each sum to 1.
+      const red = 255 - (-0.574 * r + 1.43 * g + 0.144 * b),
+        green = 255 - (0.426 * r + 0.43 * g + 0.144 * b),
+        blue = 255 - (0.426 * r + 1.43 * g - 0.856 * b);
+      r = Math.min(255, Math.max(0, red));
+      g = Math.min(255, Math.max(0, green));
+      b = Math.min(255, Math.max(0, blue));
+    }
+    rgba[i] = tone(r);
+    rgba[i + 1] = tone(g);
+    rgba[i + 2] = tone(b);
+  }
+}
+
+/** Decodes a map tile with the look baked in. */
+export async function darkenedBitmap(blob: Blob, look: DarkLook) {
+  const source = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(source.width, source.height);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(source, 0, 0);
+  source.close();
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  darken(pixels.data, look);
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.transferToImageBitmap();
 }
 
 // Downsample the ≤512px overview; 96px is plenty to find the background tone.

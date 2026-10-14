@@ -77,6 +77,8 @@ const toastIcons = {
 type ToastTone = keyof typeof toastIcons;
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
+/** Smaller compass changes are sensor noise; following them redraws the map nonstop. */
+const COMPASS_STEP_DEGREES = 2;
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -1309,8 +1311,11 @@ export class ViewerControls {
       return;
     }
     const stop = watchCompass((heading) => {
-      this.heading = heading;
-      this.orient();
+      if (this.heading === undefined ||
+        Math.abs(((heading - this.heading + 540) % 360) - 180) >= COMPASS_STEP_DEGREES) {
+        this.heading = heading;
+        this.orient();
+      }
       if (this.compass === "on") return;
       this.compass = "on";
       this.renderRotation();
