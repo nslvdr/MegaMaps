@@ -323,14 +323,33 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
-    // Turns under 5° leave the map still, so a swaying phone doesn't redraw it nonstop.
+    // Turns under 10° leave the map still, so a swaying phone doesn't redraw it nonstop.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     const following = orientations.length;
-    heading(94.5);
-    heading(85.5);
+    heading(99.5);
+    heading(80.5);
+    t.mock.timers.tick(5000);
     assert.equal(orientations.length, following);
-    heading(95);
-    assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
+    // A larger turn waits until the new heading has held for 2 s.
+    heading(120);
+    t.mock.timers.tick(1999);
+    assert.equal(orientations.length, following, "a turn in progress is not followed");
+    heading(125);
+    t.mock.timers.tick(1);
+    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9, "it turns to the latest heading");
+    // Turning on restarts the wait; coming back cancels it.
+    heading(140);
+    t.mock.timers.tick(1500);
+    heading(160);
+    t.mock.timers.tick(1500);
+    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9);
+    heading(130);
+    t.mock.timers.tick(5000);
+    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9, "a heading that returns is not followed");
     heading(90);
+    t.mock.timers.tick(2000);
+    assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
+    t.mock.timers.reset();
 
     // Its north can sit anywhere on the map; the wheel turns it as each degree passes.
     assert.equal(el("north-field").hidden, false);
