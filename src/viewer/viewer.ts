@@ -42,6 +42,9 @@ import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import type { MapSearchMatch } from "./map-search";
 // How far past the whole-map view saved names start to show.
 const LABEL_ZOOM = 3;
+/** A compass turn steps about 30 times a second: as smooth for a slowly
+ * turning map, at a fraction of the redraws on 60 and 120 Hz screens. */
+const TURN_STEP_MS = 30;
 export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
@@ -102,6 +105,7 @@ export class Viewer {
   /** The compass's map rotation, eased toward a little every frame. */
   private heading?: number;
   private lastTurn = 0;
+  private nextTurn?: ReturnType<typeof setTimeout>;
   private base?: ImageBitmap;
   private disposed = false;
   private cache: TileCache;
@@ -286,7 +290,7 @@ export class Viewer {
     }
   }
 
-  private setCamera(camera: Camera) {
+  private setCamera(camera: Camera, redraw = true) {
     const { min, max } = this.limits(camera.rotation ?? 0);
     const scale = Math.max(min, Math.min(max, camera.scale));
     // Enforcing zoom limits must preserve the chosen center (saved views/resizes).
@@ -300,7 +304,7 @@ export class Viewer {
     this.navigation.view = captureView(this.camera, this.viewport());
     this.options?.onView();
     this.onZoom(Math.round(this.camera.scale * 100));
-    this.invalidate();
+    if (redraw) this.invalidate();
   }
   fit(animated = true) {
     if (this.navigation.touchLocked && animated) return;
@@ -717,10 +721,13 @@ export class Viewer {
     }
     // About 150 ms to cover most of a turn: steady, yet keeps up with walking.
     const next = Math.abs(delta) < 0.003 ? this.heading : rotation + delta * (1 - Math.exp(-elapsed / 150));
+    // This frame shows the step; the next one waits, unless a touch redraws sooner.
     this.setCamera(transformAt(this.camera, this.camera.scale, next, {
       x: this.width / 2,
       y: this.visible().height / 2,
-    }));
+    }), false);
+    clearTimeout(this.nextTurn);
+    this.nextTurn = setTimeout(() => this.invalidate(), TURN_STEP_MS);
   }
   private invalidate() {
     if (!this.frame && !this.disposed)
@@ -836,6 +843,7 @@ export class Viewer {
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
+    clearTimeout(this.nextTurn);
     this.stopAnimation();
     this.controller.abort();
     this.observer.disconnect();
