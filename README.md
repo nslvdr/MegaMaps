@@ -62,7 +62,7 @@ src/
   storage/
     database.ts             IndexedDB metadata + transaction commits
     payloads.ts             OPFS / IndexedDB payload abstraction, deletion
-    navigation.ts           Saved camera, places/routes, settings, throttled writes
+    navigation.ts           Saved camera, places/routes, settings, batched writes
     ocr.ts                  Atomic text indexes and deletion protection
     verify.ts / .worker.ts  Offline tile inventory + sequential decode checks
   processing/
@@ -143,7 +143,7 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 
 **Phone orientation is separate from map rotation.** The app does not control the phone's screen orientation; use your phone's own rotation lock for that. **Lock** only controls map rotation.
 
-Places, routes, camera and display settings are saved locally in a separate IndexedDB store; place photos have their own store and go with their map when it is deleted. Photos no place uses any more are pruned a day after they were added. Camera writes are throttled and flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
+Places, routes, camera and display settings are saved locally in a separate IndexedDB store; place photos have their own store and go with their map when it is deleted. Photos no place uses any more are pruned a day after they were added. The camera is saved once it has rested for 2 s, and everything is flushed on home, visibility changes and pagehide. Abrupt OS termination can still lose the latest uncommitted change. See [validation.md](docs/validation.md) for the physical-device acceptance checklist.
 
 ## Sharing maps and annotations
 

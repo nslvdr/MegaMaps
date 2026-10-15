@@ -323,13 +323,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
-    // Sensor jitter leaves the map still, so it is not redrawn nonstop.
+    // Turns under 5° leave the map still, so a swaying phone doesn't redraw it nonstop.
     const following = orientations.length;
-    heading(91.5);
-    heading(88.5);
+    heading(94.5);
+    heading(85.5);
     assert.equal(orientations.length, following);
-    heading(93);
-    assert.ok(Math.abs(orientations.at(-1)! + (93 * Math.PI) / 180) < 1e-9);
+    heading(95);
+    assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
     heading(90);
 
     // Its north can sit anywhere on the map; the wheel turns it as each degree passes.

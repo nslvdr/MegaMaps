@@ -13,7 +13,7 @@ import { payloadStore } from "../src/storage/payloads";
 import { installPlatform, nativeStats } from "./node-platform";
 import { tileKey, type MapRecord } from "../src/types";
 
-test("renderer restores a rotated view, inverts only the map, keeps margins dark, and blocks locked controls", async () => {
+test("renderer restores a rotated view, inverts only the map, keeps margins dark, and blocks locked controls", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "map-viewer-renderer-"));
   await installPlatform(root);
   const { window, document } = parseHTML(
@@ -173,22 +173,41 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     step(performance.now() + 300);
     // Compass rotation eases toward the compass, the short way round, about the
     // middle of the map; it never jumps, even when readings do.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     let time = performance.now() + 1000;
+    const now = t.mock.method(performance, "now", () => time);
+    // One screen refresh at 60 Hz.
+    const refresh = () => {
+      t.mock.timers.tick(16);
+      step((time += 16));
+    };
+    // Labels finish fading in first; they redraw on every refresh while they do.
+    for (let i = 0; i < 60; i++) refresh();
     const center = { ...state.view!.center };
     viewer.orient(0);
     step((time += 16));
     const turned = viewer.diagnostics().rotation;
-    assert.ok(turned < Math.PI / 2 && turned > Math.PI / 3, "each frame turns a little");
-    for (let i = 0; i < 150; i++) step((time += 16));
+    assert.ok(turned < Math.PI / 2 && turned > Math.PI / 3, "each step turns a little");
+    // The turn steps on every other refresh, not every one.
+    const drawn = viewer.diagnostics().renderedFrames;
+    let refreshes = 0;
+    while (viewer.diagnostics().rotation !== 0 && refreshes < 300) {
+      refresh();
+      refreshes++;
+    }
     assert.equal(viewer.diagnostics().rotation, 0);
+    const steps = viewer.diagnostics().renderedFrames - drawn;
+    assert.ok(steps <= refreshes / 2 + 1, `${steps} steps in ${refreshes} refreshes`);
     assert.ok(Math.hypot(state.view!.center.x - center.x, state.view!.center.y - center.y) < 0.5);
     viewer.orient(2 * Math.PI - 0.2);
     step((time += 16));
     assert.ok(viewer.diagnostics().rotation < 0, "turning 0.2 back, not 6 forward");
     viewer.orient(Math.PI / 2);
-    for (let i = 0; i < 150; i++) step((time += 16));
+    for (let i = 0; i < 150; i++) refresh();
     viewer.orient(undefined);
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
+    now.mock.restore();
+    t.mock.timers.reset();
     // At fit zoom, pan a corner to the center and retain it across orientation changes.
     viewer.panBy(-195, 195);
     assert.ok(Math.abs(state.view!.center.x) < 1e-7);
@@ -432,6 +451,8 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
         "scrolling the card does not leave a delayed camera animation");
     }
   } finally {
+    // A failed compass check leaves its clocks mocked; cleanup needs real ones.
+    t.mock.reset();
     viewer.dispose();
     // Settle already-started bitmap loads, which must close after disposal.
     await new Promise((resolve) => setTimeout(resolve, 50));

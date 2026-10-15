@@ -46,9 +46,15 @@ export async function saveNavigation(state: NavigationState) {
 }
 export const deleteNavigation = (mapId: string) =>
   transact("navigation", "readwrite", (s) => s.delete(mapId));
-// Throttle camera writes, serialize them, and flush on visibility changes/home.
+/** How long the camera must rest before its view is saved. */
+export const VIEW_REST_MS = 2000;
+// Edits save within 250 ms; the camera saves once it rests, since a compass
+// turning the map would otherwise write several times a second. Writes are
+// serialized, and visibility changes and going home flush them.
 export class NavigationPersistence {
   private timer?: ReturnType<typeof setTimeout>;
+  /** An edit's save is due soon; camera moves must not push it back. */
+  private soon = false;
   private chain = Promise.resolve();
   private dirty = false;
   constructor(
@@ -57,13 +63,24 @@ export class NavigationPersistence {
   ) {}
   changed() {
     this.dirty = true;
-    this.timer ??= setTimeout(() => {
+    if (this.soon) return;
+    this.soon = true;
+    this.schedule(250);
+  }
+  moved() {
+    this.dirty = true;
+    if (!this.soon) this.schedule(VIEW_REST_MS);
+  }
+  private schedule(wait: number) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
       void this.flush();
-    }, 250);
+    }, wait);
   }
   flush() {
     clearTimeout(this.timer);
     this.timer = undefined;
+    this.soon = false;
     if (this.dirty) {
       const state = structuredClone(this.snapshot());
       this.dirty = false;
