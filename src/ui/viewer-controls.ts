@@ -238,7 +238,7 @@ export class ViewerControls {
         });
       },
       onView: () => {
-        this.persistence.changed();
+        this.persistence.moved();
       },
       onTap: (point) => this.onTap(point),
       onMarker: (marker) => this.showDetails(marker),

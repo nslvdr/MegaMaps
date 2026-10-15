@@ -24,6 +24,7 @@ import {
   setLastMap,
   lastMap,
   NavigationPersistence,
+  VIEW_REST_MS,
 } from "../src/storage/navigation";
 import { deleteStoredMap } from "../src/storage/payloads";
 import type { MapRecord } from "../src/types";
@@ -228,4 +229,27 @@ test("update preparation saves pending changes and blocks reload after a failed 
   }
   await persistence.flushForReload();
   assert.equal((await loadNavigation(state.mapId)).dimming, 0.7, "retry retains the unsaved change");
+});
+
+test("camera moves save once the view rests, without delaying an edit's save", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = defaultNavigation("resting-view");
+  let saves = 0;
+  const persistence = new NavigationPersistence(() => (saves++, state), (error) => assert.fail(String(error)));
+  // A compass turning the map moves it every frame; nothing saves until it stops.
+  for (let frame = 0; frame < 100; frame++) {
+    persistence.moved();
+    t.mock.timers.tick(VIEW_REST_MS / 4);
+  }
+  assert.equal(saves, 0);
+  t.mock.timers.tick(VIEW_REST_MS);
+  assert.equal(saves, 1);
+
+  persistence.changed();
+  for (let frame = 0; frame < 15; frame++) {
+    persistence.moved();
+    t.mock.timers.tick(20);
+  }
+  assert.equal(saves, 2, "an edit saves within 250 ms while the map moves");
+  await persistence.flush();
 });
