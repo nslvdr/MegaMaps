@@ -160,7 +160,7 @@ test("notes, routes and settings persist; deletion blocks late writes", async ()
 });
 
 test("a saved rotation lock becomes a rotation mode", () => {
-  // Saves from before Auto rotation have neither field.
+  // Saves from before Compass rotation have neither field.
   const { rotationMode: _, northOffset: __, ...old } = defaultNavigation("lock");
   for (const [rotationLocked, mode] of [[false, "free"], [true, "locked"], [undefined, "locked"]] as const) {
     const loaded = normalizeNavigation({ ...old, rotationLocked });

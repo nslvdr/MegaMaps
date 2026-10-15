@@ -2491,7 +2491,7 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
-/* Rotation help sits right under the modes; North follows when Auto is on. */
+/* Rotation help sits right under the modes; North follows in Compass mode. */
 #rotation-help {
   margin-bottom: 0;
 }

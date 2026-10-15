@@ -171,7 +171,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     step(performance.now() + 100);
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
     step(performance.now() + 300);
-    // Auto rotation eases toward the compass, the short way round, about the
+    // Compass rotation eases toward the compass, the short way round, about the
     // middle of the map; it never jumps, even when readings do.
     let time = performance.now() + 1000;
     const center = { ...state.view!.center };

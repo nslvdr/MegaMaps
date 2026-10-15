@@ -285,7 +285,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("sheet-title").textContent, "Rotation");
     assert.equal(el("open-rotation").getAttribute("aria-expanded"), "true");
     assert.equal((el("rotation-locked") as HTMLInputElement).checked, true);
-    assert.equal(el("north-field").hidden, true, "north only matters to Auto");
+    assert.equal(el("north-field").hidden, true, "north only matters to Compass mode");
     check("rotation-free", true);
     assert.equal(state.rotationMode, "free");
     assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Normal");
@@ -296,7 +296,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("reset-rotation");
     assert.equal(straightened, 1);
 
-    // Auto asks for the compass, and tapping it again retries a refusal.
+    // Compass mode asks for the compass, and tapping it again retries a refusal.
     let permission: PermissionState = "denied";
     Object.defineProperty(globalThis, "DeviceOrientationEvent", {
       value: { requestPermission: async () => permission },
@@ -310,7 +310,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     };
     check("rotation-compass", true);
     assert.equal(state.rotationMode, "compass");
-    assert.equal(el("reset-rotation").hidden, true, "the compass owns the angle in Auto");
+    assert.equal(el("reset-rotation").hidden, true, "the compass owns the angle in Compass mode");
     await settle();
     assert.match(el("rotation-help").textContent!, /access is off/);
     heading(90);

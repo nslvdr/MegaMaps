@@ -89,7 +89,7 @@ export const viewerMarkup = `
     <div id="sheet-rotation" data-panel="rotation" data-title="${t("Rotation")}" hidden>
       <div class="layer-toggles rotation-modes" role="radiogroup" aria-label="${t("Rotation")}" aria-describedby="rotation-help">
         ${rotationChoice("free", t("Normal"), icons.freeRotation)}
-        ${rotationChoice("compass", t("Auto"), icons.compass)}
+        ${rotationChoice("compass", t("Compass"), icons.compass)}
         ${rotationChoice("locked", t("Locked"), icons.rotationLock)}
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
