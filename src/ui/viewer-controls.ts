@@ -65,10 +65,10 @@ const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
 const rotationModes: Record<RotationMode, { icon: string; label: string; help: string }> = {
   free: { icon: icons.freeRotation, label: t("Normal"), help: t("Twist with two fingers to turn the map.") },
-  compass: { icon: icons.compass, label: t("Auto"), help: t("The map turns with your phone, so it lines up with the world around you.") },
+  compass: { icon: icons.compass, label: t("Compass"), help: t("The map turns with your phone, so it lines up with the world around you.") },
   locked: { icon: icons.rotationLock, label: t("Locked"), help: t("The map keeps its current angle.") },
 };
-/** Auto mode's compass: off, starting, turning the map, or not reaching it. */
+/** Compass mode's compass: off, starting, turning the map, or not reaching it. */
 // Every passing message is one pill: a tone sets its icon and outline color.
 const toastIcons = {
   done: icons.check,
@@ -987,7 +987,7 @@ export class ViewerControls {
         if (input.checked) this.setRotationMode(mode);
       });
     }
-    // Tapping Auto again retries a compass that needs permission or went missing.
+    // Tapping Compass again retries a compass that needs permission or went missing.
     this.click("rotation-compass", () => {
       if (this.state.rotationMode === "compass" && (this.compass === "missing" || this.compass === "blocked"))
         void this.startCompass(true);
@@ -1368,7 +1368,7 @@ export class ViewerControls {
     chip.title = t("Rotation: {mode}", { mode: label });
     if (this.openSheet === "rotation") {
       this.el("sheet-title-icon").innerHTML = icon;
-      // Auto turns the map with the phone, so a reset would not hold.
+      // Compass mode turns the map with the phone, so a reset would not hold.
       this.el("reset-rotation").hidden = mode === "compass";
     }
     for (const each of Object.keys(rotationModes))
@@ -1376,9 +1376,9 @@ export class ViewerControls {
     const compassHelp: Partial<Record<CompassStatus, string>> = {
       waiting: t("Looking for the compass…"),
       missing: compassNeedsPermission()
-        ? t("Tap Auto to turn on the compass.")
-        : t("No compass found. Auto needs a phone or tablet."),
-      blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap Auto."),
+        ? t("Tap Compass to turn it on.")
+        : t("No compass found. Compass mode needs a phone or tablet."),
+      blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap Compass."),
     };
     this.el("rotation-help").textContent =
       (mode === "compass" && compassHelp[this.compass]) || help;
