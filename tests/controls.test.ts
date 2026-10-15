@@ -1722,3 +1722,108 @@ test("Saved orders its lists and filters them by type", async () => {
     await controls.dispose();
   }
 });
+
+test("Measure asks for the map's scale once, then measures lines and gives routes a length", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog")) {
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  }
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "measure", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  state.routes = [{
+    id: "gallery", name: "Gallery", points: [{ x: 0, y: 0 }, { x: 360, y: 480 }],
+    created: 0, draft: false,
+  }];
+  const tools: string[] = [];
+  let tape: Point[] | undefined;
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool(tool) { tools.push(tool); }, updateNavigation() {}, jumpTo() {}, fitPoints() {},
+    setMeasure(points) { tape = points && points.map((point) => ({ ...point })); },
+  });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
+  const tap = (x: number, y: number) => controls.options().onTap({ x, y });
+  const routeDetail = () => document.querySelector('[data-row="gallery"] .row-detail')!.textContent;
+  try {
+    assert.equal(routeDetail(), "2 points", "without a scale, a route has no length");
+    click("open-measure");
+    assert.ok(el("scale-ask-dialog").hasAttribute("open"), "a map without a scale asks for one first");
+    assert.deepEqual(tools, [], "and does not start measuring");
+    click("scale-ask-start");
+    assert.ok(!el("scale-ask-dialog").hasAttribute("open"));
+    assert.equal(tools.at(-1), "scale");
+    assert.equal(el("tool-title").textContent, "Set scale");
+    assert.ok((el("tool-done") as HTMLButtonElement).disabled, "Next waits for both ends");
+
+    tap(0, 0);
+    tap(100, 0);
+    tap(200, 0);
+    assert.deepEqual(tape, [{ x: 0, y: 0 }, { x: 200, y: 0 }], "a third tap moves the second end");
+    click("route-undo");
+    assert.deepEqual(tape, [{ x: 0, y: 0 }, { x: 100, y: 0 }], "Undo puts it back");
+    tap(200, 0);
+    assert.equal(el("tool-done").textContent, "Next");
+    click("tool-done");
+    assert.ok(el("scale-dialog").hasAttribute("open"), "Next asks how long the line is");
+    const metres = el("scale-metres") as HTMLInputElement;
+    assert.equal(metres.value, "", "a first scale starts empty");
+    assert.ok((el("scale-save") as HTMLButtonElement).disabled);
+    metres.value = "50";
+    metres.dispatchEvent(new window.Event("input"));
+    assert.ok(!(el("scale-save") as HTMLButtonElement).disabled);
+    el("scale-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+    assert.equal(state.metresPerPixel, 0.25, "50 m over 200 pixels");
+    assert.equal(tools.at(-1), "measure", "measuring starts right after");
+    assert.equal(el("toast").textContent, "Scale set");
+
+    assert.ok(el("tool-total").hidden, "nothing to read before two points");
+    assert.ok(el("tool-done").hidden, "measuring has nothing to save");
+    tap(0, 0);
+    tap(0, 240);
+    tap(320, 240);
+    assert.equal(el("tool-total").textContent, "140 m", "the total follows every segment");
+    assert.equal(el("tool-message").textContent, "~2 min on foot · Tap to add, drag to adjust");
+    assert.equal(routeDetail(), "150 m · ~2 min on foot", "routes show their length once the map has a scale");
+
+    // The pencil changes the scale; × there goes back to the same line.
+    assert.equal(el("tool-rename").getAttribute("aria-label"), "Change scale");
+    click("tool-rename");
+    assert.equal(tools.at(-1), "scale");
+    assert.deepEqual(tape, [], "a new scale starts from its first end");
+    click("tool-cancel");
+    assert.equal(tools.at(-1), "measure");
+    assert.equal(tape?.length, 3, "the line waited");
+    assert.equal(el("tool-total").textContent, "140 m");
+
+    click("open-measure");
+    assert.equal(tools.at(-1), "browse", "the Measure button also closes it");
+    assert.equal(tape, undefined, "and the line goes with it");
+    click("open-measure");
+    assert.ok(!el("scale-ask-dialog").hasAttribute("open"), "a map with a scale measures straight away");
+    assert.equal(tools.at(-1), "measure");
+    assert.deepEqual(tape, [], "starting from a clean line");
+
+    await controls.flush();
+    assert.equal((await loadNavigation(map.id))?.metresPerPixel, 0.25, "the scale is kept with the map");
+  } finally {
+    await controls.dispose();
+  }
+});

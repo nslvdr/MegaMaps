@@ -81,6 +81,8 @@ export class Viewer {
   /** The route being edited or the place being moved. */
   private target?: string;
   private dragging?: { point: Point; from: Point };
+  /** The points of the line being measured, or of the scale being set. */
+  private measure?: Point[];
   private tone?: MapTone;
   /** Tiles wait for the overview's tone, so they load in their final look once. */
   private measured = false;
@@ -325,6 +327,12 @@ export class Viewer {
     );
     this.invalidate();
   }
+  /** Shows the measuring line; its array is edited in place by drags. */
+  setMeasure(points?: Point[]) {
+    this.measure = points;
+    this.overlay?.setMeasure(points);
+    this.invalidate();
+  }
   setSearch(matches: MapSearchMatch[], active: boolean, selected = 0) {
     this.searchOverlay?.set(matches, active, selected);
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
@@ -498,8 +506,8 @@ export class Viewer {
       return false;
     }
     const marker = this.nearestPlace(screen);
-    if (this.tool === "route") {
-      // Snap route points onto saved places the user taps.
+    if (this.tool === "route" || this.tool === "measure") {
+      // Snap route and measure points onto saved places the user taps.
       this.options?.onTap(marker ? { ...marker.point } : point);
       return true;
     }
@@ -566,18 +574,17 @@ export class Viewer {
   private grabbable(screen: Point) {
     const { routes, markers } = this.navigation;
     let found: { point: Point; replace(point: Point): void } | undefined;
-    if (this.tool === "route") {
-      const route = routes.find((r) => r.id === this.target);
-      let best = 28;
-      // Later points win ties, so the end just drawn is the one picked up.
-      route?.points.forEach((point, index) => {
-        const d = this.near(point, screen);
-        if (d <= best) {
-          best = d;
-          found = { point, replace: (p) => (route.points[index] = p) };
-        }
-      });
-    }
+    const line = this.tool === "route" ? routes.find((r) => r.id === this.target)?.points
+      : this.tool === "measure" || this.tool === "scale" ? this.measure : undefined;
+    let best = 28;
+    // Later points win ties, so the end just drawn is the one picked up.
+    line?.forEach((point, index) => {
+      const d = this.near(point, screen);
+      if (d <= best) {
+        best = d;
+        found = { point, replace: (p) => (line[index] = p) };
+      }
+    });
     if (this.tool === "move") {
       const marker = markers.find((m) => m.id === this.target);
       if (marker && this.near(marker.point, screen) < 36)
@@ -609,7 +616,7 @@ export class Viewer {
     const dragging = this.dragging;
     if (!dragging) return;
     this.dragging = undefined;
-    if (this.tool === "route") {
+    if (this.tool === "route" || this.tool === "measure") {
       const place = this.nearestPlace(screen);
       if (place) Object.assign(dragging.point, place.point);
     }

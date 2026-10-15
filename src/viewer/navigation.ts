@@ -75,6 +75,8 @@ export interface NavigationState {
   rotationMode: RotationMode;
   /** Where north is on this map, in degrees clockwise from its top. */
   northOffset: number;
+  /** Real metres one image pixel covers; unset until the user sets the scale. */
+  metresPerPixel?: number;
   /** Smart "dark map" mode. Stored under its version 1 name for compatibility. */
   inverted: boolean;
   dimming: number;
@@ -91,8 +93,9 @@ export interface NavigationState {
 export const DEFAULT_DIMMING = 0.85;
 export const BRIGHTNESS_LEVELS = [1, DEFAULT_DIMMING, 0.75, 0.65, 0.55] as const;
 export const brightnessPercent = (level: number) => Math.round(level * 100);
-/** marker: tap to drop a new place · route: draw/edit · move: reposition a place */
-export type Tool = "browse" | "marker" | "route" | "move";
+/** marker: tap to drop a new place · route: draw/edit · move: reposition a place ·
+ *  measure: tap a line to read its length · scale: tap two ends of a known length */
+export type Tool = "browse" | "marker" | "route" | "move" | "measure" | "scale";
 export function defaultNavigation(mapId: string): NavigationState {
   return {
     mapId,

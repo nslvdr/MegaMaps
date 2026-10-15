@@ -25,6 +25,8 @@ export const settingsMarkup = `<section id="settings" class="settings-page" aria
 <header class="page-header"><button type="button" class="page-back" id="settings-back" aria-label="${t("Back")}" title="${t("Back")}">${icons.arrow}</button><h1 id="settings-title">${t("Settings")}</h1></header>
 ${heading(t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), [["standard", t("Standard")], ["large", t("Large")]])}</div>
 ${note(t("Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map."))}
+${heading(t("Distances"))}<div class="share-summary">${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]))}</div>
+${note(t("Sets the travel times shown for routes and measured lines on maps with a scale."))}
 ${heading(t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}</span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
 ${note(t("Appears as “Shared by …” on maps you send."))}
 ${heading(t("Backup"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps from a .megabackup file and keeps the ones already here"))}</div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
@@ -129,6 +131,8 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
       const size = select.value as Preferences["label-size"];
       setPreference("label-size", size);
       options.setLabelSize(size);
+    } else if (select.name === "walking-speed") {
+      setPreference("walking-speed", select.value as Preferences["walking-speed"]);
     }
   });
 
