@@ -228,6 +228,9 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       assert.equal(Number(overlay.style.opacity || "1"), 1, `annotations stay opaque at ${dimming} brightness`);
       assert.equal(canvas.style.filter, "");
     }
+    // At fit the map spans y 227–617; a faint edge sits just outside it.
+    assert.ok(pixel(195, 226)[0]! > 0, "a faint edge marks where the map ends");
+    assert.deepEqual(pixel(195, 220), [0, 0, 0, 255], "the margin beyond the edge stays black");
     state.dimming = defaultNavigation(map.id).dimming;
     assert.ok(state.dimming < 1);
     viewer.updateNavigation(state);
