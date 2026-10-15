@@ -796,6 +796,11 @@ export class Viewer {
         height,
       );
     }
+    // A faint 1px edge, just outside the map, shows where it ends on black.
+    const edge = 1 / this.camera.scale;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = edge;
+    ctx.strokeRect(-edge / 2, -edge / 2, this.map.width + edge, this.map.height + edge);
     // Dimming is a black veil, the same as brightness(), drawn only on frames
     // that change. Annotations are a separate layer and stay fully opaque.
     if (this.navigation.dimming < 1) {
