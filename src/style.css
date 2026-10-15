@@ -10,6 +10,7 @@
   --neon-view: #ff4fd8;
   --neon-add: #b6ff3b;
   --neon-lock: #ff9a3c;
+  --neon-measure: #fff04d;
   --kind-route: #38d6ff;
   --kind-place: #ff9a5c;
   /* Shared type scale across the library, dialogs, and viewer. */
@@ -1279,7 +1280,7 @@ button.glass:active:not(:disabled) {
   width: 22px;
   height: 22px;
 }
-.status-chip[aria-expanded="true"] {
+.status-chip:is([aria-expanded="true"], [aria-pressed="true"]) {
   border-color: var(--c);
   background: color-mix(in srgb, var(--c) 22%, #000);
 }
@@ -1308,7 +1309,7 @@ button.glass:active:not(:disabled) {
     top: var(--hud-top);
     max-width: min(
       var(--surface-width),
-      calc(100vw - 2 * (var(--edge-r) + 2 * var(--icon-button-size) + var(--space-24)))
+      calc(100vw - 2 * (var(--edge-r) + 3 * var(--icon-button-size) + var(--space-32)))
     );
   }
 }
@@ -1607,6 +1608,16 @@ button.glass:active:not(:disabled) {
 .place-card {
   --c: var(--neon-add);
 }
+/* Measure lights up while its tool is open; the line on the map shares its neon
+   (MEASURE_COLOR in overlays.ts). */
+#open-measure,
+[data-tool="measure"] .tool-bar,
+[data-tool="scale"] .tool-bar {
+  --c: var(--neon-measure);
+}
+.measure-dialog {
+  --accent: var(--neon-measure);
+}
 /* Rotation always has a mode, so like View it only lights up while open. */
 #open-rotation,
 .sheet[data-panel="rotation"] {
@@ -1647,6 +1658,13 @@ button.glass:active:not(:disabled) {
 }
 .tool-bar .sheet-header {
   margin-bottom: var(--space-8);
+}
+/* The measured length, big enough to read at arm's length. */
+.tool-total {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-heading);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .tool-hint {
   margin: 0;

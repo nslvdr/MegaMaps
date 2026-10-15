@@ -46,6 +46,8 @@ interface PathItem {
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
 // Covers the camera glide plus two pulses (see .found in style.css).
 const FOUND_MS = 2200;
+/** The Measure control's neon, as --neon-measure in style.css. */
+const MEASURE_COLOR = "#fff04d";
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
@@ -58,6 +60,8 @@ export class NavigationOverlay {
   private selected?: string;
   private foundTimer?: ReturnType<typeof setTimeout>;
   private preview?: Pick<MapMarker, "point" | "kind">;
+  /** The line being measured, or the two ends of the scale being set. */
+  private measure?: Point[];
   private state?: NavigationState;
   constructor(private svg: SVGSVGElement) {}
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
@@ -85,6 +89,10 @@ export class NavigationOverlay {
   /** An unsaved place, lifted like a moving pin while its details are chosen. */
   setPreview(place?: Pick<MapMarker, "point" | "kind">) {
     this.preview = place;
+    if (this.state) this.rebuild(this.state);
+  }
+  setMeasure(points?: Point[]) {
+    this.measure = points;
     if (this.state) this.rebuild(this.state);
   }
   // Search owns matching place labels, avoiding duplicate callouts at the same pin.
@@ -217,6 +225,15 @@ export class NavigationOverlay {
       element.classList.add("moving");
       placeBody(body, this.preview.kind);
     }
+    // A tape over everything, whatever the layers: its points are the handles.
+    if (this.measure) {
+      const tape = node("g", { class: "measure" });
+      this.svg.append(tape);
+      path(tape, this.measure, { stroke: CASING, "stroke-width": "8" });
+      path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "4", "stroke-dasharray": "12 8" });
+      path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, true);
+      path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, true);
+    }
     // Higher priority claims space first; sorted here, not on every frame.
     this.callouts.sort((a, b) => b.priority - a.priority);
   }
@@ -244,6 +261,7 @@ export class NavigationOverlay {
         for (const point of route.points)
           reservePoint(point, route.id === this.editing ? 10 : 8);
     if (this.preview) reservePoint(this.preview.point, 18);
+    for (const point of this.measure ?? []) reservePoint(point, 10);
   }
   /** Draws one frame; returns whether a label is still gliding or fading.
    * Zoomed out, `named` is false and only pins show. */

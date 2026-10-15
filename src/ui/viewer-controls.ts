@@ -42,6 +42,7 @@ import {
   type OcrIndex,
 } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { formatDistance, formatWalk, pathLength, travelSummary } from "../viewer/measure";
 const sheets = ["display", "rotation", "saved", "add"] as const;
 /** A day as a date input holds it, in local time. */
 const dayValue = (time: number) => {
@@ -95,7 +96,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
+    Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
   private ocr?: OcrIndex;
   private ocrMessage = t("Preparing text detection…");
   private searchMatches: MapSearchMatch[] = [];
@@ -113,6 +114,12 @@ export class ViewerControls {
   /** Undo steps for the route being drawn: its points before each tap or drag. */
   private routeHistory: Point[][] = [];
   private dragBefore?: Point[];
+  /** The line being measured; it waits while the scale is set, and goes when Measure closes. */
+  private measurePoints: Point[] = [];
+  /** The two ends of a known length, while the scale is set. */
+  private scalePoints: Point[] = [];
+  /** Undo steps for the measure or scale line: its points before each tap or drag. */
+  private measureHistory: Point[][] = [];
   /** The place being moved, and where it was. */
   private movingMarker?: string;
   private moveFrom?: Point;
@@ -253,13 +260,15 @@ export class ViewerControls {
         this.openMarker(t("New place"), point);
       },
       onDragStart: () => {
-        const route = this.tool === "route" ? this.route() : undefined;
-        this.dragBefore = route && copyPoints(route.points);
+        const line = this.measuring() ? this.tape() : this.tool === "route" ? this.route()?.points : undefined;
+        this.dragBefore = line && copyPoints(line);
       },
       onDrop: (moved) => {
-        if (moved && this.dragBefore) this.routeHistory.push(this.dragBefore);
+        const measuring = this.measuring();
+        if (moved && this.dragBefore) (measuring ? this.measureHistory : this.routeHistory).push(this.dragBefore);
         this.dragBefore = undefined;
-        if (moved) this.changed();
+        if (moved && measuring) this.measured();
+        else if (moved) this.changed();
       },
       onAppearance: (mode) => {
         this.darkKind = mode.kind;
@@ -361,6 +370,7 @@ export class ViewerControls {
       tool,
       tool === "move" ? this.movingMarker : this.activeRoute,
     );
+    this.viewer?.setMeasure?.(this.measuring() ? this.tape() : undefined);
     this.sheet(undefined);
     this.renderTool();
   }
@@ -643,6 +653,14 @@ export class ViewerControls {
       moving.point = point;
       this.changed();
     }
+    if (this.measuring()) {
+      const tape = this.tape();
+      this.measureHistory.push(copyPoints(tape));
+      // A scale has two ends: once both are down, a tap moves the second.
+      if (this.tool === "scale" && tape.length >= 2) tape[1] = point;
+      else tape.push(point);
+      this.measured();
+    }
     if (this.tool === "route") {
       const route = this.route();
       if (route) {
@@ -656,6 +674,65 @@ export class ViewerControls {
   }
   private route() {
     return this.state.routes.find((r) => r.id === this.activeRoute);
+  }
+  private measuring() {
+    return this.tool === "measure" || this.tool === "scale";
+  }
+  /** The line the measure or scale tool is working on. */
+  private tape() {
+    return this.tool === "scale" ? this.scalePoints : this.measurePoints;
+  }
+  private setTape(points: Point[]) {
+    if (this.tool === "scale") this.scalePoints = points;
+    else this.measurePoints = points;
+  }
+  /** Measuring is never saved: only the line and the card change. */
+  private measured() {
+    this.viewer?.setMeasure?.(this.tape());
+    this.renderTool();
+  }
+  /** The Measure button opens and closes the tool; a map without a scale asks for one first. */
+  private toggleMeasure() {
+    if (this.measuring()) return this.closeMeasure();
+    if (this.tool !== "browse") return;
+    this.closePlaceDetails();
+    if (!this.state.metresPerPixel) return showDialog(this.dialog("scale-ask-dialog"));
+    this.measureHistory = [];
+    this.mode("measure");
+  }
+  private closeMeasure() {
+    this.measurePoints = [];
+    this.scalePoints = [];
+    this.measureHistory = [];
+    this.mode("browse");
+  }
+  /** Tap both ends of a known length, like the scale bar, then say how long it is. */
+  private startScale() {
+    this.scalePoints = [];
+    this.measureHistory = [];
+    this.mode("scale");
+  }
+  /** × goes back to measuring if the map already has a scale to measure with. */
+  private cancelScale() {
+    if (!this.state.metresPerPixel) return this.closeMeasure();
+    this.scalePoints = [];
+    this.measureHistory = [];
+    this.mode("measure");
+  }
+  private askScaleLength() {
+    const pixels = pathLength(this.scalePoints), known = this.state.metresPerPixel;
+    // Changing the scale starts from what the current one says.
+    this.input("scale-metres").value = known ? String(Math.round(pixels * known * 10) / 10) : "";
+    this.renderScaleSave();
+    showDialog(this.dialog("scale-dialog"));
+    this.input("scale-metres").focus();
+  }
+  private scaleMetres() {
+    const metres = Number(this.input("scale-metres").value);
+    return metres > 0 && metres <= 100_000 ? metres : undefined;
+  }
+  private renderScaleSave() {
+    this.el<HTMLButtonElement>("scale-save").disabled = !this.scaleMetres();
   }
   private editRoute(route: PlannedRoute) {
     this.routeBefore = route.draft ? undefined : [...route.points];
@@ -834,6 +911,12 @@ export class ViewerControls {
     waterLine.textContent = water ? t("Water level: {level}", { level: waterLevels[water] }) : "";
     waterLine.hidden = !water;
     this.renderPlaceLog(place);
+    // A route's length and walking time sit under its name, where a place says when it was seen.
+    if ("points" in item) {
+      const summary = travelSummary(item.points, this.state.metresPerPixel);
+      this.el("marker-detail-seen").textContent = summary ?? "";
+      this.el("marker-detail-seen").hidden = !summary;
+    }
     const details = this.el("marker-details");
     details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
@@ -1042,16 +1125,40 @@ export class ViewerControls {
     this.on(window, "pagehide", () => {
       void this.flush();
     });
+    this.click("open-measure", () => this.toggleMeasure());
+    for (const id of ["scale-ask-close", "scale-ask-later"])
+      this.click(id, () => this.dialog("scale-ask-dialog").close());
+    this.click("scale-ask-start", () => {
+      this.dialog("scale-ask-dialog").close();
+      this.startScale();
+    });
+    this.click("scale-cancel", () => this.dialog("scale-dialog").close());
+    this.on(this.input("scale-metres"), "input", () => this.renderScaleSave());
+    this.on(this.el("scale-form"), "submit", (event) => {
+      event.preventDefault();
+      const metres = this.scaleMetres(), pixels = pathLength(this.scalePoints);
+      if (!metres || !pixels) return;
+      this.state.metresPerPixel = metres / pixels;
+      this.dialog("scale-dialog").close();
+      this.scalePoints = [];
+      this.measureHistory = [];
+      this.changed();
+      this.mode("measure");
+      this.toast(t("Scale set"), "done");
+    });
     this.click("open-add", () =>
       this.sheet(this.openSheet === "add" ? undefined : "add"),
     );
     // The task card's X cancels: a route is dropped, a moved place goes back.
     this.click("tool-cancel", () => {
       if (this.tool === "route") this.cancelRoute();
+      else if (this.tool === "measure") this.closeMeasure();
+      else if (this.tool === "scale") this.cancelScale();
       else if (this.tool === "move") this.finishMove(false);
       else this.mode("browse");
     });
     this.click("tool-rename", () => {
+      if (this.tool === "measure") return this.startScale();
       const route = this.route();
       if (route)
         this.name(t("Rename route"), route.name, (name) => {
@@ -1083,9 +1190,17 @@ export class ViewerControls {
       this.editRoute(route);
     });
     this.click("tool-done", () =>
-      this.tool === "move" ? this.finishMove(true) : this.finishRoute(),
+      this.tool === "move" ? this.finishMove(true)
+      : this.tool === "scale" ? this.askScaleLength()
+      : this.finishRoute(),
     );
     this.click("route-undo", () => {
+      if (this.measuring()) {
+        const previous = this.measureHistory.pop();
+        if (previous) this.setTape(previous);
+        else if (!this.tape().pop()) return;
+        return this.measured();
+      }
       // Steps back through this session's taps and drags; once those run
       // out, it keeps removing the last point.
       const route = this.route();
@@ -1143,7 +1258,7 @@ export class ViewerControls {
       this.showDetails(place);
       this.toast(t("Journal entry added to {name}", { name: place.label }), "done");
     });
-    for (const id of ["marker-dialog", "entry-dialog", "name-dialog"])
+    for (const id of ["marker-dialog", "entry-dialog", "name-dialog", "scale-dialog"])
       this.on(this.dialog(id), "cancel", keepFormOpen);
     const label = this.input("marker-label");
     // Next on the name moves on to the description; only Save saves the place.
@@ -1438,6 +1553,8 @@ export class ViewerControls {
     else if (this.openSheet) this.sheet(undefined);
     else if (this.tool === "route") this.finishRoute();
     else if (this.tool === "move") this.finishMove(true);
+    else if (this.tool === "measure") this.closeMeasure();
+    else if (this.tool === "scale") this.cancelScale();
     else if (this.tool !== "browse") this.mode("browse");
     else return false;
     return true;
@@ -1450,12 +1567,20 @@ export class ViewerControls {
     // One task at a time: its card takes the pill's place until it's over.
     for (const sheet of sheets)
       this.el<HTMLButtonElement>(`open-${sheet}`).disabled = editing;
+    const measuring = this.measuring();
+    const measure = this.el<HTMLButtonElement>("open-measure");
+    measure.disabled = editing && !measuring;
+    measure.setAttribute("aria-pressed", String(measuring));
     this.input("map-search").disabled = editing;
     this.el("dock").hidden = editing;
     this.el("tool-bar").hidden = !editing || sheetOpen;
     const route = this.route();
     const count = route?.points.length ?? 0;
     const discarding = this.confirming === "cancel-route";
+    const scale = this.state.metresPerPixel;
+    const tape = measuring ? this.tape() : [];
+    const metres = this.tool === "measure" && scale && tape.length > 1 ? pathLength(tape) * scale : undefined;
+    const routeMetres = scale && count > 1 ? pathLength(route!.points) * scale : undefined;
     const texts: Record<Tool, [string, string, string]> = {
       browse: ["", "", ""],
       move: [
@@ -1472,26 +1597,53 @@ export class ViewerControls {
             ? t("Tap × again to undo your changes")
             : t("Tap × again to discard this route")
           // Done waits for a second point, so the hint asks for it.
+          : routeMetres !== undefined ? t("{distance} · Tap to add, drag to adjust", { distance: formatDistance(routeMetres) })
           : count > 1 ? t("{points} · Tap to add, drag to adjust", { points: plural(count, "point") })
           : count ? t("1 point · Tap where it goes next") : t("Tap where the route starts"),
+      ],
+      measure: [
+        icons.measure,
+        t("Measure"),
+        metres !== undefined ? t("~{time} on foot · Tap to add, drag to adjust", { time: formatWalk(metres) })
+          : tape.length ? t("Tap the next point") : t("Tap where to start measuring"),
+      ],
+      scale: [
+        icons.scale,
+        t("Set scale"),
+        tape.length > 1 ? t("Drag the ends to adjust, then tap Next")
+          : tape.length ? t("Tap the other end") : t("Tap one end of the scale bar or of a known length"),
       ],
     };
     const [icon, title, message] = texts[this.tool];
     this.el("tool-icon").innerHTML = icon;
     this.el("tool-title").textContent = title;
     this.el("tool-message").textContent = message;
-    this.el("tool-rename").hidden = this.tool !== "route";
+    // Measuring, the big number is the total; the hint below it says how long it takes.
+    const total = this.el("tool-total");
+    total.textContent = metres !== undefined ? formatDistance(metres) : "";
+    total.hidden = metres === undefined;
+    const rename = this.el("tool-rename");
+    rename.hidden = this.tool !== "route" && this.tool !== "measure";
+    const renameLabel = this.tool === "measure" ? t("Change scale") : t("Rename route");
+    rename.setAttribute("aria-label", renameLabel);
+    rename.title = renameLabel;
     const cancel = this.el("tool-cancel");
     cancel.classList.toggle("armed", discarding);
     const cancelLabel = discarding ? t("Discard?") : t("Cancel");
     cancel.setAttribute("aria-label", cancelLabel);
     cancel.title = cancelLabel;
-    this.el("tool-actions").hidden = this.tool !== "route" && this.tool !== "move";
-    this.el("route-undo").hidden = this.tool !== "route";
-    this.el<HTMLButtonElement>("route-undo").disabled =
-      !count && !this.routeHistory.length;
-    this.el<HTMLButtonElement>("tool-done").disabled =
-      this.tool === "route" && count < 2;
+    this.el("tool-actions").hidden = this.tool === "browse" || this.tool === "marker";
+    this.el("route-undo").hidden = this.tool !== "route" && !measuring;
+    this.el<HTMLButtonElement>("route-undo").disabled = measuring
+      ? !tape.length && !this.measureHistory.length
+      : !count && !this.routeHistory.length;
+    // Measuring has nothing to save, so × is how it ends; the scale goes on to its length.
+    const done = this.el<HTMLButtonElement>("tool-done");
+    done.hidden = this.tool === "measure";
+    done.innerHTML = this.tool === "scale" ? icons.next : icons.check;
+    done.append(Object.assign(this.root.ownerDocument.createElement("span"),
+      { textContent: this.tool === "scale" ? t("Next") : t("Done") }));
+    done.disabled = (this.tool === "route" || this.tool === "scale") && (this.tool === "route" ? count : tape.length) < 2;
   }
   // Saved rows open a place's or route's details; ⋯ exposes actions.
   private row(
@@ -1827,7 +1979,7 @@ export class ViewerControls {
         key: route.id,
         label: route.name,
         description: route.description,
-        meta: `${plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
+        meta: `${travelSummary(route.points, this.state.metresPerPixel) ?? plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
         photos: route.photos,
         icon: this.routeIcon(route),
         jump: () => this.showDetails(route),

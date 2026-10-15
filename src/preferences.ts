@@ -10,6 +10,8 @@ const choices = {
   "compass-step": ["2", "5", "10"],
   /** …once they've held this many seconds. */
   "compass-delay": ["1", "0.5", "2", "5"],
+  /** Pace for travel times, in km/h. */
+  "walking-speed": ["4", "2", "3", "5"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };
