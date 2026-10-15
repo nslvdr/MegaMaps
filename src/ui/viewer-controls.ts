@@ -1333,7 +1333,7 @@ export class ViewerControls {
       return;
     }
     // The first heading turns the map at once. Later, the map turns only once
-    // a heading a step or more away has held for the delay (10° and 2 s by
+    // a heading a step or more away has held for the delay (2° and 1 s by
     // default), so turning while walking waits until you stop; a heading that
     // returns is never followed. Smaller changes are left alone: following
     // each one redraws the map nonstop.

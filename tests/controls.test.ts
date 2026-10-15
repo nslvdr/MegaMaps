@@ -323,8 +323,26 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
-    // Turns under 10° leave the map still, so a swaying phone doesn't redraw it nonstop.
+    // By default a 2° turn is followed once it has held for 1 s.
     t.mock.timers.enable({ apis: ["setTimeout"] });
+    assert.equal((el("compass-step-2") as HTMLInputElement).checked, true);
+    assert.equal((el("compass-delay-1") as HTMLInputElement).checked, true);
+    heading(91);
+    t.mock.timers.tick(5000);
+    assert.equal(orientations.at(-1), -Math.PI / 2, "a 1° sway is left alone");
+    heading(92);
+    t.mock.timers.tick(999);
+    assert.equal(orientations.at(-1), -Math.PI / 2);
+    t.mock.timers.tick(1);
+    assert.ok(Math.abs(orientations.at(-1)! + (92 * Math.PI) / 180) < 1e-9);
+    heading(90);
+    t.mock.timers.tick(1000);
+    // Compass mode lets the device choose a larger step and a longer delay.
+    check("compass-step-10", true);
+    check("compass-delay-2", true);
+    assert.equal(localStorage.getItem("megamaps:compass-step"), "10", "the device keeps them for every map");
+    assert.equal(localStorage.getItem("megamaps:compass-delay"), "2");
+    // Turns under 10° then leave the map still.
     const following = orientations.length;
     heading(99.5);
     heading(80.5);
@@ -349,18 +367,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     t.mock.timers.tick(2000);
     assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
-    // Compass mode lets the device choose a smaller step and a shorter delay.
-    assert.equal((el("compass-step-10") as HTMLInputElement).checked, true);
-    assert.equal((el("compass-delay-2") as HTMLInputElement).checked, true);
-    check("compass-step-2", true);
-    check("compass-delay-0.5", true);
-    assert.equal(localStorage.getItem("megamaps:compass-step"), "2", "the device keeps them for every map");
-    assert.equal(localStorage.getItem("megamaps:compass-delay"), "0.5");
-    heading(93);
-    t.mock.timers.tick(499);
-    assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
-    t.mock.timers.tick(1);
-    assert.ok(Math.abs(orientations.at(-1)! + (93 * Math.PI) / 180) < 1e-9, "a 3° turn follows after 0.5 s");
     localStorage.removeItem("megamaps:compass-step");
     localStorage.removeItem("megamaps:compass-delay");
     t.mock.timers.reset();
@@ -377,7 +383,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.northOffset, 5);
     assert.equal(wheel.scrollTop, (zero + 5) * row + 10, "a scrolling wheel is left where the finger is");
     assert.equal(wheel.getAttribute("aria-valuenow"), "5");
-    assert.ok(Math.abs(orientations.at(-1)! + (98 * Math.PI) / 180) < 1e-9);
+    assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
     wheel.scrollTop = 0;
     wheel.dispatchEvent(new window.Event("scroll"));
     assert.equal(wheel.querySelector(".selected")!.textContent, "−179°");
