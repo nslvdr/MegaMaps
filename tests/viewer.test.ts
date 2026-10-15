@@ -235,9 +235,17 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.ok(state.dimming < 1);
     viewer.updateNavigation(state);
 
+    // A pan of less than a pixel (a fling coming to rest) leaves the drawn map
+    // on whole pixels, so its edges and lines don't shimmer frame to frame.
+    state.touchLocked = false;
+    viewer.updateNavigation(state);
+    const edge = pixel(195, 227);
+    viewer.panBy(0, 0.4);
+    assert.deepEqual(pixel(195, 227), edge);
+    viewer.panBy(0, -0.4);
+
     // Editing a route: its points drag; a point snapped onto a place moves
     // alone, and dropping one on a place snaps it there.
-    state.touchLocked = false;
     const place = state.markers[0]!;
     state.routes.push({
       id: "route",
