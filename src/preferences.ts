@@ -6,6 +6,10 @@ const choices = {
   /** How each Saved list is ordered. */
   "place-order": ["newest", "oldest", "name", "type", "seen"],
   "route-order": ["newest", "oldest", "name"],
+  /** Compass mode turns the map for changes of at least this many degrees… */
+  "compass-step": ["10", "2", "5"],
+  /** …once they've held this many seconds. */
+  "compass-delay": ["2", "0.5", "1", "5"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };

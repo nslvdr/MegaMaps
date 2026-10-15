@@ -1,6 +1,6 @@
 import { dialogHeader } from "./dialog";
 import { icons } from "./icons";
-import { t } from "../i18n";
+import { locale, t } from "../i18n";
 import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
@@ -27,6 +27,11 @@ const northDegrees = Array.from({ length: NORTH_MAX - NORTH_MIN + 1 }, (_, i) =>
 const brightnessChoices = BRIGHTNESS_LEVELS.map(
   (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
+// Compass settings, smallest first; the device's choice is checked on render.
+const compassChoices = (name: string, values: number[], label: (value: number) => string) =>
+  values.map((value) => `<label><input type="radio" name="${name}" id="${name}-${value}" value="${value}"><span>${label(value)}</span></label>`).join("");
+const stepChoices = compassChoices("compass-step", [2, 5, 10], (degrees) => `${degrees}°`);
+const delayChoices = compassChoices("compass-delay", [0.5, 1, 2, 5], (seconds) => `${seconds.toLocaleString(locale)} s`);
 // The form shows the chosen pin; tapping it opens every pin, named, in a modal.
 const kindPicks = Object.entries(markerKinds)
   .map(
@@ -76,7 +81,7 @@ export const viewerMarkup = `
       <h3>${t("Map")}</h3>
       <div class="panel-card">
         <label class="panel-row">${rowIcon(icons.moon)}<span class="row-text"><strong>${t("Dark map")}</strong><small id="dark-status"></small></span><input type="checkbox" role="switch" class="switch" id="dark-map"></label>
-        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>${t("Brightness")}</strong><small id="brightness-help">${t("Dim the map so routes and places stand out.")}</small></span><div class="brightness-options" role="radiogroup" aria-label="${t("Map brightness")}" aria-describedby="brightness-help">${brightnessChoices}</div></div>
+        <div class="panel-row stacked">${rowIcon(icons.sun)}<span class="row-text"><strong>${t("Brightness")}</strong><small id="brightness-help">${t("Dim the map so routes and places stand out.")}</small></span><div class="option-pills" role="radiogroup" aria-label="${t("Map brightness")}" aria-describedby="brightness-help">${brightnessChoices}</div></div>
       </div>
       <h3>${t("Show on map")}</h3>
       <div class="layer-toggles" role="group" aria-label="${t("Show on map")}">
@@ -94,7 +99,9 @@ export const viewerMarkup = `
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
       <div id="north-field" class="panel-card" hidden>
-        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North")}</strong><small id="north-help">${t("Clockwise from map top")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
+        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
+        <div class="panel-row stacked">${rowIcon(icons.rotateRight)}<span class="row-text"><strong>${t("Turn step")}</strong><small id="compass-step-help">${t("Smaller changes leave the map still")}</small></span><div class="option-pills" role="radiogroup" aria-label="${t("Turn step")}" aria-describedby="compass-step-help">${stepChoices}</div></div>
+        <div class="panel-row stacked">${rowIcon(icons.timer)}<span class="row-text"><strong>${t("Turn delay")}</strong><small id="compass-delay-help">${t("A new heading must hold this long first")}</small></span><div class="option-pills" role="radiogroup" aria-label="${t("Turn delay")}" aria-describedby="compass-delay-help">${delayChoices}</div></div>
       </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="${t("Saved")}" hidden>

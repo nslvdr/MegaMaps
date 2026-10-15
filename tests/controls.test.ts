@@ -349,10 +349,25 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     t.mock.timers.tick(2000);
     assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
+    // Compass mode lets the device choose a smaller step and a shorter delay.
+    assert.equal((el("compass-step-10") as HTMLInputElement).checked, true);
+    assert.equal((el("compass-delay-2") as HTMLInputElement).checked, true);
+    check("compass-step-2", true);
+    check("compass-delay-0.5", true);
+    assert.equal(localStorage.getItem("megamaps:compass-step"), "2", "the device keeps them for every map");
+    assert.equal(localStorage.getItem("megamaps:compass-delay"), "0.5");
+    heading(93);
+    t.mock.timers.tick(499);
+    assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
+    t.mock.timers.tick(1);
+    assert.ok(Math.abs(orientations.at(-1)! + (93 * Math.PI) / 180) < 1e-9, "a 3° turn follows after 0.5 s");
+    localStorage.removeItem("megamaps:compass-step");
+    localStorage.removeItem("megamaps:compass-delay");
     t.mock.timers.reset();
 
-    // Its north can sit anywhere on the map; the wheel turns it as each degree passes.
+    // Its north offset fixes a map whose top isn't north; the wheel turns it as each degree passes.
     assert.equal(el("north-field").hidden, false);
+    assert.equal(el("north-label").textContent, "North offset");
     const wheel = el("north-offset");
     const row = 32, zero = 179;
     assert.equal(wheel.scrollTop, zero * row, "the wheel opens on 0°");
@@ -362,7 +377,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.northOffset, 5);
     assert.equal(wheel.scrollTop, (zero + 5) * row + 10, "a scrolling wheel is left where the finger is");
     assert.equal(wheel.getAttribute("aria-valuenow"), "5");
-    assert.ok(Math.abs(orientations.at(-1)! + (95 * Math.PI) / 180) < 1e-9);
+    assert.ok(Math.abs(orientations.at(-1)! + (98 * Math.PI) / 180) < 1e-9);
     wheel.scrollTop = 0;
     wheel.dispatchEvent(new window.Event("scroll"));
     assert.equal(wheel.querySelector(".selected")!.textContent, "−179°");
