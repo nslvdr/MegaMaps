@@ -105,6 +105,50 @@ export function chooseLevel(levels: Level[], scale: number, dpr: number) {
     Math.max(0, Math.floor(Math.log2(1 / (scale * dpr)))),
   );
 }
+// Decoded tiles a view may need at once; the cache budget holds a few more.
+const MOST_TILES = 22;
+/** The sharpest level whose tiles fit the decode budget wherever the screen is
+ * panned. Counting only the tiles shown now would switch levels mid-pan, as
+ * rows and columns of the grid slide in and out, and the map would flicker
+ * between sharp and coarse tiles. */
+export function tileLevel(levels: Level[], camera: Camera, viewport: Size, dpr: number) {
+  let level = chooseLevel(levels, camera.scale, dpr);
+  while (level < levels.length - 1 && mostTiles(levels[level]!, camera, viewport) > MOST_TILES)
+    level++;
+  return level;
+}
+/** The most tiles of a level the screen can touch at this zoom and turn. The
+ * grid is slid under the screen by steps of a fraction of a tile, and the
+ * screen grows by one step on each side so the positions between are covered.
+ * A map smaller than the screen counts only the tiles it has. */
+function mostTiles(level: Level, camera: Camera, viewport: Size, steps = 8) {
+  const extent = TILE_SIZE * level.scale,
+    step = (extent * camera.scale) / steps;
+  const { c, s } = trig(camera.rotation ?? 0);
+  const grown = { width: viewport.width + 2 * step, height: viewport.height + 2 * step };
+  let most = 0;
+  for (let u = 0; u < steps; u++)
+    for (let v = 0; v < steps; v++) {
+      const slid = { ...camera, x: step * (1 + u * c - v * s), y: step * (1 + u * s + v * c) };
+      const bounds = viewBounds(slid, grown);
+      const left = Math.floor(bounds.left / extent), right = Math.floor(bounds.right / extent),
+        top = Math.floor(bounds.top / extent), bottom = Math.floor(bounds.bottom / extent);
+      const touched: Point[] = [];
+      for (let y = top; y <= bottom; y++)
+        for (let x = left; x <= right; x++)
+          if (onScreen(slid, grown, { x: x * extent, y: y * extent, width: extent, height: extent }))
+            touched.push({ x, y });
+      // Slide the map's own grid over the touched tiles.
+      for (let x0 = left; x0 <= Math.max(left, right - level.cols + 1); x0++)
+        for (let y0 = top; y0 <= Math.max(top, bottom - level.rows + 1); y0++)
+          most = Math.max(most, touched.filter((t) =>
+            t.x >= x0 && t.x < x0 + level.cols && t.y >= y0 && t.y < y0 + level.rows).length);
+    }
+  // Growing the screen may add a row or column that no pan could show.
+  const bounds = viewBounds(camera, viewport),
+    span = (size: number, tiles: number) => Math.min(tiles, Math.floor(size / extent) + 2);
+  return Math.min(most, span(bounds.right - bounds.left, level.cols) * span(bounds.bottom - bounds.top, level.rows));
+}
 /** World-space box around the screen. All four corners are inverse-projected:
  * an unrotated rectangle would miss areas along diagonal edges when rotated. */
 export function viewBounds(camera: Camera, viewport: Size) {

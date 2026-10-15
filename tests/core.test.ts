@@ -10,6 +10,7 @@ import {
   zoomAt,
   constrain,
   chooseLevel,
+  tileLevel,
   visibleTiles,
   viewBounds,
 } from "../src/viewer/camera";
@@ -110,6 +111,20 @@ test("a turned screen loads only the tiles it shows", () => {
   const boxed = (Math.floor(box.right / TILE_SIZE) - Math.floor(box.left / TILE_SIZE) + 1) *
     (Math.floor(box.bottom / TILE_SIZE) - Math.floor(box.top / TILE_SIZE) + 1);
   assert.ok(keys.size < boxed * 0.75, `${keys.size} of ${boxed}`);
+});
+test("panning keeps the tile level, and that level fits the decode budget everywhere", () => {
+  const levels = pyramid(9000, 9000),
+    viewport = { width: 390, height: 844 };
+  for (const scale of [0.25, 0.3, 0.35, 0.4, 0.5, 0.7])
+    for (const rotation of [0, 0.3, Math.PI / 4]) {
+      const at = (x: number, y: number) => cameraAt({ x, y }, viewport, scale, rotation);
+      const level = tileLevel(levels, at(4500, 4500), viewport, 2);
+      for (let x = 3000; x < 4200; x += 7)
+        for (const y of [4000, 4133, 4271]) {
+          assert.equal(tileLevel(levels, at(x, y), viewport, 2), level, `${scale} ${rotation} at ${x},${y}`);
+          assert.ok(visibleTiles(levels[level]!, at(x, y), viewport).length <= 22);
+        }
+    }
 });
 test("map edges and corners can be centered at fit and native zoom, including rotation", () => {
   const image = { width: 9000, height: 4000 };

@@ -5,7 +5,7 @@ import {
   fitCamera,
   constrain,
   zoomAt,
-  chooseLevel,
+  tileLevel,
   visibleTiles,
   onScreen,
   viewBounds,
@@ -98,6 +98,7 @@ export class Viewer {
   private covered = 0;
   private dpr = 1;
   private frame = 0;
+  private level?: { view: string; level: number };
   private animation = 0;
   // Where the running animation ends, so quick key presses add up.
   private destination?: Camera;
@@ -743,23 +744,23 @@ export class Viewer {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.translate(this.camera.x, this.camera.y);
+    // Whole device pixels: a fling's slow tail moves less than a pixel a frame,
+    // and sub-pixel offsets resample the tiles differently each time, so fine
+    // lines shimmer as the map comes to rest.
+    ctx.translate(
+      Math.round(this.camera.x * this.dpr) / this.dpr,
+      Math.round(this.camera.y * this.dpr) / this.dpr,
+    );
     ctx.rotate(this.camera.rotation ?? 0);
     ctx.scale(this.camera.scale, this.camera.scale);
     ctx.fillRect(0, 0, this.map.width, this.map.height);
-    let level = chooseLevel(this.map.levels, this.camera.scale, this.dpr);
-    let tiles = visibleTiles(
-      this.map.levels[level]!,
-      this.camera,
-      this.viewport(),
-    );
-    // Keep all visible tiles within the decoded-byte budget, including edge tiles.
-    while (tiles.length > 22 && level < this.map.levels.length - 1)
-      tiles = visibleTiles(
-        this.map.levels[++level]!,
-        this.camera,
-        this.viewport(),
-      );
+    // Only zooming, turning or resizing changes the level, never panning.
+    const { scale, rotation = 0 } = this.camera,
+      view = `${scale} ${rotation} ${this.width} ${this.height} ${this.dpr}`;
+    if (this.level?.view !== view)
+      this.level = { view, level: tileLevel(this.map.levels, this.camera, this.viewport(), this.dpr) };
+    const { level } = this.level;
+    const tiles = visibleTiles(this.map.levels[level]!, this.camera, this.viewport());
     if (this.measured) this.cache.plan(tiles.map((t) => ({ ...t, level })));
     // The overview stays beneath everything: it hides hairline seams where
     // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
