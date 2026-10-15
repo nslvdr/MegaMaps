@@ -80,7 +80,9 @@ type ToastTone = keyof typeof toastIcons;
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
 /** Smaller compass changes are left alone: following each one redraws the map nonstop. */
-const COMPASS_STEP_DEGREES = 5;
+const COMPASS_STEP_DEGREES = 10;
+/** How long a new heading must hold before the map turns to it. */
+const COMPASS_SETTLE_MS = 2000;
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -1326,11 +1328,28 @@ export class ViewerControls {
       this.renderRotation();
       return;
     }
+    // The first heading turns the map at once. Later, the map turns only once
+    // a heading 10° or more away has held for 2 s, so turning while walking
+    // waits until you stop; a heading that returns is never followed.
+    const apart = (a: number, b: number) =>
+      Math.abs(((a - b + 540) % 360) - 180) >= COMPASS_STEP_DEGREES;
+    let latest = 0, candidate: number | undefined, settle: ReturnType<typeof setTimeout> | undefined;
     const stop = watchCompass((heading) => {
-      if (this.heading === undefined ||
-        Math.abs(((heading - this.heading + 540) % 360) - 180) >= COMPASS_STEP_DEGREES) {
+      latest = heading;
+      if (this.heading === undefined) {
         this.heading = heading;
         this.orient();
+      } else if (!apart(heading, this.heading)) {
+        clearTimeout(settle);
+        candidate = undefined;
+      } else if (candidate === undefined || apart(heading, candidate)) {
+        candidate = heading;
+        clearTimeout(settle);
+        settle = setTimeout(() => {
+          candidate = undefined;
+          this.heading = latest;
+          this.orient();
+        }, COMPASS_SETTLE_MS);
       }
       if (this.compass === "on") return;
       this.compass = "on";
@@ -1344,6 +1363,7 @@ export class ViewerControls {
     this.stopWatching = () => {
       stop();
       clearTimeout(timer);
+      clearTimeout(settle);
     };
   }
   private stopCompass() {
