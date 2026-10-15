@@ -3,6 +3,9 @@
 const choices = {
   language: ["fr", "en"],
   "label-size": ["standard", "large"],
+  /** How each Saved list is ordered. */
+  "place-order": ["newest", "oldest", "name", "type", "seen"],
+  "route-order": ["newest", "oldest", "name"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };

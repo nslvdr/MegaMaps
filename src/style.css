@@ -2690,6 +2690,31 @@ label.panel-row {
   color: var(--k);
   font-variant-numeric: tabular-nums;
 }
+/* A section's order and filter, a 44px target around the title's small ring. */
+.section-menu {
+  display: grid;
+  place-items: center;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  margin: -8px -8px -8px 0;
+  padding: 0;
+  border-radius: var(--radius-round);
+  background: none;
+}
+.section-menu svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--muted);
+  background: #000;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.section-menu[aria-expanded="true"] svg,
+.section-menu.active svg {
+  color: var(--k);
+  background: color-mix(in srgb, var(--k) 14%, #000);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 45%, transparent);
+}
 .navigation-jump {
   flex: 1;
   min-width: 0;
@@ -2825,6 +2850,30 @@ label.panel-row {
 }
 .popover-item:active:not(:disabled) {
   background: var(--fill-strong);
+}
+.popover-item .place-icon {
+  width: 24px;
+  height: 24px;
+}
+.popover-label {
+  padding: var(--space-4) var(--space-12);
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+.popover-item + .popover-label {
+  margin-top: var(--space-8);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--line);
+}
+/* Order and filter menus tick what's chosen. */
+.popover-item .popover-check {
+  margin-left: auto;
+  color: var(--neon-saved);
+  visibility: hidden;
+}
+.popover-item[aria-checked="true"] .popover-check {
+  visibility: visible;
 }
 /* A plain row like the others, not the bordered, centered .danger pill. */
 .popover-item.danger {

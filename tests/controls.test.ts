@@ -1626,3 +1626,59 @@ test("a route reads and edits like a place: name, description and photos", async
     await controls.dispose();
   }
 });
+
+test("Saved orders its lists and filters them by type", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog"))
+    Object.defineProperty(dialog, "close", { value: () => dialog.removeAttribute("open") });
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "saved-order", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  const place = (label: string, kind: "entrance" | "unstable", created: number) =>
+    ({ id: label, point: { x: 1, y: 1 }, label, description: "", kind, created });
+  state.markers = [place("Well", "entrance", 1), place("Arch", "unstable", 2), place("Gate", "entrance", 3)];
+  state.routes = [{ id: "loop", name: "Loop", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], created: 0, draft: false }];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({ setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {} });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (target: Element) => target.dispatchEvent(new window.Event("click"));
+  const places = () => [...el("marker-list").querySelectorAll(".row-text strong")].map((row) => row.textContent);
+  const items = () => [...document.querySelectorAll("#saved-section-menu .popover-item")];
+  const pick = (label: string) => click(items().find((item) => item.textContent === label)!);
+  try {
+    assert.equal(el("places-order").parentElement, el("saved-places-title"), "the icon sits on the section's title line");
+    assert.equal(el("routes-order").hidden, true, "a single route has nothing to order");
+    assert.deepEqual(places(), ["Gate", "Arch", "Well"], "newest first by default");
+
+    click(el("places-order"));
+    assert.equal(document.querySelector("#saved-section-menu [aria-checked=true]")?.textContent, "Newest");
+    pick("A–Z");
+    assert.equal(document.getElementById("saved-section-menu"), null, "picking an order closes the menu");
+    assert.deepEqual(places(), ["Arch", "Gate", "Well"]);
+    assert.equal(localStorage.getItem("megamaps:place-order"), "name", "the order is kept for next time");
+
+    click(el("places-order"));
+    assert.deepEqual(items().map((item) => item.textContent).slice(5),
+      ["All types", "Entrance", "Danger"], "only kinds saved here are offered");
+    pick("Entrance");
+    assert.ok(document.getElementById("saved-section-menu"), "the filter stays open to pick more");
+    assert.deepEqual(places(), ["Gate", "Well"]);
+    assert.equal(el("saved-places-count").textContent, "2/3");
+    assert.ok(el("places-order").classList.contains("active"));
+    pick("Danger");
+    assert.deepEqual(places(), ["Arch", "Gate", "Well"]);
+    pick("All types");
+    assert.equal(el("saved-places-count").textContent, "3");
+    assert.equal(el("places-order").classList.contains("active"), false);
+  } finally {
+    localStorage.removeItem("megamaps:place-order");
+    await controls.dispose();
+  }
+});

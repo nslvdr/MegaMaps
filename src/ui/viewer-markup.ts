@@ -98,9 +98,9 @@ export const viewerMarkup = `
       </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="${t("Saved")}" hidden>
-      <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>${t("Routes")}</span><small id="saved-routes-count"></small></h3>
+      <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>${t("Routes")}</span><small id="saved-routes-count"></small><button id="routes-order" class="section-menu" aria-label="${t("Order routes")}" aria-haspopup="menu" aria-expanded="false">${icons.filter}</button></h3>
       <ul id="route-list" class="navigation-list" aria-labelledby="saved-routes-title"></ul>
-      <h3 id="saved-places-title" class="section-title places">${icons.pin}<span>${t("Places")}</span><small id="saved-places-count"></small></h3>
+      <h3 id="saved-places-title" class="section-title places">${icons.pin}<span>${t("Places")}</span><small id="saved-places-count"></small><button id="places-order" class="section-menu" aria-label="${t("Order and filter places")}" aria-haspopup="menu" aria-expanded="false">${icons.filter}</button></h3>
       <ul id="marker-list" class="navigation-list" aria-labelledby="saved-places-title"></ul>
     </div>
     <div id="sheet-add" data-panel="add" data-title="${t("Add")}" hidden>

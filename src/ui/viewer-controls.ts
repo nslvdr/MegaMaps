@@ -32,6 +32,8 @@ import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/co
 import { icons } from "./icons";
 import { logDate, nextName, plural, seenAgo } from "./format";
 import { t } from "../i18n";
+import { preference, setPreference } from "../preferences";
+import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
 import {
@@ -145,6 +147,11 @@ export class ViewerControls {
   private rowMenu?: string;
   private rowMenuAnchor?: HTMLElement;
   private rowPopover?: HTMLElement;
+  /** How Saved lists places and routes, kept for the device. */
+  private placeOrder = preference("place-order");
+  private routeOrder = preference("route-order");
+  /** The kinds of place Saved shows, only while the map is open; none shows every kind. */
+  private placeKinds = new Set<MapMarker["kind"]>();
   private openSheet?: Sheet;
   private darkKind: DarkMode["kind"] = "inverted";
   /** New places start as the kind last saved, for runs of entrances or notes. */
@@ -1010,7 +1017,7 @@ export class ViewerControls {
     this.on(document, "pointerdown", (event) => {
       if (!this.rowMenu) return;
       const target = event.target as Element | null;
-      if (target?.closest?.(".row-popover, .row-more")) return;
+      if (target?.closest?.(".row-popover, .row-more, .section-menu")) return;
       this.closeRowMenu();
     });
     this.on(this.root.querySelector(".sheet-content")!, "scroll", () =>
@@ -1048,6 +1055,15 @@ export class ViewerControls {
     });
     this.click("add-marker", () => this.mode("marker"));
     this.click("share-saved", () => this.onShare?.());
+    for (const id of ["routes-order", "places-order"] as const)
+      this.click(id, () => {
+        const wasOpen = this.rowMenu === id;
+        this.closeRowMenu();
+        if (wasOpen) return;
+        this.rowMenu = id;
+        this.savedMenu(id);
+        this.positionRowMenu();
+      });
     // Start drawing immediately; the default name can be changed from Saved.
     this.click("add-route", () => {
       const route: PlannedRoute = {
@@ -1555,6 +1571,74 @@ export class ViewerControls {
     };
     if (open) showMenu();
   }
+  // A section's menu: an order, picked once, and for places the kinds to show, several at a time.
+  private savedMenu(id: "routes-order" | "places-order") {
+    const anchor = this.el(id);
+    const menu = document.createElement("div");
+    menu.id = "saved-section-menu";
+    menu.className = "row-popover";
+    menu.dataset.width = "256";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", anchor.getAttribute("aria-label")!);
+    anchor.setAttribute("aria-expanded", "true");
+    anchor.setAttribute("aria-controls", menu.id);
+    const group = (label: string) => {
+      const heading = document.createElement("div");
+      heading.className = "popover-label";
+      heading.textContent = label;
+      menu.append(heading);
+    };
+    const item = (role: string, label: string, icon: string, checked: boolean, action: () => void) => {
+      const button = document.createElement("button");
+      button.className = "popover-item";
+      button.setAttribute("role", role);
+      button.setAttribute("aria-checked", String(checked));
+      const text = document.createElement("span");
+      text.textContent = label;
+      button.innerHTML = icon;
+      button.append(text);
+      button.insertAdjacentHTML("beforeend", icons.check);
+      button.lastElementChild!.classList.add("popover-check");
+      button.addEventListener("click", action);
+      menu.append(button);
+    };
+    const pick = () => {
+      this.closeRowMenu();
+      this.render();
+    };
+    group(t("Order"));
+    if (id === "routes-order")
+      for (const [order, label] of Object.entries(routeOrders) as [keyof typeof routeOrders, string][])
+        item("menuitemradio", label, icons[order], order === this.routeOrder, () => {
+          setPreference("route-order", this.routeOrder = order);
+          pick();
+        });
+    else {
+      for (const [order, label] of Object.entries(placeOrders) as [keyof typeof placeOrders, string][])
+        item("menuitemradio", label, icons[order], order === this.placeOrder, () => {
+          setPreference("place-order", this.placeOrder = order);
+          pick();
+        });
+      group(t("Type"));
+      item("menuitemcheckbox", t("All types"), icons.pin, !this.placeKinds.size, () => {
+        this.placeKinds.clear();
+        this.render();
+      });
+      for (const kind of this.savedKinds())
+        item("menuitemcheckbox", markerKinds[kind].label, placeIcon(kind), this.placeKinds.has(kind), () => {
+          if (!this.placeKinds.delete(kind)) this.placeKinds.add(kind);
+          this.render();
+        });
+    }
+    this.rowPopover = menu;
+    this.rowMenuAnchor = anchor;
+    this.root.append(menu);
+  }
+  /** Each kind of place saved here, in the picker's order. */
+  private savedKinds() {
+    const kinds = new Set(this.state.markers.map((marker) => marker.kind));
+    return (Object.keys(markerKinds) as MapMarker["kind"][]).filter((kind) => kinds.has(kind));
+  }
   // Dismiss without rebuilding rows: pointerdown must not remove the pending click target.
   private closeRowMenu() {
     if (!this.rowMenu && !this.rowPopover) return;
@@ -1576,9 +1660,10 @@ export class ViewerControls {
     if (!menu || !anchor) return;
     const bounds = this.el("sheet").getBoundingClientRect();
     const origin = this.root.getBoundingClientRect();
-    menu.style.width = `${Math.max(0, Math.min(216, bounds.width - 16))}px`;
+    const width = Number(menu.dataset.width) || 216;
+    menu.style.width = `${Math.max(0, Math.min(width, bounds.width - 16))}px`;
     const position = popoverPosition(anchor.getBoundingClientRect(), bounds, {
-      width: 216,
+      width,
       height: (menu.scrollHeight || 0) + 2,
     });
     menu.style.left = `${position.left - origin.left}px`;
@@ -1638,8 +1723,6 @@ export class ViewerControls {
       if (layer !== "labels")
         this.el(`layer-${layer}-count`).textContent = String(counts[layer]);
     }
-    this.el("saved-routes-count").textContent = String(counts.routes);
-    this.el("saved-places-count").textContent = String(counts.places);
     this.el<HTMLButtonElement>("spotlight").disabled = !(counts.routes + counts.places);
     // Fine rotation only appears once twisting is unlocked.
     this.rowPopover?.remove();
@@ -1649,7 +1732,26 @@ export class ViewerControls {
       routes = this.el("route-list");
     markers.replaceChildren();
     routes.replaceChildren();
-    for (const marker of this.state.markers) {
+    // Kinds no longer saved here drop out, so the filter can't hide every place,
+    // and with its menu gone below two places, the filter goes too.
+    const kinds = this.savedKinds();
+    for (const kind of this.placeKinds)
+      if (!kinds.includes(kind) || counts.places < 2) this.placeKinds.delete(kind);
+    const placeList = orderPlaces(this.placeKinds.size
+      ? this.state.markers.filter((marker) => this.placeKinds.has(marker.kind)) : this.state.markers, this.placeOrder);
+    const routeList = orderRoutes(this.state.routes, this.routeOrder);
+    // Ordering needs two items.
+    for (const [id, count] of [["routes-order", counts.routes], ["places-order", counts.places]] as const) {
+      const button = this.el(id);
+      button.setAttribute("aria-expanded", "false");
+      button.hidden = count < 2;
+      if (button.hidden && this.rowMenu === id) this.rowMenu = undefined;
+    }
+    this.el("places-order").classList.toggle("active", this.placeKinds.size > 0);
+    this.el("saved-routes-count").textContent = String(counts.routes);
+    this.el("saved-places-count").textContent = this.placeKinds.size
+      ? `${placeList.length}/${counts.places}` : String(counts.places);
+    for (const marker of placeList) {
       this.row(markers, {
         key: marker.id,
         label: marker.label,
@@ -1687,7 +1789,7 @@ export class ViewerControls {
         ],
       });
     }
-    for (const route of this.state.routes) {
+    for (const route of routeList) {
       this.row(routes, {
         key: route.id,
         label: route.name,
@@ -1732,6 +1834,7 @@ export class ViewerControls {
         item.textContent = empty;
         container.append(item);
       }
+    if (this.rowMenu === "routes-order" || this.rowMenu === "places-order") this.savedMenu(this.rowMenu);
     // Measure only after all rows are back in the list and the panel has its final height.
     this.positionRowMenu();
     this.renderTool();
