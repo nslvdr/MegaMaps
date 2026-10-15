@@ -32,7 +32,7 @@ import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/co
 import { icons } from "./icons";
 import { logDate, nextName, plural, seenAgo } from "./format";
 import { t } from "../i18n";
-import { preference, setPreference } from "../preferences";
+import { preference, setPreference, type Preferences } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
@@ -79,10 +79,8 @@ const toastIcons = {
 type ToastTone = keyof typeof toastIcons;
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
-/** Smaller compass changes are left alone: following each one redraws the map nonstop. */
-const COMPASS_STEP_DEGREES = 10;
-/** How long a new heading must hold before the map turns to it. */
-const COMPASS_SETTLE_MS = 2000;
+/** The device's compass settings, chosen in the Rotation sheet. */
+const compassSettings = ["compass-step", "compass-delay"] as const;
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -1000,6 +998,12 @@ export class ViewerControls {
       const degrees = Math.round(wheel.scrollTop / NORTH_ROW_PX) + NORTH_MIN;
       if (degrees !== this.state.northOffset) this.setNorth(degrees);
     });
+    // Following headings reads these each time, so a change applies at once.
+    for (const key of compassSettings)
+      for (const input of this.compassChoices(key))
+        this.on(input, "change", () => {
+          if (input.checked) setPreference(key, input.value as Preferences[typeof key]);
+        });
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
@@ -1329,10 +1333,12 @@ export class ViewerControls {
       return;
     }
     // The first heading turns the map at once. Later, the map turns only once
-    // a heading 10° or more away has held for 2 s, so turning while walking
-    // waits until you stop; a heading that returns is never followed.
+    // a heading a step or more away has held for the delay (2° and 1 s by
+    // default), so turning while walking waits until you stop; a heading that
+    // returns is never followed. Smaller changes are left alone: following
+    // each one redraws the map nonstop.
     const apart = (a: number, b: number) =>
-      Math.abs(((a - b + 540) % 360) - 180) >= COMPASS_STEP_DEGREES;
+      Math.abs(((a - b + 540) % 360) - 180) >= Number(preference("compass-step"));
     let latest = 0, candidate: number | undefined, settle: ReturnType<typeof setTimeout> | undefined;
     const stop = watchCompass((heading) => {
       latest = heading;
@@ -1349,7 +1355,7 @@ export class ViewerControls {
           candidate = undefined;
           this.heading = latest;
           this.orient();
-        }, COMPASS_SETTLE_MS);
+        }, Number(preference("compass-delay")) * 1000);
       }
       if (this.compass === "on") return;
       this.compass = "on";
@@ -1403,6 +1409,10 @@ export class ViewerControls {
     this.el("rotation-help").textContent =
       (mode === "compass" && compassHelp[this.compass]) || help;
     this.el("north-field").hidden = mode !== "compass";
+    for (const key of compassSettings) {
+      const chosen = preference(key);
+      for (const input of this.compassChoices(key)) input.checked = input.value === chosen;
+    }
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
     wheel.setAttribute("aria-valuetext", t("{degrees}° clockwise", { degrees: north }));
@@ -1411,6 +1421,9 @@ export class ViewerControls {
     wheel.children[row]?.classList.add("selected");
     // Only a wheel showing another degree moves; a scrolling one already matches.
     if (Math.round(wheel.scrollTop / NORTH_ROW_PX) !== row) wheel.scrollTop = row * NORTH_ROW_PX;
+  }
+  private compassChoices(key: (typeof compassSettings)[number]) {
+    return this.el("north-field").querySelectorAll<HTMLInputElement>(`input[name="${key}"]`);
   }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted

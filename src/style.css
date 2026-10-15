@@ -2422,15 +2422,16 @@ label.panel-row {
   font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
 }
-/* Native radios expose one brightness choice, with full-size touch targets. */
-.brightness-options {
+/* Native radios expose one choice (brightness, compass), with full-size touch targets. */
+.option-pills {
   flex-basis: 100%;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: var(--space-4);
   margin: 0;
 }
-.brightness-options label {
+.option-pills label {
   position: relative;
   display: grid;
   place-items: center;
@@ -2442,7 +2443,7 @@ label.panel-row {
   font-weight: 600;
   cursor: pointer;
 }
-.brightness-options input {
+.option-pills input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -2451,7 +2452,7 @@ label.panel-row {
   opacity: 0;
   cursor: pointer;
 }
-.brightness-options label:has(input:checked) {
+.option-pills label:has(input:checked) {
   color: var(--c);
   border-color: color-mix(in srgb, var(--c) 40%, transparent);
   background: color-mix(in srgb, var(--c) 12%, #000);
@@ -2491,7 +2492,7 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
-/* Rotation help sits right under the modes; North follows in Compass mode. */
+/* Rotation help sits right under the modes; compass settings follow in Compass mode. */
 #rotation-help {
   margin-bottom: 0;
 }

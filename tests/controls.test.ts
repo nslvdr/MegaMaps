@@ -323,8 +323,26 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
-    // Turns under 10° leave the map still, so a swaying phone doesn't redraw it nonstop.
+    // By default a 2° turn is followed once it has held for 1 s.
     t.mock.timers.enable({ apis: ["setTimeout"] });
+    assert.equal((el("compass-step-2") as HTMLInputElement).checked, true);
+    assert.equal((el("compass-delay-1") as HTMLInputElement).checked, true);
+    heading(91);
+    t.mock.timers.tick(5000);
+    assert.equal(orientations.at(-1), -Math.PI / 2, "a 1° sway is left alone");
+    heading(92);
+    t.mock.timers.tick(999);
+    assert.equal(orientations.at(-1), -Math.PI / 2);
+    t.mock.timers.tick(1);
+    assert.ok(Math.abs(orientations.at(-1)! + (92 * Math.PI) / 180) < 1e-9);
+    heading(90);
+    t.mock.timers.tick(1000);
+    // Compass mode lets the device choose a larger step and a longer delay.
+    check("compass-step-10", true);
+    check("compass-delay-2", true);
+    assert.equal(localStorage.getItem("megamaps:compass-step"), "10", "the device keeps them for every map");
+    assert.equal(localStorage.getItem("megamaps:compass-delay"), "2");
+    // Turns under 10° then leave the map still.
     const following = orientations.length;
     heading(99.5);
     heading(80.5);
@@ -349,10 +367,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     t.mock.timers.tick(2000);
     assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
+    localStorage.removeItem("megamaps:compass-step");
+    localStorage.removeItem("megamaps:compass-delay");
     t.mock.timers.reset();
 
-    // Its north can sit anywhere on the map; the wheel turns it as each degree passes.
+    // Its north offset fixes a map whose top isn't north; the wheel turns it as each degree passes.
     assert.equal(el("north-field").hidden, false);
+    assert.equal(el("north-label").textContent, "North offset");
     const wheel = el("north-offset");
     const row = 32, zero = 179;
     assert.equal(wheel.scrollTop, zero * row, "the wheel opens on 0°");
