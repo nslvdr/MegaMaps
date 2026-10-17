@@ -3,6 +3,7 @@ import type { ImportProgress, MapRecord, WorkerReply } from "../types";
 import { readHeader } from "./headers";
 import { chooseBackend, deleteStoredMap } from "../storage/payloads";
 import { saveMap } from "../storage/database";
+import { protectStorage } from "../storage/protection";
 export async function importMap(
   file: File,
   onProgress: (p: ImportProgress) => void,
@@ -35,7 +36,7 @@ export async function importMap(
     throw new Error(
       t("Device storage is too low to save the original file. Free space and try again."),
     );
-  await navigator.storage?.persist?.().catch(() => false);
+  await protectStorage();
   await saveMap(record);
   const worker = new Worker(new URL("./import.worker.ts", import.meta.url), {
     type: "module",
