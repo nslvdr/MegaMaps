@@ -6,6 +6,7 @@ import { language, locale, t } from "../i18n";
 import { preference, setPreference, type Preferences } from "../preferences";
 import { backupDue, backupSummary, createBackup, readBackup, type Backup } from "../storage/backup";
 import { listMaps } from "../storage/database";
+import { storageProtected } from "../storage/protection";
 import { loadSetting, saveSetting } from "../storage/settings";
 
 const heading = (text: string) => `<h2 class="settings-heading">${text}</h2>`;
@@ -75,13 +76,22 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     backupError.hidden = error === undefined;
     backupError.textContent = error === undefined ? "" : errorMessage(error);
   };
+  // Only a browser that says it may clear the library gets the warning and the weekly reminder.
+  let kept = true;
   const showLastBackup = (at: number | undefined, due: boolean) => {
     backupRow.dataset.state = due ? "due" : "";
-    part(page, "backup-note").textContent = due && at
-      ? t("Your last backup is from {date}, over a month ago. Save a new one to keep recent changes.", { date: day(at) })
+    const advice = due && at
+      ? kept
+        ? t("Your last backup is from {date}, over a month ago. Save a new one to keep recent changes.", { date: day(at) })
+        : t("Your last backup is from {date}. Save a new one to keep recent changes.", { date: day(at) })
       : at
         ? t("Last backup {date}. Keep it in Files or on another device.", { date: day(at) })
-        : t("Your maps live only on this device. Keep a backup in Files or on another device.");
+        : kept
+          ? t("Your maps live only on this device. Keep a backup in Files or on another device.")
+          : t("Keep a backup in Files or on another device.");
+    part(page, "backup-note").textContent = kept
+      ? advice
+      : `${t("This browser may clear your maps when the device runs low on space.")} ${advice}`;
   };
 
   // The file is ready before the tap, so the share sheet keeps the tap's permission.
@@ -108,16 +118,19 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     const current = ++version;
     showError();
     void prepareBackup(current);
-    const [shareName, lastBackup, maps, estimate] = await Promise.all([
+    const [shareName, lastBackup, maps, estimate, protection] = await Promise.all([
       loadSetting("share-name").catch(() => undefined),
       loadSetting("last-backup").catch(() => undefined),
       listMaps().then((maps) => maps.filter((map) => map.status === "ready")).catch(() => []),
       navigator.storage?.estimate?.().catch(() => undefined),
+      storageProtected(),
     ]);
     if (current !== version) return;
     name.value = shareName ?? "";
-    showLastBackup(lastBackup, backupDue(maps, lastBackup));
-    status("settings-storage", estimate?.usage !== undefined ? formatBytes(estimate.usage) : t("Unknown"));
+    kept = protection !== false;
+    showLastBackup(lastBackup, backupDue(maps, lastBackup, Date.now(), kept));
+    const usage = estimate?.usage !== undefined ? formatBytes(estimate.usage) : t("Unknown");
+    status("settings-storage", protection === undefined ? usage : `${usage} · ${protection ? t("Protected") : t("Not protected")}`);
     status("settings-erase", maps.length ? t("{maps} on this device", { maps: plural(maps.length, "map") }) : t("Nothing saved yet"));
   }
 

@@ -27,6 +27,7 @@ import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
 import { eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "./ui/settings-page";
 import { backupDue, isBackupFile, restoreBackup, type Backup } from "./storage/backup";
 import { loadSetting } from "./storage/settings";
+import { protectStorage, storageProtected } from "./storage/protection";
 import { language, locale, t } from "./i18n";
 import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
@@ -707,8 +708,8 @@ async function erase() {
 }
 // A dot on Settings while a backup is due.
 async function showBackupReminder() {
-  const lastBackup = await loadSetting("last-backup").catch(() => undefined);
-  element("settings-open").dataset.state = backupDue(maps, lastBackup) ? "due" : "";
+  const [lastBackup, kept] = await Promise.all([loadSetting("last-backup").catch(() => undefined), storageProtected()]);
+  element("settings-open").dataset.state = backupDue(maps, lastBackup, Date.now(), kept !== false) ? "due" : "";
 }
 element("delete-cancel").addEventListener("click", () => deleteDialog.close());
 element("delete-confirm").addEventListener("click", () => {
@@ -873,6 +874,8 @@ async function start() {
       if (map.status !== "ready") await deleteStoredMap(map);
   }).catch(() => {}); // Another tab may legitimately be importing; don't touch its files.
   await refresh();
+  // Ask on every launch: Chrome may grant it later, once the app is installed or used more.
+  if (maps.length) void protectStorage().then(showBackupReminder);
   if (import.meta.env.DEV) await restoreDevData().catch((error) => console.warn("Dev data", error));
   // Reloading on the Settings page stays there.
   if (history.state?.settings) return showSettings();

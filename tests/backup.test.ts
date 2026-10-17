@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BACKUP_INTERVAL, backupDue, createBackup, isBackupFile, readBackup, restoreBackup } from "../src/storage/backup";
+import { BACKUP_INTERVAL, UNPROTECTED_BACKUP_INTERVAL, backupDue, createBackup, isBackupFile, readBackup, restoreBackup } from "../src/storage/backup";
 import { listMaps, saveMap } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { loadOcr, saveOcr } from "../src/storage/ocr";
@@ -97,6 +97,14 @@ test("a backup is due once a month has passed with maps added or opened since th
   assert.equal(backupDue([map], now - BACKUP_INTERVAL + 1, now), false, "the last backup is recent");
   assert.equal(backupDue([map], now - BACKUP_INTERVAL, now), true, "the map was opened after an old backup");
   assert.equal(backupDue([{ created: map.created }], now - BACKUP_INTERVAL, now), false, "nothing changed since the old backup");
+});
+
+test("a backup is due weekly while the browser may clear the library", () => {
+  const now = 100 * 86_400_000;
+  const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, false), true);
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL + 1, now, false), false, "the last backup is recent");
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, true), false, "protected storage waits a month");
 });
 
 test("deleting everything removes every map with its data and the saved settings", async () => {

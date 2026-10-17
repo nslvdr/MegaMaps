@@ -46,3 +46,22 @@ test("deleting everything takes three separate confirmations, each after a pause
   assert.equal(erased, 1);
   assert.ok(!dialog.hasAttribute("open"));
 });
+
+test("Settings warns and says so beside the storage size when the browser may clear the library", async () => {
+  const { document } = parseHTML(`<html><body>${settingsMarkup}${restoreDialogMarkup}${eraseDialogMarkup}</body></html>`);
+  const storage = Object.getOwnPropertyDescriptor(navigator, "storage");
+  Object.defineProperty(navigator, "storage", { configurable: true, value: {
+    estimate: async () => ({ usage: 2048, quota: 1e9 }), persisted: async () => false,
+  } });
+  try {
+    const page = initSettingsPage(document.querySelector("#settings")!, {
+      restore: document.querySelector("#restore-dialog")!, erase: document.querySelector("#erase-dialog")!,
+    }, { back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, erase() {} });
+    await page.refresh();
+    assert.match(document.querySelector("#settings-storage-status")!.textContent!, /· Not protected$/);
+    assert.match(document.querySelector("#backup-note")!.textContent!, /^This browser may clear your maps when the device runs low on space\. /);
+  } finally {
+    if (storage) Object.defineProperty(navigator, "storage", storage);
+    else delete (navigator as { storage?: unknown }).storage;
+  }
+});
