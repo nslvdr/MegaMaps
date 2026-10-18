@@ -60,8 +60,8 @@ test("older shared bookmarks import as landmarks and re-export with the merged t
   const legacy = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "bookmark" }] };
   const decoded = await readShare(rawFile(legacy));
   assert.deepEqual(decoded.manifest.markers, [{ ...manifest.markers[0]!, kind: "landmark" }]);
-  const retiredKinds = { junction: "landmark", note: "landmark", shaft: "landmark", machinery: "landmark",
-    "dead-end": "landmark", "new-room": "landmark", stairs: "passage", squeeze: "passage" };
+  const retiredKinds = { junction: "landmark", note: "landmark", shaft: "shaft", machinery: "landmark",
+    "dead-end": "landmark", "new-room": "room", stairs: "passage", squeeze: "passage", photo: "landmark" };
   for (const [kind, now] of Object.entries(retiredKinds)) {
     const retired = { ...manifest, markers: [{ ...manifest.markers[0]!, kind }] };
     assert.equal((await readShare(rawFile(retired))).manifest.markers[0]!.kind, now, `retired ${kind} places become ${now}`);
@@ -81,6 +81,14 @@ test("a flooded place's water level travels in shares; levels on other kinds or 
   await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], water: 4 }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], water: "2" }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...flooded, markers: [{ ...flooded.markers[0], kind: "entrance" }] })), /invalid/);
+});
+
+test("a danger place's level travels in shares; levels on other kinds or out of range are rejected", async () => {
+  const { manifest } = await fixture();
+  const danger = { ...manifest, markers: [{ ...manifest.markers[0]!, kind: "unstable" as const, danger: 1 as const }] };
+  assert.deepEqual((await readShare(encodeShare(danger))).manifest, danger);
+  await assert.rejects(readShare(rawFile({ ...danger, markers: [{ ...danger.markers[0], danger: 3 }] })), /invalid/);
+  await assert.rejects(readShare(rawFile({ ...danger, markers: [{ ...danger.markers[0], kind: "flooded" }] })), /invalid/);
 });
 
 test("place photos travel with their place, and version 1 notes arrive as descriptions", async () => {

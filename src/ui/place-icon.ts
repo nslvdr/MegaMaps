@@ -1,4 +1,4 @@
-import { markerKinds, type MapMarker, type WaterLevel } from "../viewer/navigation";
+import { placeColor, type MapMarker, type WaterLevel } from "../viewer/navigation";
 import { lucideMarkup, placeSymbols } from "./icons";
 
 export const PIN_CASING = "#05070a";
@@ -23,9 +23,9 @@ const waterGauge = (water: WaterLevel) => {
 
 // The same pin as on the map, so a place kind is recognizable at a glance.
 // The glyph fills about half the disc, so even square symbols clear its rim.
-// A water rim draws just outside the 24-unit box.
-export const placeIcon = (kind: MapMarker["kind"], water?: WaterLevel) => {
-  const { color } = markerKinds[kind] ?? markerKinds.landmark;
+// A water rim draws just outside the 24-unit box; moderate danger is orange.
+export const placeIcon = (kind: MapMarker["kind"], { water, danger }: Pick<MapMarker, "water" | "danger"> = {}) => {
+  const color = placeColor({ kind, danger });
   const symbol = placeSymbols[kind] ?? placeSymbols.landmark;
   const gauge = water && kind === "flooded" ? waterGauge(water) : "";
   return `<svg class="place-icon" viewBox="0 0 24 24"${gauge ? ' overflow="visible"' : ""} aria-hidden="true">${gauge ? `<circle cx="12" cy="12" r="${WATER_RIM}" fill="${PIN_CASING}"/>` : ""}<circle cx="12" cy="12" r="10.75" fill="${color}" stroke="${PIN_CASING}" stroke-width="2.5"/><g class="place-glyph" transform="translate(5.4 5.4) scale(0.55)" fill="none" stroke="${PIN_CASING}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">${lucideMarkup(symbol)}</g>${gauge}</svg>`;

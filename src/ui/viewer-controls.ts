@@ -13,9 +13,12 @@ import {
   DEFAULT_DIMMING,
   brightnessPercent,
   insideImage,
+  dangerLevel,
+  dangerLevels,
   lastSeen,
   layerNames,
   markerKinds,
+  placeColor,
   routeColor,
   wrapNorth,
   NORTH_MIN,
@@ -25,6 +28,7 @@ import {
   type PlaceLogEntry,
   type PlannedRoute,
   type RotationMode,
+  type DangerLevel,
   type WaterLevel,
   waterLevels,
 } from "../viewer/navigation";
@@ -171,6 +175,8 @@ export class ViewerControls {
   private formLog: PlaceLogEntry[] = [];
   /** The water level picked in the form; kept only if the place is saved as flooded. */
   private formWater?: WaterLevel;
+  /** The danger level picked in the form; kept only if the place is saved as danger. */
+  private formDanger: DangerLevel = 2;
   /** Bumped per form so a photo still being prepared can't land on another place. */
   private formVersion = 0;
   private photoJobs = 0;
@@ -396,16 +402,18 @@ export class ViewerControls {
     ))
       input.checked = input.value === kind;
   }
-  /** Paints the picker and card for the chosen level; the picker shows only for flooded. */
-  private setFormWater(water?: WaterLevel) {
-    this.formWater = water;
-    const kind = this.markerKind();
+  /** Paints the pickers and card for the chosen kind and levels; each picker shows only for its kind. */
+  private paintFormKind() {
+    const kind = this.markerKind(), levels = { water: this.formWater, danger: this.formDanger };
     this.el("marker-water").hidden = kind !== "flooded";
-    for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
-      step.setAttribute("aria-pressed", String(Number(step.dataset.water) === water));
-    this.paintPlaceCard(kind, water);
+    this.el("marker-danger").hidden = kind !== "unstable";
+    for (const step of this.root.querySelectorAll<HTMLElement>(".level-step"))
+      step.setAttribute("aria-pressed", String(step.dataset.water
+        ? Number(step.dataset.water) === levels.water
+        : Number(step.dataset.danger) === levels.danger));
+    this.paintPlaceCard(kind, levels);
     this.el("marker-kind-current").innerHTML =
-      `${placeIcon(kind, water)}<span>${(markerKinds[kind] ?? markerKinds.landmark).label}</span>`;
+      `${placeIcon(kind, levels)}<span>${(markerKinds[kind] ?? markerKinds.landmark).label}</span>`;
   }
   private markerName(kind: MapMarker["kind"]) {
     return this.mapLabel ??
@@ -431,6 +439,7 @@ export class ViewerControls {
     // A route's look comes from its line, so only places pick an icon.
     this.el("marker-kinds").hidden = !!route;
     this.el("marker-water").hidden = true;
+    this.el("marker-danger").hidden = true;
     this.el("marker-move").hidden = true;
     this.el("route-points").hidden = !route;
     this.input("marker-label").value = fields.name;
@@ -454,7 +463,9 @@ export class ViewerControls {
       : this.markerName(kind);
     this.openForm(title, { ...marker, name: marker?.label ?? this.autoMarkerName });
     this.setMarkerKind(kind);
-    this.setFormWater(marker?.water);
+    this.formWater = marker?.water;
+    this.formDanger = marker?.danger ?? 2;
+    this.paintFormKind();
     this.formLog = [...marker?.log ?? []];
     this.renderFormLog();
     const seen = this.input("marker-seen-date");
@@ -537,7 +548,7 @@ export class ViewerControls {
   private formState() {
     return JSON.stringify([
       this.input("marker-label").value, this.el<HTMLTextAreaElement>("marker-description").value,
-      this.markerKind(), this.formWater, this.input("marker-seen-date").value,
+      this.markerKind(), this.formWater, this.formDanger, this.input("marker-seen-date").value,
       this.formPhotos, this.formLog.map((entry) => entry.id),
     ]);
   }
@@ -862,9 +873,9 @@ export class ViewerControls {
     this.el("marker-dialog-title-icon").innerHTML = icon;
     this.dialog("marker-dialog").style.setProperty("--c", color);
   }
-  private paintPlaceCard(kind: MapMarker["kind"], water?: WaterLevel) {
-    const { color } = markerKinds[kind] ?? markerKinds.landmark;
-    this.paintCard(placeIcon(kind, water), color);
+  private paintPlaceCard(kind: MapMarker["kind"], levels?: Pick<MapMarker, "water" | "danger">) {
+    const color = placeColor({ kind, danger: levels?.danger });
+    this.paintCard(placeIcon(kind, levels), color);
     this.dialog("kind-dialog").style.setProperty("--c", color);
     this.dialog("entry-dialog").style.setProperty("--c", color);
   }
@@ -890,7 +901,7 @@ export class ViewerControls {
     edit.title = place ? t("Edit place") : t("Edit route");
     edit.setAttribute("aria-label", edit.title);
     this.el("marker-dialog-title").textContent = "label" in item ? item.label : item.name;
-    if ("label" in item) this.paintPlaceCard(item.kind, item.water);
+    if ("label" in item) this.paintPlaceCard(item.kind, item);
     else this.paintCard(this.routeIcon(item), routeColor(this.state, item.id));
     const description = this.el("marker-detail-description");
     description.textContent = item.description ?? "";
@@ -907,9 +918,11 @@ export class ViewerControls {
     photos.hidden = !count;
     photos.scrollLeft = 0;
     const water = place?.kind === "flooded" ? place.water : undefined;
-    const waterLine = this.el("marker-detail-water");
-    waterLine.textContent = water ? t("Water level: {level}", { level: waterLevels[water] }) : "";
-    waterLine.hidden = !water;
+    const danger = place && dangerLevel(place);
+    const levelLine = this.el("marker-detail-level");
+    levelLine.textContent = water ? t("Water level: {level}", { level: waterLevels[water] })
+      : danger ? t("Danger level: {level}", { level: dangerLevels[danger] }) : "";
+    levelLine.hidden = !levelLine.textContent;
     this.renderPlaceLog(place);
     // A route's length and walking time sit under its name, where a place says when it was seen.
     if ("points" in item) {
@@ -920,7 +933,7 @@ export class ViewerControls {
     const details = this.el("marker-details");
     details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
-    details.hidden = !item.description && !count && !water && !place?.log?.length;
+    details.hidden = !item.description && !count && levelLine.hidden && !place?.log?.length;
     details.scrollTop = 0;
     this.presentCard(false);
     this.markMoreDetails();
@@ -1316,7 +1329,7 @@ export class ViewerControls {
       // Tapping a pin, even the chosen one, picks it and goes back to the form.
       this.on(input, "click", () => this.dialog("kind-dialog").close());
       this.on(input, "change", () => {
-        this.setFormWater(this.formWater);
+        this.paintFormKind();
         // Keep auto names in sync with the chosen kind until the user types.
         const label = this.input("marker-label");
         if (this.autoMarkerName && label.value === this.autoMarkerName) {
@@ -1327,10 +1340,13 @@ export class ViewerControls {
           this.viewer?.previewPlace?.({ point: this.markerPoint, kind: this.markerKind() });
       });
     }
-    for (const step of this.root.querySelectorAll<HTMLElement>(".water-step"))
+    for (const step of this.root.querySelectorAll<HTMLElement>(".level-step"))
       this.on(step, "click", () => {
-        const water = Number(step.dataset.water) as WaterLevel;
-        this.setFormWater(water === this.formWater ? undefined : water);
+        if (step.dataset.water) {
+          const water = Number(step.dataset.water) as WaterLevel;
+          this.formWater = water === this.formWater ? undefined : water;
+        } else this.formDanger = Number(step.dataset.danger) as DangerLevel;
+        this.paintFormKind();
       });
     this.click("photo-viewer-close", () => this.dialog("photo-viewer").close());
     this.on(this.dialog("marker-dialog"), "close", () => {
@@ -1373,6 +1389,7 @@ export class ViewerControls {
         ...(this.formPhotos.length ? { photos: [...this.formPhotos] } : {}),
         kind: this.markerKind(),
         ...(this.markerKind() === "flooded" && this.formWater ? { water: this.formWater } : {}),
+        ...(this.markerKind() === "unstable" ? { danger: this.formDanger } : {}),
         created,
         ...seen,
         ...(this.formLog.length ? { log: [...this.formLog] } : {}),
@@ -1382,7 +1399,7 @@ export class ViewerControls {
       if (existing?.deletedLog || removed.length) marker.deletedLog = [...existing?.deletedLog ?? [], ...removed];
       const unchanged = !!existing && existing.label === marker.label &&
         existing.description === marker.description && existing.kind === marker.kind &&
-        existing.water === marker.water &&
+        existing.water === marker.water && dangerLevel(existing) === dangerLevel(marker) &&
         existing.lastSeen === marker.lastSeen && !removed.length &&
         (existing.photos ?? []).join() === (marker.photos ?? []).join() &&
         existing.point.x === marker.point.x && existing.point.y === marker.point.y;
@@ -1942,7 +1959,7 @@ export class ViewerControls {
         label: marker.label,
         description: marker.description,
         photos: marker.photos,
-        icon: placeIcon(marker.kind, marker.water),
+        icon: placeIcon(marker.kind, marker),
         jump: () => this.showDetails(marker),
         actions: [
           {

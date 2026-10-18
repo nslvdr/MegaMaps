@@ -16,6 +16,8 @@ export interface MapMarker {
   kind: keyof typeof markerKinds;
   /** How deep the water is; only flooded places have one. */
   water?: WaterLevel;
+  /** How dangerous a danger place is; without one it reads as high. */
+  danger?: DangerLevel;
   created: number;
   /** When someone last confirmed the place; absent means since it was created. */
   lastSeen?: number;
@@ -118,12 +120,14 @@ export function defaultNavigation(mapId: string): NavigationState {
 // Saves from before the manual position was removed may still carry it; drop it.
 // Bookmarks and older checkpoints now share the landmark type.
 // A draft with no points only survives when the page went away mid-draw; drop it.
-// Retired kinds (shaft and machinery on 2026-10-12, four more on 2026-10-14); old saves and shared files still use them.
-export const legacyMarkerKinds = ["bookmark", "junction", "note", "shaft", "machinery", "stairs", "squeeze", "dead-end", "new-room"] as const;
+// Retired kinds (machinery on 2026-10-12, four more on 2026-10-14, photo on 2026-10-18); old saves and shared files still use them.
+// Shaft was retired on 2026-10-12 and came back as a kind of its own on 2026-10-18.
+export const legacyMarkerKinds = ["bookmark", "junction", "note", "machinery", "stairs", "squeeze", "dead-end", "new-room", "photo"] as const;
 // Retired kinds that clearly became another; the rest become points of interest.
 const retiredKindMoves: Partial<Record<(typeof legacyMarkerKinds)[number], MapMarker["kind"]>> = {
   stairs: "passage",
   squeeze: "passage",
+  "new-room": "room",
 };
 // Places saved before descriptions had a plain-text `note` instead.
 type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
@@ -182,22 +186,36 @@ export const routeColor = (state: NavigationState, id: string) =>
     Math.max(0, state.routes.findIndex((route) => route.id === id)) %
       routeColors.length
   ]!;
+// Twelve kinds in rows of three: ways in, spaces, hazards, then what people left behind.
 export const markerKinds = {
   landmark: { label: t("Point of interest"), color: "#ff9a5c" },
   entrance: { label: t("Entrance"), color: "#7dff8a" },
+  shaft: { label: t("Shaft"), color: "#ffd23f" },
   passage: { label: t("Passage"), color: "#3ef0c8" },
+  room: { label: t("Room"), color: "#c6f04a" },
   unstable: { label: t("Danger"), color: "#ff4d4d" },
   flooded: { label: t("Flooded"), color: "#5aa9ff" },
   ossuary: { label: t("Ossuary"), color: "#e05bff" },
+  sculpture: { label: t("Sculpture"), color: "#eceae4" },
   graffiti: { label: t("Graffiti"), color: "#ff5fa2" },
   tools: { label: t("Tools"), color: "#d9a066" },
-  photo: { label: t("Photo spot"), color: "#b18cff" },
+  squat: { label: t("Rest area"), color: "#b18cff" },
 } as const satisfies Record<string, { label: string; color: string }>;
 /** Three steps of water depth, shallowest first; a place stores the step number. */
 export const waterLevels = { 1: t("Ankle"), 2: t("Knee"), 3: t("Waist+") } as const;
 export type WaterLevel = keyof typeof waterLevels;
 export const isWaterLevel = (value: unknown): value is WaterLevel =>
   value === 1 || value === 2 || value === 3;
+/** Two steps of danger; a danger place without one is high, as before levels existed. */
+export const dangerLevels = { 1: t("Moderate"), 2: t("High") } as const;
+export type DangerLevel = keyof typeof dangerLevels;
+export const isDangerLevel = (value: unknown): value is DangerLevel => value === 1 || value === 2;
+export const dangerLevel = (place: Pick<MapMarker, "kind" | "danger">) =>
+  place.kind === "unstable" ? place.danger ?? 2 : undefined;
+const MODERATE_DANGER_COLOR = "#ff8a1f";
+/** A place's pin colour: its kind's, except moderate danger, which is orange. */
+export const placeColor = (place: Pick<MapMarker, "kind" | "danger">) =>
+  dangerLevel(place) === 1 ? MODERATE_DANGER_COLOR : (markerKinds[place.kind] ?? markerKinds.landmark).color;
 export function captureView(camera: Camera, viewport: Size): SavedView {
   return {
     center: screenToWorld(camera, {

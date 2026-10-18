@@ -2034,19 +2034,21 @@ dialog.place-card::backdrop {
   border-color: var(--c);
   background: color-mix(in srgb, var(--c) 12%, transparent);
 }
-/* A flooded place's water level: three big steps, tap the chosen one to clear. */
-.water-picker {
+/* A flooded place's water level (three big steps, tap the chosen one to clear)
+   or a danger place's level (two steps, one always chosen). */
+.level-picker {
   margin: var(--space-16) 0;
   color: var(--muted);
   font-size: var(--font-size-small);
 }
-.water-steps {
+.level-steps {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   gap: var(--space-4);
   margin-top: var(--space-8);
 }
-.water-step {
+.level-step {
   display: grid;
   place-items: center;
   gap: var(--space-4);
@@ -2064,17 +2066,17 @@ dialog.place-card::backdrop {
 }
 /* The water rim reaches 4 of 24 units past the box on each side; the margin
    makes room for it so the whole pin sits centred above its name. */
-.water-step svg {
+.level-step svg {
   width: 28px;
   height: 28px;
   margin: calc(28px / 6);
   overflow: visible;
 }
-.water-step[aria-pressed="true"] {
-  border-color: var(--water);
-  background: color-mix(in srgb, var(--water) 12%, transparent);
+.level-step[aria-pressed="true"] {
+  border-color: var(--level);
+  background: color-mix(in srgb, var(--level) 12%, transparent);
 }
-.place-detail-water {
+.place-detail-level {
   margin: 0 0 var(--space-12);
   color: var(--c);
   font-weight: 600;

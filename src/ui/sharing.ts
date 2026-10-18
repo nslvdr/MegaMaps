@@ -363,7 +363,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
             label.className = "share-choice";
             const icon = root.ownerDocument.createElement("span");
             icon.className = "share-choice-icon";
-            icon.innerHTML = "label" in item ? placeIcon(item.kind) : icons.route.replace("<svg ", `<svg style="color:${routeColor(state, item.id)}" `);
+            icon.innerHTML = "label" in item ? placeIcon(item.kind, item) : icons.route.replace("<svg ", `<svg style="color:${routeColor(state, item.id)}" `);
             const text = root.ownerDocument.createElement("span");
             text.className = "share-choice-text";
             text.textContent = "label" in item ? item.label : item.name;

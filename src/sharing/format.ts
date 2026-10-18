@@ -3,7 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
+import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -139,6 +139,7 @@ export function validateManifest(value: unknown): ShareManifest {
         typeof value.kind !== "string" ||
         (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind)) ||
         (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water))) ||
+        (value.danger !== undefined && (value.kind !== "unstable" || !isDangerLevel(value.danger))) ||
         (value.lastSeen !== undefined && !time(value.lastSeen)) ||
         (value.seenAt !== undefined && !time(value.seenAt))) invalid();
     return { ...identity(value, "marker"), label: value.label, description,
@@ -146,7 +147,8 @@ export function validateManifest(value: unknown): ShareManifest {
       ...(time(value.lastSeen) ? { lastSeen: value.lastSeen } : {}),
       ...(time(value.seenAt) ? { seenAt: value.seenAt } : {}), ...log(value.log),
       kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]),
-      ...(isWaterLevel(value.water) ? { water: value.water } : {}), point: point(value.point) };
+      ...(isWaterLevel(value.water) ? { water: value.water } : {}),
+      ...(isDangerLevel(value.danger) ? { danger: value.danger } : {}), point: point(value.point) };
   });
   let points = 0;
   const routes = value.routes.map((value: unknown): PlannedRoute => {
