@@ -57,6 +57,8 @@ export interface ViewerOptions {
   onEmptyTap?(): void;
   /** A search result's label was tapped, by its place among the matches. */
   onSearchResult?(index: number): void;
+  /** A browsing double tap; true when it was used, so the map doesn't zoom. */
+  onDoubleTap?(): boolean;
   /** Long press on the map while browsing, in image coordinates. */
   onLongPress?(point: Point): void;
   /** A route point or the moving place was picked up (before it changes). */
@@ -146,6 +148,7 @@ export class Viewer {
       rotationLocked: () => this.navigation.rotationMode !== "free",
       editing: () => this.tool !== "browse",
       tap: (point) => this.tap(point),
+      doubleTap: () => !!this.options?.onDoubleTap?.(),
       grab: (screen) => this.grab(screen),
       drag: (screen) => this.dragTo(screen),
       drop: (screen) => this.drop(screen),
