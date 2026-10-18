@@ -2442,7 +2442,7 @@ label.panel-row {
   font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
 }
-/* Native radios expose one choice (brightness, compass), with full-size touch targets. */
+/* Native radios expose one choice (brightness), with full-size touch targets. */
 .option-pills {
   flex-basis: 100%;
   display: grid;
@@ -2522,6 +2522,17 @@ label.panel-row {
 }
 #north-field {
   margin-top: var(--space-12);
+}
+/* Five ways to follow the compass share one row, so the tiles sit closer. */
+.layer-toggles.follow-modes {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.follow-modes .layer-toggle {
+  padding-inline: var(--space-2);
+}
+#compass-follow-help {
+  margin-bottom: 0;
 }
 /* Map north: an iOS Clock-style wheel; the band marks the chosen degree. */
 .north-wheel {
