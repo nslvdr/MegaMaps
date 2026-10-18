@@ -2510,6 +2510,10 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
+/* Live compass turning costs battery, so its help reads as a warning. */
+#compass-follow-help.warning {
+  color: var(--danger);
+}
 /* Rotation help sits right under the modes; compass settings follow in Compass mode. */
 #rotation-help {
   margin-bottom: 0;

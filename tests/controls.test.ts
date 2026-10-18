@@ -323,10 +323,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     assert.match(el("rotation-help").textContent!, /turns with your phone/);
-    // By default a 2° turn is followed once it has held for 1 s.
+    // By default (Mid) a 2° turn is followed once it has held for 1 s.
+    const turnedTo = (degrees: number, within = 1e-9) =>
+      Math.abs(orientations.at(-1)! + (degrees * Math.PI) / 180) < within;
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    assert.equal((el("compass-step-2") as HTMLInputElement).checked, true);
-    assert.equal((el("compass-delay-1") as HTMLInputElement).checked, true);
+    assert.equal((el("compass-follow-mid") as HTMLInputElement).checked, true);
+    assert.match(el("compass-follow-help").textContent!, /holds 1 s/);
     heading(91);
     t.mock.timers.tick(5000);
     assert.equal(orientations.at(-1), -Math.PI / 2, "a 1° sway is left alone");
@@ -334,41 +336,69 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     t.mock.timers.tick(999);
     assert.equal(orientations.at(-1), -Math.PI / 2);
     t.mock.timers.tick(1);
-    assert.ok(Math.abs(orientations.at(-1)! + (92 * Math.PI) / 180) < 1e-9);
+    assert.ok(turnedTo(92));
     heading(90);
     t.mock.timers.tick(1000);
-    // Compass mode lets the device choose a larger step and a longer delay.
-    check("compass-step-10", true);
-    check("compass-delay-2", true);
-    assert.equal(localStorage.getItem("megamaps:compass-step"), "10", "the device keeps them for every map");
-    assert.equal(localStorage.getItem("megamaps:compass-delay"), "2");
-    // Turns under 10° then leave the map still.
+    // Low waits 2 s for a new heading, and the device keeps the choice for every map.
+    check("compass-follow-low", true);
+    assert.equal(localStorage.getItem("megamaps:compass-follow"), "low");
+    assert.match(el("compass-follow-help").textContent!, /holds 2 s/);
+    // Walking sways the phone; within 15° that still holds, and the map turns to the average.
     const following = orientations.length;
-    heading(99.5);
-    heading(80.5);
-    t.mock.timers.tick(5000);
-    assert.equal(orientations.length, following);
-    // A larger turn waits until the new heading has held for 2 s.
-    heading(120);
-    t.mock.timers.tick(1999);
+    heading(110);
+    t.mock.timers.tick(500);
+    heading(100);
+    t.mock.timers.tick(500);
+    heading(115);
+    t.mock.timers.tick(500);
+    heading(105);
+    t.mock.timers.tick(499);
     assert.equal(orientations.length, following, "a turn in progress is not followed");
-    heading(125);
     t.mock.timers.tick(1);
-    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9, "it turns to the latest heading");
-    // Turning on restarts the wait; coming back cancels it.
+    assert.ok(turnedTo(107.5, 0.01), "it turns to the average of the hold");
+    // Turning past the window restarts the wait.
     heading(140);
     t.mock.timers.tick(1500);
     heading(160);
     t.mock.timers.tick(1500);
-    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9);
-    heading(130);
+    assert.ok(turnedTo(107.5, 0.01));
+    t.mock.timers.tick(500);
+    assert.ok(turnedTo(160));
+    // A heading that returns averages back to where the map is, so it stays put.
+    const settled = orientations.length;
+    heading(165);
+    heading(157);
+    heading(158);
     t.mock.timers.tick(5000);
-    assert.ok(Math.abs(orientations.at(-1)! + (125 * Math.PI) / 180) < 1e-9, "a heading that returns is not followed");
+    assert.equal(orientations.length, settled, "a heading that returns is not followed");
+    // High waits half a second.
+    check("compass-follow-high", true);
     heading(90);
-    t.mock.timers.tick(2000);
-    assert.ok(Math.abs(orientations.at(-1)! + (90 * Math.PI) / 180) < 1e-9);
-    localStorage.removeItem("megamaps:compass-step");
-    localStorage.removeItem("megamaps:compass-delay");
+    t.mock.timers.tick(499);
+    assert.ok(turnedTo(160));
+    t.mock.timers.tick(1);
+    assert.ok(turnedTo(90));
+    // Live follows every 2° turn at once, and warns about the battery.
+    check("compass-follow-live", true);
+    assert.match(el("compass-follow-help").textContent!, /more battery/);
+    assert.ok(el("compass-follow-help").classList.contains("warning"));
+    heading(91);
+    assert.ok(turnedTo(90), "Live still leaves a 1° sway alone");
+    heading(93);
+    assert.ok(turnedTo(93));
+    // Tap keeps the map still until a double tap turns it, instead of zooming.
+    check("compass-follow-tap", true);
+    assert.equal(el("compass-follow-help").classList.contains("warning"), false);
+    heading(180);
+    t.mock.timers.tick(5000);
+    assert.ok(turnedTo(93), "Tap never turns by itself");
+    assert.equal(controls.options().onDoubleTap?.(), true, "the double tap is used, not zoomed");
+    assert.ok(turnedTo(180));
+    check("compass-follow-mid", true);
+    heading(90);
+    t.mock.timers.tick(1000);
+    assert.equal(controls.options().onDoubleTap?.(), false, "outside Tap, a double tap zooms");
+    localStorage.removeItem("megamaps:compass-follow");
     t.mock.timers.reset();
 
     // Its north offset fixes a map whose top isn't north; the wheel turns it as each degree passes.
