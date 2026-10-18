@@ -247,26 +247,16 @@ const appTitle = document.title;
 function showTitle() {
   document.title = currentMap ? `${displayName(currentMap.name)} · ${appTitle}` : appTitle;
 }
-let leavingMap = false;
 // Going home returns to the same place in the list, on the map just closed.
 let libraryScroll = 0;
-// Back closes a panel or tool first, then the map.
+// Back leaves Settings. A map has no history entry: only its Back button
+// leaves it, so a stray edge swipe can't.
 window.addEventListener("popstate", (event) => {
-  const state = event.state as { map?: string; settings?: boolean } | null;
-  const wanted = state?.map;
+  const state = event.state as { settings?: boolean } | null;
   if (!settingsPage.hidden && !state?.settings) {
     if (document.querySelector("dialog:modal")) history.pushState({ settings: true }, "");
     else hideSettings();
   } else if (settingsPage.hidden && state?.settings && !currentMap) showSettings();
-  else if (leavingMap) leavingMap = false;
-  else if (currentMap && !wanted) {
-    if (document.querySelector("dialog:modal") || controls?.escape())
-      history.pushState({ map: currentMap.id }, "");
-    else closeViewer();
-  } else if (!currentMap && wanted) {
-    const map = maps.find((map) => map.id === wanted);
-    if (map) void openMap(map);
-  }
 });
 function closeViewer() {
   openVersion++;
@@ -280,11 +270,6 @@ function closeViewer() {
   void setLastMap(null).catch((error) =>
     showMessage(t("Could not save home view"), String(error)),
   );
-  // Drop the map's history entry so Back from home leaves the app as usual.
-  if (history.state?.map) {
-    leavingMap = true;
-    history.back();
-  }
   viewerSection.hidden = true;
   home.hidden = false;
   void refreshFooter();
@@ -307,9 +292,6 @@ async function openMap(map: MapRecord) {
   map.opened = Date.now();
   void markOpened(map.id, map.opened).catch(() => {});
   showTitle();
-  // An open map gets its own history entry, so the system Back returns home.
-  if (history.state?.map) history.replaceState({ map: map.id }, "");
-  else history.pushState({ map: map.id }, "");
   viewerSection.hidden = false;
   home.hidden = true;
   document.body.classList.add("viewing");
