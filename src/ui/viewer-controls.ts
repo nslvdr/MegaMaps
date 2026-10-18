@@ -1597,20 +1597,6 @@ export class ViewerControls {
       ? darkMessages[this.darkKind]
       : t("Off: original colors");
   }
-  /** Backs out one level (sheet → tool → browse); false when already browsing. */
-  escape() {
-    if (this.modalOpen()) return false;
-    if (this.closePlaceDetails()) return true;
-    if (this.rowMenu) this.closeRowMenu();
-    else if (this.openSheet) this.sheet(undefined);
-    else if (this.tool === "route") this.finishRoute();
-    else if (this.tool === "move") this.finishMove(true);
-    else if (this.tool === "measure") this.closeMeasure();
-    else if (this.tool === "scale") this.cancelScale();
-    else if (this.tool !== "browse") this.mode("browse");
-    else return false;
-    return true;
-  }
   private renderTool() {
     this.viewer?.refreshLabels?.();
     this.root.dataset.tool = this.tool;

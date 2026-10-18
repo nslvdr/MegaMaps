@@ -231,9 +231,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-add");
     assert.equal(sheet.hidden, true, "Add toggles its panel");
     click("open-add");
-    controls.escape();
-    assert.equal(sheet.hidden, true, "Back closes the panel");
-    click("open-add");
     click("open-saved");
     assert.equal(el("sheet-add").hidden, true, "a panel replaces the choice");
     click("close-sheet");
@@ -243,10 +240,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("sheet-dismiss").hidden, false);
     click("open-display");
     assert.equal(sheet.hidden, true);
-    click("open-saved");
-    controls.escape();
-    assert.equal(sheet.hidden, true);
-    assert.equal(controls.escape(), false, "nothing left to back out of");
     click("open-display");
     click("sheet-dismiss");
     assert.equal(sheet.hidden, true);
@@ -676,10 +669,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     window.dispatchEvent(new window.Event("resize"));
     assert.equal(popover(), null, "rotation/resize dismisses the menu");
     placeMore().dispatchEvent(new window.Event("click"));
-    controls.escape();
-    assert.equal(popover(), null);
-    assert.equal(sheet.hidden, false);
-    placeMore().dispatchEvent(new window.Event("click"));
     click("close-sheet");
     click("open-saved");
     assert.equal(popover(), null, "menus close with the panel");
@@ -774,7 +763,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(framed.at(-1), state.routes[0]!.points, "editing frames the route");
     click("route-undo");
     assert.equal(state.routes[0]?.points.length, 1);
-    controls.escape();
+    click("tool-done");
     assert.equal(state.routes[0]?.points.length, 2);
     assert.equal(state.routes[0]?.draft, false);
 
@@ -873,7 +862,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       null,
       "the menu stays open for the second delete tap",
     );
-    controls.escape();
+    window.dispatchEvent(new window.Event("resize"));
     openMenu();
     assert.ok(
       rowButton(/^Delete$/),
@@ -1096,8 +1085,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
     assert.equal(highlights?.active, false, "clear cancels a pending query");
-    controls.escape();
-    assert.equal(dock.hidden, false, "Back restores the navbar too");
+    click("search-close");
+    assert.equal(dock.hidden, false, "closing search restores the navbar");
     state.markers = originalMarkers;
 
     // Long-press drops a place.
@@ -1319,9 +1308,6 @@ test("reading a place leaves the map usable and closes when tapping away", async
     controls.options().onMarker(marker);
     press(document.getElementById("open-saved")!);
     assert.equal(card.hasAttribute("open"), false, "pressing other controls closes it");
-    controls.options().onMarker(marker);
-    assert.equal(controls.escape(), true);
-    assert.equal(card.hasAttribute("open"), false, "Back closes it");
     controls.options().onMarker(marker);
     document.getElementById("marker-edit")!.dispatchEvent(new window.Event("click"));
     assert.deepEqual(opened.slice(-2), [false, true], "editing is modal");

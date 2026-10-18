@@ -128,7 +128,7 @@ The map fills the screen. Fingers move it, so there are no zoom or pan buttons; 
 - **Top right:** **Measure** (distances and walking time) · **Rotation** (Normal, Compass, Locked; orange unless Normal) · **View** (dark map, brightness, layers, highlight).
 - **Bottom pill:** **Saved** (routes, places) · **Search** · **Add** (place, route).
 
-**Saved** and **View** open a panel just above the pill, and their button stays highlighted while it is open: tap another button to switch, or the same button, the map or Close to dismiss (you can also swipe the panel header down). The system Back button or gesture closes the panel or the Add choice, then finishes the current tool, then returns home. The viewer supports native resolution and up to 400% CSS zoom; native-level pixels are not interpolated when enlarged.
+**Saved** and **View** open a panel just above the pill, and their button stays highlighted while it is open: tap another button to switch, or the same button, the map or Close to dismiss (you can also swipe the panel header down). Only the **Back** button leaves the map; the system back gesture does nothing there, so a stray edge swipe can't close it. The viewer supports native resolution and up to 400% CSS zoom; native-level pixels are not interpolated when enlarged.
 
 ### Cave and quarry tools
 
