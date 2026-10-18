@@ -4,7 +4,7 @@ import { PIN_CASING, placeIcon } from "../ui/place-icon";
 import { MapCallout } from "./map-callout";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
-  markerKinds,
+  placeColor,
   routeColor,
   type Layers,
   type MapMarker,
@@ -203,17 +203,17 @@ export class NavigationOverlay {
         icon.setAttribute("stroke-width", "3.6");
       }
     }
-    const placeBody = (body: SVGGElement, kind: MapMarker["kind"], water?: MapMarker["water"]) => {
-      pinIcon(body, placeIcon(kind, water), 24);
+    const placeBody = (body: SVGGElement, kind: MapMarker["kind"], levels?: Pick<MapMarker, "water" | "danger">) => {
+      pinIcon(body, placeIcon(kind, levels), 24);
     };
     const places = group("places");
     for (const marker of state.markers) {
-      const { color } = markerKinds[marker.kind] ?? markerKinds.landmark;
+      const color = placeColor(marker);
       const { element, body } = pin(places, marker.point);
       if (marker.id === this.moving) element.classList.add("moving");
       else if (marker.id === this.found) element.classList.add("found");
       if (marker.id === this.selected) element.classList.add("selected");
-      placeBody(body, marker.kind, marker.water);
+      placeBody(body, marker.kind, marker);
       const raised = marker.id === this.moving || marker.id === this.selected;
       label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, raised ? 18 : 12, "places", raised ? 2 : 0, marker.id);
     }

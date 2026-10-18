@@ -1,6 +1,6 @@
 import { worldToScreen, type Camera, type Point, type Size } from "./camera";
 import type { MapSearchMatch } from "./map-search";
-import { markerKinds } from "./navigation";
+import { placeColor } from "./navigation";
 import { icons, markerCalloutIcon } from "../ui/icons";
 import { MapCallout } from "./map-callout";
 import { CalloutLayout } from "./callout-layout";
@@ -78,7 +78,7 @@ export class SearchOverlay {
       connector.setAttribute("class", "search-match-connector");
       const callout = new MapCallout(match.marker ? markerCalloutIcon(match.marker.kind)
         : match.midpoint ? icons.pair : icons.text,
-        match.marker ? markerKinds[match.marker.kind].color : undefined);
+        match.marker ? placeColor(match.marker) : undefined);
       callout.setText(match.text);
       this.callouts.push(callout);
       group.append(connector, callout.element);

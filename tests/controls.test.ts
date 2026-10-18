@@ -488,12 +488,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     assert.equal(
       el("kind-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
-      9,
+      12,
       "kinds show the map's pins",
     );
     assert.deepEqual(
       Array.from(root.querySelectorAll<HTMLInputElement>('input[name="marker-kind"]'), (input) => input.value),
-      ["landmark", "entrance", "passage", "unstable", "flooded", "ossuary", "graffiti", "tools", "photo"],
+      ["landmark", "entrance", "shaft", "passage", "room", "unstable", "flooded", "ossuary", "sculpture", "graffiti", "tools", "squat"],
       "landmarks and bookmarks share one option",
     );
     assert.equal(el("marker-kind-current").textContent, "Point of interest", "the form shows only the chosen pin");
@@ -1410,7 +1410,7 @@ test("place photos lead the details as a carousel and are removed from the edit 
   }
 });
 
-test("a flooded place's water level shows beside its pin and is picked in the edit form", async () => {
+test("a flooded place's water level and a danger place's level show on its pin and are picked in the edit form", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -1436,11 +1436,14 @@ test("a flooded place's water level shows beside its pin and is picked in the ed
   state.markers = [{
     id: "sump", point: { x: 500, y: 600 }, label: "Sump", description: "",
     kind: "flooded", water: 2, created: 0,
+  }, {
+    id: "fall", point: { x: 200, y: 300 }, label: "Fall", description: "",
+    kind: "unstable", created: 1,
   }];
   const controls = new ViewerControls(root, map, state);
   controls.attach({ setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {} });
   const el = (id: string) => document.getElementById(id)!;
-  const step = (level: number) => document.querySelector<HTMLElement>(`.water-step[data-water="${level}"]`)!;
+  const step = (level: number) => document.querySelector<HTMLElement>(`.level-step[data-water="${level}"]`)!;
   const pressed = () => [1, 2, 3].filter((level) => step(level).getAttribute("aria-pressed") === "true");
   const kind = (value: string) => {
     const input = document.querySelector<HTMLInputElement>(`input[name="marker-kind"][value="${value}"]`)!;
@@ -1452,7 +1455,7 @@ test("a flooded place's water level shows beside its pin and is picked in the ed
     assert.ok(el("marker-list").querySelector(".water-gauge"), "Saved shows the level beside the pin");
     controls.options().onMarker(state.markers[0]!);
     assert.equal(el("marker-details").hidden, false, "the level alone is worth reading");
-    assert.equal(el("marker-detail-water").textContent, "Water level: Knee");
+    assert.equal(el("marker-detail-level").textContent, "Water level: Knee");
     assert.ok(el("marker-dialog-title-icon").querySelector(".water-gauge"));
 
     el("marker-edit").dispatchEvent(new window.Event("click"));
@@ -1469,8 +1472,32 @@ test("a flooded place's water level shows beside its pin and is picked in the ed
     assert.equal(el("marker-water").hidden, true, "only flooded places have a level");
     save();
     assert.equal(state.markers[0]!.water, undefined, "a place that is no longer flooded drops its level");
-    assert.equal(el("marker-detail-water").hidden, true);
+    assert.equal(el("marker-detail-level").hidden, true);
     assert.equal(el("marker-list").querySelector(".water-gauge"), null);
+
+    const danger = (level: number) => document.querySelector<HTMLElement>(`.level-step[data-danger="${level}"]`)!;
+    const pinFill = () => el("marker-dialog-title-icon").querySelector(".place-icon > circle")!.getAttribute("fill");
+    controls.options().onMarker(state.markers[1]!);
+    assert.equal(el("marker-detail-level").textContent, "Danger level: Severe", "danger without a level is severe");
+    assert.equal(pinFill(), "#ff4d4d");
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    assert.equal(el("marker-danger").hidden, false);
+    assert.equal(el("marker-water").hidden, true);
+    assert.equal(danger(2).getAttribute("aria-pressed"), "true");
+    danger(1).dispatchEvent(new window.Event("click"));
+    danger(1).dispatchEvent(new window.Event("click"));
+    assert.equal(danger(1).getAttribute("aria-pressed"), "true", "tapping the chosen danger step keeps it");
+    save();
+    assert.equal(state.markers[1]!.danger, 1);
+    assert.equal(el("marker-detail-level").textContent, "Danger level: Moderate");
+    assert.equal(pinFill(), "#ff8a1f", "moderate danger is orange");
+
+    el("marker-edit").dispatchEvent(new window.Event("click"));
+    kind("room");
+    assert.equal(el("marker-danger").hidden, true, "only danger places have a danger level");
+    save();
+    assert.equal(state.markers[1]!.danger, undefined, "a place that is no longer dangerous drops its level");
+    assert.equal(el("marker-detail-level").hidden, true);
   } finally {
     await controls.dispose();
   }
