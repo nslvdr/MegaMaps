@@ -30,8 +30,8 @@ const brightnessChoices = BRIGHTNESS_LEVELS.map(
   (level) => `<label><input type="radio" name="map-brightness" id="brightness-${brightnessPercent(level)}" value="${level}"${level === DEFAULT_DIMMING ? " checked" : ""}><span>${brightnessPercent(level)}%</span></label>`,
 ).join("");
 // When Compass mode turns the map, slowest first; the device's choice is checked on render.
-const followChoices = ([["tap", t("Tap")], ["low", t("Low")], ["mid", t("Mid")], ["high", t("High")], ["live", t("Live")]] as const)
-  .map(([value, label]) => `<label><input type="radio" name="compass-follow" id="compass-follow-${value}" value="${value}"><span>${label}</span></label>`).join("");
+const followChoices = ([["tap", t("Tap"), icons.followTap], ["low", t("Low"), icons.followLow], ["mid", t("Mid"), icons.followMid], ["high", t("High"), icons.followHigh], ["live", t("Live"), icons.followLive]] as const)
+  .map(([value, label, icon]) => `<label class="layer-toggle"><input type="radio" name="compass-follow" id="compass-follow-${value}" value="${value}">${icon}<span>${label}</span></label>`).join("");
 // The form shows the chosen pin; tapping it opens every pin, named, in a modal.
 const kindPicks = Object.entries(markerKinds)
   .map(
@@ -105,9 +105,13 @@ export const viewerMarkup = `
         ${rotationChoice("locked", t("Locked"), icons.rotationLock)}
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
-      <div id="north-field" class="panel-card" hidden>
-        <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
-        <div class="panel-row stacked">${rowIcon(icons.rotateRight)}<span class="row-text"><strong>${t("Follow")}</strong><small id="compass-follow-help"></small></span><div class="option-pills" role="radiogroup" aria-label="${t("Follow")}" aria-describedby="compass-follow-help">${followChoices}</div></div>
+      <div id="north-field" hidden>
+        <div class="panel-card">
+          <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
+        </div>
+        <h3 id="compass-follow-title">${t("When to turn")}</h3>
+        <div class="layer-toggles follow-modes" role="radiogroup" aria-labelledby="compass-follow-title" aria-describedby="compass-follow-help">${followChoices}</div>
+        <p id="compass-follow-help" class="field-help"></p>
       </div>
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="${t("Saved")}" hidden>
