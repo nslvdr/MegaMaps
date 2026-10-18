@@ -207,7 +207,7 @@ export type WaterLevel = keyof typeof waterLevels;
 export const isWaterLevel = (value: unknown): value is WaterLevel =>
   value === 1 || value === 2 || value === 3;
 /** Two steps of danger; a danger place without one is high, as before levels existed. */
-export const dangerLevels = { 1: t("Moderate"), 2: t("High") } as const;
+export const dangerLevels = { 1: t("Moderate"), 2: t("Severe") } as const;
 export type DangerLevel = keyof typeof dangerLevels;
 export const isDangerLevel = (value: unknown): value is DangerLevel => value === 1 || value === 2;
 export const dangerLevel = (place: Pick<MapMarker, "kind" | "danger">) =>

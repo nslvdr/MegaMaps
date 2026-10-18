@@ -35,7 +35,7 @@ import {
 import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
 import { icons } from "./icons";
 import { logDate, nextName, plural, seenAgo } from "./format";
-import { t } from "../i18n";
+import { locale, t } from "../i18n";
 import { preference, setPreference, type Preferences } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
@@ -84,8 +84,13 @@ const toastIcons = {
 type ToastTone = keyof typeof toastIcons;
 type CompassStatus = "off" | "waiting" | "on" | "missing" | "blocked";
 const COMPASS_WAIT_MS = 3000;
-/** The device's compass settings, chosen in the Rotation sheet. */
-const compassSettings = ["compass-step", "compass-delay"] as const;
+/** Compass mode leaves turns smaller than this, in degrees, alone… */
+const COMPASS_STEP = 2;
+/** …and waits for readings to hold within this many degrees of their average. */
+const COMPASS_HOLD = 15;
+type CompassFollow = Preferences["compass-follow"];
+/** How long a new heading must hold before the map turns to it; a tap waits for a double tap. */
+const followDelays: Record<CompassFollow, number | undefined> = { tap: undefined, low: 2000, mid: 1000, high: 500, live: 0 };
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -184,8 +189,10 @@ export class ViewerControls {
   private photoURLs = new Map<string, Promise<string | undefined>>();
   private photoViewer?: PhotoViewer;
   private compass: CompassStatus = "off";
-  /** Where the top of the phone points, in degrees from north. */
+  /** The heading the map is turned to, in degrees from north. */
   private heading?: number;
+  /** Where the top of the phone points now, in degrees from north. */
+  private reading?: number;
   private stopWatching?: () => void;
   /** Bumped on every start and stop, so a late permission answer is ignored. */
   private compassRun = 0;
@@ -257,6 +264,7 @@ export class ViewerControls {
       onMarker: (marker) => this.showDetails(marker),
       onRoute: (route) => this.showDetails(route),
       onEmptyTap: () => this.closePlaceDetails(),
+      onDoubleTap: () => this.orientOnTap(),
       // A result's label flies to that result, like stepping to it.
       onSearchResult: (index) => this.showMatch(index),
       // Long-press drops a place without going through Add.
@@ -1094,12 +1102,13 @@ export class ViewerControls {
       const degrees = Math.round(wheel.scrollTop / NORTH_ROW_PX) + NORTH_MIN;
       if (degrees !== this.state.northOffset) this.setNorth(degrees);
     });
-    // Following headings reads these each time, so a change applies at once.
-    for (const key of compassSettings)
-      for (const input of this.compassChoices(key))
-        this.on(input, "change", () => {
-          if (input.checked) setPreference(key, input.value as Preferences[typeof key]);
-        });
+    // Following headings reads this each time, so a change applies at once.
+    for (const input of this.followChoices())
+      this.on(input, "change", () => {
+        if (!input.checked) return;
+        setPreference("compass-follow", input.value as CompassFollow);
+        this.renderRotation();
+      });
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
@@ -1464,30 +1473,42 @@ export class ViewerControls {
       this.renderRotation();
       return;
     }
-    // The first heading turns the map at once. Later, the map turns only once
-    // a heading a step or more away has held for the delay (2° and 1 s by
-    // default), so turning while walking waits until you stop; a heading that
-    // returns is never followed. Smaller changes are left alone: following
-    // each one redraws the map nonstop.
-    const apart = (a: number, b: number) =>
-      Math.abs(((a - b + 540) % 360) - 180) >= Number(preference("compass-step"));
-    let latest = 0, candidate: number | undefined, settle: ReturnType<typeof setTimeout> | undefined;
+    // Tap only turns the map on a double tap. Otherwise the first heading
+    // turns it at once; later, a heading a step or more away starts a hold,
+    // and the map turns to the hold's average once readings have stayed
+    // within the window of it for the delay. Walking sways the phone a few
+    // degrees each step, which the window allows and the average evens out;
+    // a real turn restarts the hold, and a heading that returns averages
+    // back to where the map is. Live skips the wait. Smaller changes are
+    // left alone: following each one redraws the map nonstop.
+    const gap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+    let hold: { x: number; y: number } | undefined, settle: ReturnType<typeof setTimeout> | undefined;
+    const held = () => (((Math.atan2(hold!.y, hold!.x) * 180) / Math.PI) + 360) % 360;
+    const drop = () => {
+      clearTimeout(settle);
+      hold = undefined;
+    };
     const stop = watchCompass((heading) => {
-      latest = heading;
-      if (this.heading === undefined) {
+      this.reading = heading;
+      const delay = followDelays[preference("compass-follow")], shown = this.heading;
+      if (hold && (!delay || gap(heading, held()) >= COMPASS_HOLD)) drop();
+      if (delay !== undefined && (shown === undefined || (delay === 0 && gap(heading, shown) >= COMPASS_STEP))) {
         this.heading = heading;
         this.orient();
-      } else if (!apart(heading, this.heading)) {
-        clearTimeout(settle);
-        candidate = undefined;
-      } else if (candidate === undefined || apart(heading, candidate)) {
-        candidate = heading;
-        clearTimeout(settle);
-        settle = setTimeout(() => {
-          candidate = undefined;
-          this.heading = latest;
-          this.orient();
-        }, Number(preference("compass-delay")) * 1000);
+      } else if (delay && (hold || gap(heading, shown!) >= COMPASS_STEP)) {
+        if (!hold) {
+          hold = { x: 0, y: 0 };
+          settle = setTimeout(() => {
+            const average = held();
+            hold = undefined;
+            if (gap(average, this.heading!) < COMPASS_STEP) return;
+            this.heading = average;
+            this.orient();
+          }, delay);
+        }
+        const radians = (heading * Math.PI) / 180;
+        hold.x += Math.cos(radians);
+        hold.y += Math.sin(radians);
       }
       if (this.compass === "on") return;
       this.compass = "on";
@@ -1501,7 +1522,7 @@ export class ViewerControls {
     this.stopWatching = () => {
       stop();
       clearTimeout(timer);
-      clearTimeout(settle);
+      drop();
     };
   }
   private stopCompass() {
@@ -1509,8 +1530,17 @@ export class ViewerControls {
     this.stopWatching?.();
     this.stopWatching = undefined;
     this.compass = "off";
-    this.heading = undefined;
+    this.heading = this.reading = undefined;
     this.viewer?.orient?.(undefined);
+  }
+  /** In Tap, a double tap on the map turns it to the phone instead of zooming. */
+  private orientOnTap() {
+    if (this.state.rotationMode !== "compass" || preference("compass-follow") !== "tap") return false;
+    if (this.reading !== undefined) {
+      this.heading = this.reading;
+      this.orient();
+    }
+    return true;
   }
   /** The map's north points where the phone says north is. */
   private orient() {
@@ -1541,10 +1571,15 @@ export class ViewerControls {
     this.el("rotation-help").textContent =
       (mode === "compass" && compassHelp[this.compass]) || help;
     this.el("north-field").hidden = mode !== "compass";
-    for (const key of compassSettings) {
-      const chosen = preference(key);
-      for (const input of this.compassChoices(key)) input.checked = input.value === chosen;
-    }
+    const follow = preference("compass-follow"), delay = followDelays[follow];
+    for (const input of this.followChoices()) input.checked = input.value === follow;
+    const followHelp = this.el("compass-follow-help");
+    followHelp.textContent = delay === undefined
+      ? t("Double-tap the map to turn it with your phone")
+      : delay
+        ? t("Turns once a new heading holds {seconds} s", { seconds: (delay / 1000).toLocaleString(locale) })
+        : t("Turns with every move. Uses more battery.");
+    followHelp.classList.toggle("warning", delay === 0);
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
     wheel.setAttribute("aria-valuetext", t("{degrees}° clockwise", { degrees: north }));
@@ -1554,8 +1589,8 @@ export class ViewerControls {
     // Only a wheel showing another degree moves; a scrolling one already matches.
     if (Math.round(wheel.scrollTop / NORTH_ROW_PX) !== row) wheel.scrollTop = row * NORTH_ROW_PX;
   }
-  private compassChoices(key: (typeof compassSettings)[number]) {
-    return this.el("north-field").querySelectorAll<HTMLInputElement>(`input[name="${key}"]`);
+  private followChoices() {
+    return this.el("north-field").querySelectorAll<HTMLInputElement>(`input[name="compass-follow"]`);
   }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted

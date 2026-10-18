@@ -18,6 +18,8 @@ interface InteractionHost {
   rotationLocked?(): boolean;
   editing?(): boolean;
   tap?(point: Point): boolean;
+  /** A double tap the host used for something other than zooming in. */
+  doubleTap?(point: Point): boolean;
   longPress?(point: Point): boolean;
   /** Whether an editable point is under this screen point (editing only). */
   grab?(point: Point): boolean;
@@ -71,6 +73,7 @@ export function attachInteractions(
   function doubleZoom(p: Point) {
     if (host.locked?.() || host.editing?.()) return;
     stop();
+    if (host.doubleTap?.(p)) return;
     const camera = host.getCamera(),
       { min } = host.limits();
     const target =

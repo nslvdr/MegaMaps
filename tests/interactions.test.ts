@@ -25,6 +25,8 @@ function host(canvas: Canvas) {
     editing = false,
     taps = 0,
     presses = 0,
+    orienting = false,
+    orients = 0,
     animations = 0;
   const interactions = attachInteractions(
     canvas as unknown as HTMLCanvasElement,
@@ -49,6 +51,10 @@ function host(canvas: Canvas) {
         }
         return false;
       },
+      doubleTap: () => {
+        if (orienting) orients++;
+        return orienting;
+      },
       longPress: () => {
         if (editing) return false;
         presses++;
@@ -69,8 +75,12 @@ function host(canvas: Canvas) {
     setEditing: (value: boolean) => {
       editing = value;
     },
+    setOrienting: (value: boolean) => {
+      orienting = value;
+    },
     taps: () => taps,
     presses: () => presses,
+    orients: () => orients,
     animations: () => animations,
   };
 }
@@ -160,6 +170,23 @@ test("double-tap and drag zooms with one finger around the tapped point", () => 
   emit(canvas, "pointerdown", pointer(1, 300, 300));
   emit(canvas, "pointerup", pointer(1, 300, 300));
   assert.equal(h.animations(), 1);
+  // A double tap the host uses (turning the map) doesn't zoom; a dragged one still does.
+  h.setOrienting(true);
+  const scale = h.camera().scale;
+  emit(canvas, "pointerdown", pointer(1, 500, 500));
+  emit(canvas, "pointerup", pointer(1, 500, 500));
+  emit(canvas, "pointerdown", pointer(1, 500, 500));
+  emit(canvas, "pointerup", pointer(1, 500, 500));
+  assert.equal(h.orients(), 1);
+  assert.equal(h.animations(), 1);
+  assert.equal(h.camera().scale, scale);
+  emit(canvas, "pointerdown", pointer(1, 100, 600));
+  emit(canvas, "pointerup", pointer(1, 100, 600));
+  emit(canvas, "pointerdown", pointer(1, 100, 600));
+  emit(canvas, "pointermove", pointer(1, 100, 700));
+  emit(canvas, "pointerup", pointer(1, 100, 700));
+  assert.ok(h.camera().scale > scale, "double-tap and drag still zooms");
+  assert.equal(h.orients(), 1);
   h.interactions.dispose();
 });
 test("a two-finger tap zooms out around its center; a pinch does not", () => {
