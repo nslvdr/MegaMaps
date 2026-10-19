@@ -2512,27 +2512,52 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
-/* Live compass turning costs battery, so its help reads as a warning. */
-#compass-follow-help.warning {
+/* Auto's speeds are a radio list: the chosen row is tinted and checked. */
+.choice-row {
+  position: relative;
+}
+.choice-row input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.choice-row:has(input:checked) {
+  background: color-mix(in srgb, var(--c) 7%, transparent);
+}
+.choice-row:not(:has(input:checked)) .row-icon {
+  background: var(--fill);
+  color: var(--muted);
+}
+.choice-check {
+  display: grid;
+  color: var(--c);
+  visibility: hidden;
+}
+.choice-check svg {
+  width: 20px;
+  height: 20px;
+}
+.choice-row:has(input:checked) .choice-check {
+  visibility: visible;
+}
+/* Each speed explains itself, so its help line is never cut. */
+.choice-row .row-text small {
+  max-height: none;
+}
+/* Live costs a lot of battery, so that warning gets its own line. */
+.choice-row .warning {
+  display: block;
   color: var(--danger);
 }
-/* Rotation help sits right under the modes; compass settings follow in Compass mode. */
 #rotation-help {
   margin-bottom: 0;
 }
+/* Rotation pairs its modes: by hand, then with the compass. */
+.layer-toggles.rotation-modes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 #north-field {
   margin-top: var(--space-12);
-}
-/* Five ways to follow the compass share one row, so the tiles sit closer. */
-.layer-toggles.follow-modes {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-.follow-modes .layer-toggle {
-  padding-inline: var(--space-2);
-}
-#compass-follow-help {
-  margin-bottom: 0;
 }
 /* Map north: an iOS Clock-style wheel; the band marks the chosen degree. */
 .north-wheel {
@@ -2604,6 +2629,7 @@ label.panel-row {
   color: var(--muted);
   font-size: var(--font-size-small);
   font-weight: 500;
+  text-align: center;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
