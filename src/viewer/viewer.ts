@@ -39,9 +39,8 @@ import {
 import { Darkener } from "./darkener";
 import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
+import { labelZoom } from "./measure";
 import type { MapSearchMatch } from "./map-search";
-// How far past the whole-map view saved names start to show.
-const LABEL_ZOOM = 3;
 export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
@@ -819,9 +818,8 @@ export class Viewer {
     // The current search result gets space first, then saved items share it.
     const searchGliding = this.searchOverlay?.draw(this.camera, viewport, labels);
     // Labels finish gliding to a new spot after the map stops.
-    // Saved names show once zoomed in from the whole map; before, only pins.
-    const { min, max } = this.limits();
-    const named = this.camera.scale >= Math.min(min * LABEL_ZOOM, max);
+    // Saved names show once zoomed in close; before, only pins.
+    const named = this.camera.scale >= labelZoom(this.limits(), viewport, this.navigation.metresPerPixel);
     if (this.overlay?.draw(this.camera, viewport, labels, named) || searchGliding) this.invalidate();
     if (this.lastFrame && now - this.lastFrame < 100) {
       this.frameTimes.push(now - this.lastFrame);

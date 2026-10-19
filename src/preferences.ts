@@ -3,6 +3,8 @@
 const choices = {
   language: ["fr", "en"],
   "label-size": ["standard", "large"],
+  /** Saved names show once the screen spans at most this many metres. */
+  "label-distance": ["200", "100", "500", "1000", "always"],
   /** How each Saved list is ordered. */
   "place-order": ["newest", "oldest", "name", "type", "seen"],
   "route-order": ["newest", "oldest", "name"],

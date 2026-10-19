@@ -1,6 +1,9 @@
 import { locale, t } from "../i18n";
 import { preference } from "../preferences";
-import type { Point } from "./camera";
+import type { Point, Size } from "./camera";
+
+// How far past the whole-map view saved names show on maps without a scale.
+const LABEL_ZOOM = 3;
 
 /** Length of a line through the points, in image pixels. */
 export const pathLength = (points: Point[]) =>
@@ -29,4 +32,16 @@ export function travelSummary(points: Point[], metresPerPixel?: number) {
   if (!metresPerPixel || points.length < 2) return undefined;
   const metres = pathLength(points) * metresPerPixel;
   return t("{distance} · ~{time} on foot", { distance: formatDistance(metres), time: formatWalk(metres) });
+}
+
+/** The zoom from which saved names show: once the screen's shorter side spans
+ * the distance set in Settings, or a few zooms in without a scale. The closest
+ * zoom always shows them. */
+export function labelZoom(limits: { min: number; max: number }, viewport: Size, metresPerPixel?: number) {
+  const distance = preference("label-distance");
+  if (distance === "always") return 0;
+  const close = metresPerPixel
+    ? Math.min(viewport.width, viewport.height) * metresPerPixel / Number(distance)
+    : limits.min * LABEL_ZOOM;
+  return Math.min(close, limits.max);
 }

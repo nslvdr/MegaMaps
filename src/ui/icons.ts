@@ -74,6 +74,7 @@ import {
   WifiOff,
   X,
   Zap,
+  ZoomIn,
 } from "lucide";
 import type { MapMarker } from "../viewer/navigation";
 
@@ -179,6 +180,7 @@ export const icons = {
   user: svg(UserRound),
   language: svg(Languages),
   labelSize: svg(ALargeSmall),
+  labelDistance: svg(ZoomIn),
   walkingSpeed: svg(Footprints),
   measure: svg(Ruler),
   scale: svg(RulerDimensionLine),

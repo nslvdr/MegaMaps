@@ -3,6 +3,7 @@ import { formatBytes, plural } from "./format";
 import { icons } from "./icons";
 import { shareOrDownload } from "./save-file";
 import { language, locale, t } from "../i18n";
+import { formatDistance } from "../viewer/measure";
 import { preference, setPreference, type Preferences } from "../preferences";
 import { backupDue, backupSummary, createBackup, readBackup, type Backup } from "../storage/backup";
 import { listMaps } from "../storage/database";
@@ -24,8 +25,10 @@ const choice = <K extends keyof Preferences>(key: K, icon: string, label: string
 // Language names stay in their own language, so either can be found.
 export const settingsMarkup = `<section id="settings" class="settings-page" aria-labelledby="settings-title" hidden><div class="top-edge" aria-hidden="true"></div>
 <header class="page-header"><button type="button" class="page-back" id="settings-back" aria-label="${t("Back")}" title="${t("Back")}">${icons.arrow}</button><h1 id="settings-title">${t("Settings")}</h1></header>
-${heading(t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), [["standard", t("Standard")], ["large", t("Large")]])}</div>
-${note(t("Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map."))}
+${heading(t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), [["standard", t("Standard")], ["large", t("Large")]])}${choice("label-distance", icons.labelDistance, t("Show labels within"), [
+  ...(["100", "200", "500", "1000"] as const).map((metres): [Preferences["label-distance"], string] => [metres, formatDistance(Number(metres))]),
+  ["always", t("Always")]])}</div>
+${note(`${t("Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map.")} ${t("Place and route names appear once the screen spans less than this distance, so pins stay clear from afar. Maps without a scale show them a few zooms in.")}`)}
 ${heading(t("Distances"))}<div class="share-summary">${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]))}</div>
 ${note(t("Sets the travel times shown for routes and measured lines on maps with a scale."))}
 ${heading(t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}</span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
@@ -146,6 +149,8 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
       options.setLabelSize(size);
     } else if (select.name === "walking-speed") {
       setPreference("walking-speed", select.value as Preferences["walking-speed"]);
+    } else if (select.name === "label-distance") {
+      setPreference("label-distance", select.value as Preferences["label-distance"]);
     }
   });
 
