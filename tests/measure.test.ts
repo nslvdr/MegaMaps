@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setPreference } from "../src/preferences";
-import { formatDistance, formatWalk, pathLength, travelSummary } from "../src/viewer/measure";
+import { formatDistance, formatWalk, labelZoom, pathLength, travelSummary } from "../src/viewer/measure";
 
 test("a line's length adds up its segments", () => {
   assert.equal(pathLength([]), 0);
@@ -33,4 +33,20 @@ test("a route only has a length once the map has a scale and the route two point
   assert.equal(travelSummary(points), undefined);
   assert.equal(travelSummary(points.slice(0, 1), 0.5), undefined);
   assert.equal(travelSummary(points, 0.5), "500 m · ~8 min on foot");
+});
+
+test("names show once the screen's shorter side spans the distance set in Settings", () => {
+  const limits = { min: 0.1, max: 8 }, phone = { width: 400, height: 800 };
+  // At half a metre per map pixel, 400 screen pixels span 200 m at a zoom of 1.
+  assert.equal(labelZoom(limits, phone, 0.5), 1);
+  assert.equal(labelZoom({ min: 0.1, max: 0.5 }, phone, 0.5), 0.5, "the closest zoom always shows them");
+  assert.equal(labelZoom(limits, phone), 0.1 * 3, "without a scale, a few zooms past the whole map");
+  setPreference("label-distance", "500");
+  try {
+    assert.equal(labelZoom(limits, phone, 0.5), 0.4);
+    setPreference("label-distance", "always");
+    assert.equal(labelZoom(limits, phone, 0.5), 0);
+  } finally {
+    localStorage.removeItem("megamaps:label-distance");
+  }
 });
