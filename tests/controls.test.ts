@@ -376,7 +376,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.ok(turnedTo(90));
     // Live follows every 2° turn at once.
     check("compass-speed-live", true);
-    assert.match(el("speed-help").textContent!, /instantly.*battery/);
+    assert.match(el("speed-help").textContent!, /Instant\..*battery/);
     heading(91);
     assert.ok(turnedTo(90), "Live still leaves a 1° sway alone");
     heading(93);
