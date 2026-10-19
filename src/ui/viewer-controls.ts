@@ -32,11 +32,11 @@ import {
   type WaterLevel,
   waterLevels,
 } from "../viewer/navigation";
-import { allowCompass, compassNeedsPermission, watchCompass } from "../viewer/compass";
+import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
 import { icons } from "./icons";
 import { logDate, nextName, plural, seenAgo } from "./format";
-import { locale, t } from "../i18n";
-import { preference, setPreference, type Preferences } from "../preferences";
+import { t } from "../i18n";
+import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
 import { popoverPosition } from "./popover-position";
@@ -68,11 +68,17 @@ const copyPoints = (points: Point[]) => points.map((point) => ({ ...point }));
 type Sheet = (typeof sheets)[number] | "search";
 const SEARCH_DEBOUNCE_MS = 200;
 const SPOTLIGHT_MS = 4500;
-const rotationModes: Record<RotationMode, { icon: string; label: string; help: string }> = {
-  free: { icon: icons.freeRotation, label: t("Normal"), help: t("Twist with two fingers to turn the map.") },
-  compass: { icon: icons.compass, label: t("Compass"), help: t("The map turns with your phone, so it lines up with the world around you.") },
-  locked: { icon: icons.rotationLock, label: t("Locked"), help: t("The map keeps its current angle.") },
+const rotationModes: Record<RotationMode, { icon: string; label: string }> = {
+  free: { icon: icons.freeRotation, label: t("Manual") },
+  compass: { icon: icons.compass, label: t("Compass") },
+  locked: { icon: icons.rotationLock, label: t("Locked") },
 };
+const manualModes = ["free", "locked"] as const;
+const follows = ["tap", "auto"] as const;
+const speeds = Object.keys(speedDelays) as CompassSpeed[];
+/** How long a new heading must hold before the map turns to it; Tap waits for a double tap. */
+const followDelay = () =>
+  preference("compass-follow") === "tap" ? undefined : speedDelays[preference("compass-speed")];
 /** Compass mode's compass: off, starting, turning the map, or not reaching it. */
 // Every passing message is one pill: a tone sets its icon and outline color.
 const toastIcons = {
@@ -88,9 +94,6 @@ const COMPASS_WAIT_MS = 3000;
 const COMPASS_STEP = 2;
 /** …and waits for readings to hold within this many degrees of their average. */
 const COMPASS_HOLD = 15;
-type CompassFollow = Preferences["compass-follow"];
-/** How long a new heading must hold before the map turns to it; a tap waits for a double tap. */
-const followDelays: Record<CompassFollow, number | undefined> = { tap: undefined, low: 2000, mid: 1000, high: 500, live: 0 };
 /** Height of one north wheel row, as in `.north-track span`. */
 const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -1085,30 +1088,42 @@ export class ViewerControls {
         this.changed();
       });
     this.click("spotlight", () => this.spotlight());
-    for (const mode of Object.keys(rotationModes) as RotationMode[]) {
+    for (const mode of manualModes) {
       const input = this.input(`rotation-${mode}`);
       this.on(input, "change", () => {
         if (input.checked) this.setRotationMode(mode);
       });
     }
-    // Tapping Compass again retries a compass that needs permission or went missing.
-    this.click("rotation-compass", () => {
-      if (this.state.rotationMode === "compass" && (this.compass === "missing" || this.compass === "blocked"))
-        void this.startCompass(true);
-    });
+    // Tap and Auto pick Compass mode and how it follows. Following reads the
+    // choice each time, so a change applies at once.
+    for (const follow of follows) {
+      const input = this.input(`compass-follow-${follow}`);
+      // Tapping a compass tile again retries a compass that needs permission or went missing.
+      this.click(`compass-follow-${follow}`, () => {
+        if (this.state.rotationMode === "compass" && (this.compass === "missing" || this.compass === "blocked"))
+          void this.startCompass(true);
+      });
+      this.on(input, "change", () => {
+        if (!input.checked) return;
+        setPreference("compass-follow", follow);
+        if (this.state.rotationMode === "compass") this.renderRotation();
+        else this.setRotationMode("compass");
+      });
+    }
+    for (const speed of speeds) {
+      const input = this.input(`compass-speed-${speed}`);
+      this.on(input, "change", () => {
+        if (!input.checked) return;
+        setPreference("compass-speed", speed);
+        this.renderRotation();
+      });
+    }
     // Scrolling the wheel turns the map as each degree passes the middle.
     const wheel = this.el("north-offset");
     this.on(wheel, "scroll", () => {
       const degrees = Math.round(wheel.scrollTop / NORTH_ROW_PX) + NORTH_MIN;
       if (degrees !== this.state.northOffset) this.setNorth(degrees);
     });
-    // Following headings reads this each time, so a change applies at once.
-    for (const input of this.followChoices())
-      this.on(input, "change", () => {
-        if (!input.checked) return;
-        setPreference("compass-follow", input.value as CompassFollow);
-        this.renderRotation();
-      });
     for (const level of BRIGHTNESS_LEVELS) {
       const input = this.input(`brightness-${brightnessPercent(level)}`);
       this.on(input, "change", () => {
@@ -1490,7 +1505,7 @@ export class ViewerControls {
     };
     const stop = watchCompass((heading) => {
       this.reading = heading;
-      const delay = followDelays[preference("compass-follow")], shown = this.heading;
+      const delay = followDelay(), shown = this.heading;
       if (hold && (!delay || gap(heading, held()) >= COMPASS_HOLD)) drop();
       if (delay !== undefined && (shown === undefined || (delay === 0 && gap(heading, shown) >= COMPASS_STEP))) {
         this.heading = heading;
@@ -1549,7 +1564,7 @@ export class ViewerControls {
   }
   private renderRotation() {
     const mode = this.state.rotationMode,
-      { icon, label, help } = rotationModes[mode];
+      { icon, label } = rotationModes[mode];
     const chip = this.el("open-rotation");
     chip.innerHTML = icon;
     chip.setAttribute("aria-label", t("Rotation: {mode}", { mode: label }));
@@ -1559,27 +1574,24 @@ export class ViewerControls {
       // Compass mode turns the map with the phone, so a reset would not hold.
       this.el("reset-rotation").hidden = mode === "compass";
     }
-    for (const each of Object.keys(rotationModes))
-      this.input(`rotation-${each}`).checked = each === mode;
+    for (const each of manualModes) this.input(`rotation-${each}`).checked = each === mode;
+    const follow = preference("compass-follow"), speed = preference("compass-speed");
+    for (const each of follows) this.input(`compass-follow-${each}`).checked = mode === "compass" && each === follow;
+    for (const each of speeds) this.input(`compass-speed-${each}`).checked = each === speed;
     const compassHelp: Partial<Record<CompassStatus, string>> = {
       waiting: t("Looking for the compass…"),
       missing: compassNeedsPermission()
-        ? t("Tap Compass to turn it on.")
+        ? t("Tap your compass choice again to turn it on.")
         : t("No compass found. Compass mode needs a phone or tablet."),
-      blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap Compass."),
+      blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap your choice again."),
     };
-    this.el("rotation-help").textContent =
-      (mode === "compass" && compassHelp[this.compass]) || help;
+    const help = this.el("rotation-help"), status = mode === "compass" && compassHelp[this.compass];
+    help.textContent = status || (mode === "free" ? t("Turn the map freely with two fingers.")
+      : mode === "locked" ? t("The map keeps its angle, even if you twist it.")
+      : follow === "tap" ? t("Double-tap the map to orient it with the compass.")
+      : t("The map follows the compass on its own."));
     this.el("north-field").hidden = mode !== "compass";
-    const follow = preference("compass-follow"), delay = followDelays[follow];
-    for (const input of this.followChoices()) input.checked = input.value === follow;
-    const followHelp = this.el("compass-follow-help");
-    followHelp.textContent = delay === undefined
-      ? t("Double-tap the map to turn it with your phone")
-      : delay
-        ? t("Turns once a new heading holds {seconds} s", { seconds: (delay / 1000).toLocaleString(locale) })
-        : t("Turns with every move. Uses more battery.");
-    followHelp.classList.toggle("warning", delay === 0);
+    this.el("speed-field").hidden = follow !== "auto";
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
     wheel.setAttribute("aria-valuetext", t("{degrees}° clockwise", { degrees: north }));
@@ -1588,9 +1600,6 @@ export class ViewerControls {
     wheel.children[row]?.classList.add("selected");
     // Only a wheel showing another degree moves; a scrolling one already matches.
     if (Math.round(wheel.scrollTop / NORTH_ROW_PX) !== row) wheel.scrollTop = row * NORTH_ROW_PX;
-  }
-  private followChoices() {
-    return this.el("north-field").querySelectorAll<HTMLInputElement>(`input[name="compass-follow"]`);
   }
   private renderDark() {
     this.el("dark-status").textContent = this.state.inverted

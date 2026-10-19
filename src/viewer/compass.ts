@@ -1,3 +1,9 @@
+import type { Preferences } from "../preferences";
+
+export type CompassSpeed = Preferences["compass-speed"];
+/** How long a new heading must hold before Auto turns the map to it. */
+export const speedDelays: Record<CompassSpeed, number> = { mid: 1000, high: 500, live: 0 };
+
 /** iOS adds its own compass reading to the standard event. */
 interface CompassEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;

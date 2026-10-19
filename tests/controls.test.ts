@@ -281,7 +281,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("north-field").hidden, true, "north only matters to Compass mode");
     check("rotation-free", true);
     assert.equal(state.rotationMode, "free");
-    assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Normal");
+    assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Manual");
+    assert.equal((el("compass-follow-auto") as HTMLInputElement).checked, false, "a compass tile is only chosen in Compass mode");
     assert.match(el("rotation-help").textContent!, /two fingers/);
     // Reset sits beside Close and turns the map back to 0°.
     assert.equal(el("reset-rotation").hidden, false);
@@ -289,7 +290,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("reset-rotation");
     assert.equal(straightened, 1);
 
-    // Compass mode asks for the compass, and tapping it again retries a refusal.
+    // A compass tile turns on Compass mode and asks for the compass; tapping it again retries a refusal.
     let permission: PermissionState = "denied";
     Object.defineProperty(globalThis, "DeviceOrientationEvent", {
       value: { requestPermission: async () => permission },
@@ -301,27 +302,29 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       Object.assign(event, { webkitCompassHeading: degrees });
       window.dispatchEvent(event);
     };
-    check("rotation-compass", true);
+    check("compass-follow-auto", true);
     assert.equal(state.rotationMode, "compass");
+    assert.equal((el("rotation-free") as HTMLInputElement).checked, false);
     assert.equal(el("reset-rotation").hidden, true, "the compass owns the angle in Compass mode");
     await settle();
     assert.match(el("rotation-help").textContent!, /access is off/);
     heading(90);
     assert.ok(orientations.every((rotation) => rotation === undefined), "a refused compass is not followed");
     permission = "granted";
-    click("rotation-compass");
+    click("compass-follow-auto");
     await settle();
     assert.match(el("rotation-help").textContent!, /Looking for the compass/);
     // Facing east, the map's north turns to the left of the screen.
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
-    assert.match(el("rotation-help").textContent!, /turns with your phone/);
+    assert.match(el("rotation-help").textContent!, /on its own/, "a working compass explains the choice");
     // By default (Mid) a 2° turn is followed once it has held for 1 s.
     const turnedTo = (degrees: number, within = 1e-9) =>
       Math.abs(orientations.at(-1)! + (degrees * Math.PI) / 180) < within;
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    assert.equal((el("compass-follow-mid") as HTMLInputElement).checked, true);
-    assert.match(el("compass-follow-help").textContent!, /holds 1 s/);
+    assert.equal((el("compass-follow-auto") as HTMLInputElement).checked, true);
+    assert.equal((el("compass-speed-mid") as HTMLInputElement).checked, true);
+    assert.equal(el("speed-field").hidden, false);
     heading(91);
     t.mock.timers.tick(5000);
     assert.equal(orientations.at(-1), -Math.PI / 2, "a 1° sway is left alone");
@@ -332,30 +335,26 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.ok(turnedTo(92));
     heading(90);
     t.mock.timers.tick(1000);
-    // Low waits 2 s for a new heading, and the device keeps the choice for every map.
-    check("compass-follow-low", true);
-    assert.equal(localStorage.getItem("megamaps:compass-follow"), "low");
-    assert.match(el("compass-follow-help").textContent!, /holds 2 s/);
     // Walking sways the phone; within 15° that still holds, and the map turns to the average.
     const following = orientations.length;
     heading(110);
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(250);
     heading(100);
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(250);
     heading(115);
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(250);
     heading(105);
-    t.mock.timers.tick(499);
+    t.mock.timers.tick(249);
     assert.equal(orientations.length, following, "a turn in progress is not followed");
     t.mock.timers.tick(1);
     assert.ok(turnedTo(107.5, 0.01), "it turns to the average of the hold");
     // Turning past the window restarts the wait.
     heading(140);
-    t.mock.timers.tick(1500);
+    t.mock.timers.tick(750);
     heading(160);
-    t.mock.timers.tick(1500);
+    t.mock.timers.tick(750);
     assert.ok(turnedTo(107.5, 0.01));
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(250);
     assert.ok(turnedTo(160));
     // A heading that returns averages back to where the map is, so it stays put.
     const settled = orientations.length;
@@ -364,34 +363,38 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(158);
     t.mock.timers.tick(5000);
     assert.equal(orientations.length, settled, "a heading that returns is not followed");
-    // High waits half a second.
-    check("compass-follow-high", true);
+    // High waits half a second, and the device keeps the choice for every map.
+    check("compass-speed-high", true);
+    assert.equal(localStorage.getItem("megamaps:compass-speed"), "high");
+    assert.equal((el("compass-speed-mid") as HTMLInputElement).checked, false);
     heading(90);
     t.mock.timers.tick(499);
     assert.ok(turnedTo(160));
     t.mock.timers.tick(1);
     assert.ok(turnedTo(90));
-    // Live follows every 2° turn at once, and warns about the battery.
-    check("compass-follow-live", true);
-    assert.match(el("compass-follow-help").textContent!, /more battery/);
-    assert.ok(el("compass-follow-help").classList.contains("warning"));
+    // Live follows every 2° turn at once.
+    check("compass-speed-live", true);
     heading(91);
     assert.ok(turnedTo(90), "Live still leaves a 1° sway alone");
     heading(93);
     assert.ok(turnedTo(93));
     // Tap keeps the map still until a double tap turns it, instead of zooming.
     check("compass-follow-tap", true);
-    assert.equal(el("compass-follow-help").classList.contains("warning"), false);
+    assert.equal(el("speed-field").hidden, true, "Tap has no speed");
+    assert.equal(el("north-field").hidden, false, "Tap still lines up with north");
+    assert.match(el("rotation-help").textContent!, /Double-tap/);
     heading(180);
     t.mock.timers.tick(5000);
     assert.ok(turnedTo(93), "Tap never turns by itself");
     assert.equal(controls.options().onDoubleTap?.(), true, "the double tap is used, not zoomed");
     assert.ok(turnedTo(180));
-    check("compass-follow-mid", true);
+    check("compass-follow-auto", true);
+    check("compass-speed-mid", true);
     heading(90);
     t.mock.timers.tick(1000);
     assert.equal(controls.options().onDoubleTap?.(), false, "outside Tap, a double tap zooms");
     localStorage.removeItem("megamaps:compass-follow");
+    localStorage.removeItem("megamaps:compass-speed");
     t.mock.timers.reset();
 
     // Its north offset fixes a map whose top isn't north; the wheel turns it as each degree passes.
@@ -425,6 +428,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     heading(180);
     assert.equal(orientations.length, followed);
     assert.equal(el("north-field").hidden, true);
+    assert.equal((el("compass-follow-auto") as HTMLInputElement).checked, false);
     assert.equal(el("reset-rotation").hidden, false);
     click("close-sheet");
     assert.equal(el("reset-rotation").hidden, true, "reset belongs to the Rotation panel");

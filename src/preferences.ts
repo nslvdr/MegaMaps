@@ -6,8 +6,10 @@ const choices = {
   /** How each Saved list is ordered. */
   "place-order": ["newest", "oldest", "name", "type", "seen"],
   "route-order": ["newest", "oldest", "name"],
-  /** When Compass mode turns the map: on a double tap, or by itself, slower to faster. */
-  "compass-follow": ["mid", "tap", "low", "high", "live"],
+  /** When Compass mode turns the map: by itself, or on a double tap. */
+  "compass-follow": ["auto", "tap"],
+  /** How soon Auto follows a new heading, slower to faster. */
+  "compass-speed": ["mid", "high", "live"],
   /** Pace for travel times, in km/h. */
   "walking-speed": ["4", "2", "3", "5"],
 } as const;
