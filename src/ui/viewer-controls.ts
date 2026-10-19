@@ -1592,7 +1592,7 @@ export class ViewerControls {
     this.el("north-field").hidden = mode !== "compass";
     this.el("speed-field").hidden = mode !== "compass" || follow !== "auto";
     this.el("speed-help").innerHTML = speed === "live"
-      ? `${t("Turns instantly.")}<span class="warning">${t("Very hungry for battery.")}</span>`
+      ? `${t("Instant.")}<span class="warning">${t("Very hungry for battery.")}</span>`
       : t("Turns after {seconds} s in the same direction.", { seconds: (speedDelays[speed] / 1000).toLocaleString(locale) });
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
