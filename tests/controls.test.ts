@@ -283,7 +283,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.rotationMode, "free");
     assert.equal(el("open-rotation").getAttribute("aria-label"), "Rotation: Manual");
     assert.equal((el("compass-follow-auto") as HTMLInputElement).checked, false, "a compass tile is only chosen in Compass mode");
-    assert.match(el("rotation-help").textContent!, /two fingers/);
+    assert.equal(el("rotation-help").hidden, true, "each row explains its mode, so the line below waits for the compass");
+    assert.equal(el("speed-field").hidden, true, "speeds only show under a chosen Auto");
     // Reset sits beside Close and turns the map back to 0°.
     assert.equal(el("reset-rotation").hidden, false);
     assert.ok(el("reset-rotation").nextElementSibling === el("close-sheet"));
@@ -317,7 +318,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Facing east, the map's north turns to the left of the screen.
     heading(90);
     assert.equal(orientations.at(-1), -Math.PI / 2);
-    assert.match(el("rotation-help").textContent!, /on its own/, "a working compass explains the choice");
+    assert.equal(el("rotation-help").hidden, true, "a working compass needs no status");
     // By default (Mid) a 2° turn is followed once it has held for 1 s.
     const turnedTo = (degrees: number, within = 1e-9) =>
       Math.abs(orientations.at(-1)! + (degrees * Math.PI) / 180) < within;
@@ -367,6 +368,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     check("compass-speed-high", true);
     assert.equal(localStorage.getItem("megamaps:compass-speed"), "high");
     assert.equal((el("compass-speed-mid") as HTMLInputElement).checked, false);
+    assert.match(el("speed-help").textContent!, /after 0\.5 s/);
     heading(90);
     t.mock.timers.tick(499);
     assert.ok(turnedTo(160));
@@ -374,6 +376,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.ok(turnedTo(90));
     // Live follows every 2° turn at once.
     check("compass-speed-live", true);
+    assert.match(el("speed-help").textContent!, /instantly.*battery/);
     heading(91);
     assert.ok(turnedTo(90), "Live still leaves a 1° sway alone");
     heading(93);
@@ -382,7 +385,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     check("compass-follow-tap", true);
     assert.equal(el("speed-field").hidden, true, "Tap has no speed");
     assert.equal(el("north-field").hidden, false, "Tap still lines up with north");
-    assert.match(el("rotation-help").textContent!, /Double-tap/);
     heading(180);
     t.mock.timers.tick(5000);
     assert.ok(turnedTo(93), "Tap never turns by itself");

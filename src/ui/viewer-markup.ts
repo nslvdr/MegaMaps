@@ -1,7 +1,6 @@
 import { dialogHeader } from "./dialog";
 import { icons } from "./icons";
-import { locale, t } from "../i18n";
-import { speedDelays } from "../viewer/compass";
+import { t } from "../i18n";
 import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
@@ -21,18 +20,16 @@ const rowIcon = (icon: string, tint = "") =>
 // The whole icon tile toggles its layer through a native, keyboard-accessible input.
 const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
-// Rotation is one set of tiles: each is a mode, or Compass mode with how it follows.
-const rotationChoice = (id: string, label: string, icon: string) =>
-  `<label class="layer-toggle"><input type="radio" name="rotation" id="${id}">${icon}<span>${label}</span></label>`;
-// Auto's speeds, slowest first: each row says how long a heading must hold.
-const holds = (speed: keyof typeof speedDelays) =>
-  t("Turns after {seconds} s in the same direction.", { seconds: (speedDelays[speed] / 1000).toLocaleString(locale) });
+// Rotation is one list: each row is a mode, or Compass mode with how it follows.
+const rotationChoice = (id: string, label: string, help: string, icon: string) =>
+  `<label class="panel-row choice-row"><input type="radio" name="rotation" id="${id}">${rowIcon(icon)}<span class="row-text"><strong>${label}</strong><small>${help}</small></span><i class="choice-check">${icons.check}</i></label>`;
+// Auto's speeds, slowest first, as one pill; the line below says how long a heading must hold.
 const speedChoices = ([
-  ["mid", t("Mid"), holds("mid"), icons.speedMid],
-  ["high", t("High"), holds("high"), icons.speedHigh],
-  ["live", t("Live"), `${t("Turns instantly.")}<span class="warning">${t("Very hungry for battery.")}</span>`, icons.speedLive],
-] as const).map(([speed, label, help, icon]) =>
-  `<label class="panel-row choice-row"><input type="radio" name="compass-speed" id="compass-speed-${speed}">${rowIcon(icon)}<span class="row-text"><strong>${label}</strong><small>${help}</small></span><i class="choice-check">${icons.check}</i></label>`).join("");
+  ["mid", t("Mid"), icons.speedMid],
+  ["high", t("High"), icons.speedHigh],
+  ["live", t("Live"), icons.speedLive],
+] as const).map(([speed, label, icon]) =>
+  `<label><input type="radio" name="compass-speed" id="compass-speed-${speed}">${icon}<span>${label}</span></label>`).join("");
 // A wheel of whole degrees, like the iOS Clock picker; the middle one is chosen.
 const northDegrees = Array.from({ length: NORTH_MAX - NORTH_MIN + 1 }, (_, i) =>
   `<span aria-hidden="true">${String(NORTH_MIN + i).replace("-", "−")}°</span>`).join("");
@@ -106,21 +103,19 @@ export const viewerMarkup = `
       <button id="spotlight" class="panel-action spotlight-action" title="${t("Dim the map for a moment and pulse every route and place, even hidden ones")}">${icons.sparkle}<span>${t("Highlight saved")}</span></button>
     </div>
     <div id="sheet-rotation" data-panel="rotation" data-title="${t("Rotation")}" hidden>
-      <h3 id="rotation-hand-title">${t("By hand")}</h3>
-      <div class="layer-toggles rotation-modes" role="radiogroup" aria-labelledby="rotation-hand-title" aria-describedby="rotation-help">
-        ${rotationChoice("rotation-free", t("Manual"), icons.freeRotation)}
-        ${rotationChoice("rotation-locked", t("Locked"), icons.rotationLock)}
-      </div>
-      <h3 id="rotation-compass-title">${t("With the compass")}</h3>
-      <div class="layer-toggles rotation-modes" role="radiogroup" aria-labelledby="rotation-compass-title" aria-describedby="rotation-help">
-        ${rotationChoice("compass-follow-tap", t("Tap"), icons.followTap)}
-        ${rotationChoice("compass-follow-auto", t("Auto"), icons.compass)}
+      <div class="panel-card rotation-list">
+        ${rotationChoice("rotation-locked", t("Locked"), t("Rotation is locked."), icons.rotationLock)}
+        ${rotationChoice("rotation-free", t("Manual"), t("Turn the map freely with two fingers."), icons.freeRotation)}
+        ${rotationChoice("compass-follow-tap", t("Tap"), t("Double-tap the map to orient it with the compass."), icons.followTap)}
+        <div class="rotation-auto">
+          ${rotationChoice("compass-follow-auto", t("Auto"), t("The map follows the compass on its own."), icons.compass)}
+          <div id="speed-field" hidden>
+            <div class="speed-pill" role="radiogroup" aria-label="${t("Speed")}" aria-describedby="speed-help">${speedChoices}</div>
+            <p id="speed-help" class="field-help"></p>
+          </div>
+        </div>
       </div>
       <p id="rotation-help" class="field-help" role="status"></p>
-      <div id="speed-field" hidden>
-        <h3 id="speed-label">${t("Speed")}</h3>
-        <div class="panel-card" role="radiogroup" aria-labelledby="speed-label">${speedChoices}</div>
-      </div>
       <div id="north-field" class="panel-card" hidden>
         <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
       </div>

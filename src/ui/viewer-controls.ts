@@ -35,7 +35,7 @@ import {
 import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
 import { icons } from "./icons";
 import { logDate, nextName, plural, seenAgo } from "./format";
-import { t } from "../i18n";
+import { locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
@@ -1585,13 +1585,15 @@ export class ViewerControls {
         : t("No compass found. Compass mode needs a phone or tablet."),
       blocked: t("Compass access is off. Allow motion and orientation access for this site, then tap your choice again."),
     };
-    const help = this.el("rotation-help"), status = mode === "compass" && compassHelp[this.compass];
-    help.textContent = status || (mode === "free" ? t("Turn the map freely with two fingers.")
-      : mode === "locked" ? t("The map keeps its angle, even if you twist it.")
-      : follow === "tap" ? t("Double-tap the map to orient it with the compass.")
-      : t("The map follows the compass on its own."));
+    // Each row explains its mode, so the line below the list only reports the compass.
+    const help = this.el("rotation-help");
+    help.textContent = (mode === "compass" && compassHelp[this.compass]) || "";
+    help.hidden = !help.textContent;
     this.el("north-field").hidden = mode !== "compass";
-    this.el("speed-field").hidden = follow !== "auto";
+    this.el("speed-field").hidden = mode !== "compass" || follow !== "auto";
+    this.el("speed-help").innerHTML = speed === "live"
+      ? `${t("Turns instantly.")}<span class="warning">${t("Very hungry for battery.")}</span>`
+      : t("Turns after {seconds} s in the same direction.", { seconds: (speedDelays[speed] / 1000).toLocaleString(locale) });
     const wheel = this.el("north-offset"), north = this.state.northOffset;
     wheel.setAttribute("aria-valuenow", String(north));
     wheel.setAttribute("aria-valuetext", t("{degrees}° clockwise", { degrees: north }));

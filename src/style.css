@@ -2512,7 +2512,7 @@ label.panel-row {
 .switch:disabled {
   opacity: 0.4;
 }
-/* Auto's speeds are a radio list: the chosen row is tinted and checked. */
+/* Rotation is a radio list: the chosen row is tinted and checked. */
 .choice-row {
   position: relative;
 }
@@ -2540,21 +2540,74 @@ label.panel-row {
 .choice-row:has(input:checked) .choice-check {
   visibility: visible;
 }
-/* Each speed explains itself, so its help line is never cut. */
+/* Each mode explains itself, so its help line is never cut. */
 .choice-row .row-text small {
   max-height: none;
 }
-/* Live costs a lot of battery, so that warning gets its own line. */
-.choice-row .warning {
-  display: block;
-  color: var(--danger);
+/* Auto and its speeds read as one tinted block while Auto is chosen. */
+.rotation-auto:has(#compass-follow-auto:checked) {
+  background: color-mix(in srgb, var(--c) 7%, transparent);
 }
-#rotation-help {
+.rotation-auto > .choice-row:has(input:checked) {
+  background: none;
+}
+#speed-field {
+  padding: 0 var(--space-12) var(--space-12);
+}
+/* Auto's speeds: one pill, the chosen speed lit inside it. */
+.speed-pill {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--fill);
+  border: 1px solid var(--line);
+}
+.speed-pill label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  cursor: pointer;
+}
+.speed-pill input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.speed-pill svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.speed-pill label:has(input:checked) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--c) 18%, #000);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.speed-pill label:has(input:checked) svg {
+  color: var(--c);
+}
+#speed-help {
   margin-bottom: 0;
 }
-/* Rotation pairs its modes: by hand, then with the compass. */
-.layer-toggles.rotation-modes {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Live costs a lot of battery, so that warning gets its own line. */
+#speed-help .warning {
+  display: block;
+  color: var(--danger);
 }
 #north-field {
   margin-top: var(--space-12);
