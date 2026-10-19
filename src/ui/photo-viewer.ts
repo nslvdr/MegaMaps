@@ -13,7 +13,6 @@ interface Point {
 }
 
 const MAX_SCALE = 5;
-const DOUBLE_TAP_SCALE = 2.5;
 const identity: PhotoView = { scale: 1, x: 0, y: 0 };
 
 export const clampScale = (scale: number) => Math.min(MAX_SCALE, Math.max(1, scale));
@@ -46,9 +45,9 @@ const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const middle = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 /**
- * Full-screen photos: drag or arrow keys to page, pinch, double-tap or the
- * wheel to zoom, drag to pan a zoomed photo. Every gesture follows the finger;
- * only releases animate, and touching mid-animation picks up where it is.
+ * Full-screen photos: drag or arrow keys to page, pinch or the wheel to
+ * zoom, drag to pan a zoomed photo. Every gesture follows the finger; only
+ * releases animate, and touching mid-animation picks up where it is.
  */
 export class PhotoViewer {
   private readonly stage: HTMLElement;
@@ -59,7 +58,6 @@ export class PhotoViewer {
   private drag = 0;
   private pointers = new Map<number, Point>();
   private gesture?: { view: PhotoView; drag: number; points: Point[]; pinched: boolean; moved: boolean; last: { x: number; time: number }; speed: number };
-  private lastTap?: { point: Point; time: number };
 
   constructor(private readonly dialog: HTMLDialogElement, signal: AbortSignal) {
     this.stage = dialog.querySelector(".photo-viewer-stage")!;
@@ -68,8 +66,8 @@ export class PhotoViewer {
       target.addEventListener(type, action, { signal, passive: false });
     on(this.stage, "pointerdown", (event) => this.down(event));
     on(this.stage, "pointermove", (event) => this.move(event));
-    on(this.stage, "pointerup", (event) => this.up(event, true));
-    on(this.stage, "pointercancel", (event) => this.up(event, false));
+    on(this.stage, "pointerup", (event) => this.up(event));
+    on(this.stage, "pointercancel", (event) => this.up(event));
     on(this.stage, "wheel", (event) => this.wheel(event));
     on(dialog, "close", () => this.pointers.clear());
     dialog.ownerDocument.defaultView?.addEventListener("resize", () => this.dialog.open && this.render(), { signal });
@@ -183,26 +181,13 @@ export class PhotoViewer {
     }
     this.render();
   }
-  private up(event: PointerEvent, released: boolean) {
+  private up(event: PointerEvent) {
     const gesture = this.gesture;
     if (!gesture || !this.pointers.delete(event.pointerId)) return;
     if (this.pointers.size) {
       // Lifting one finger of a pinch carries on as a pan from here.
       this.begin();
       return;
-    }
-    const point = this.point(event);
-    if (released && !gesture.moved && !gesture.pinched) {
-      const last = this.lastTap;
-      if (last && event.timeStamp - last.time < 300 && distance(point, last.point) < 30) {
-        this.lastTap = undefined;
-        const scale = this.view.scale > 1 ? 1 : DOUBLE_TAP_SCALE;
-        this.view = this.clamp(zoomAt(this.view, scale, point));
-        this.settle(true);
-        this.render();
-        return;
-      }
-      this.lastTap = { point, time: event.timeStamp };
     }
     if (this.view.scale > 1 || !this.drag) return;
     const width = this.stage.clientWidth;

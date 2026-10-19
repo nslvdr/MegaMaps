@@ -381,20 +381,23 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.ok(turnedTo(90), "Live still leaves a 1° sway alone");
     heading(93);
     assert.ok(turnedTo(93));
-    // Tap keeps the map still until a double tap turns it, instead of zooming.
+    // Tap keeps the map still until a double tap turns it.
     check("compass-follow-tap", true);
     assert.equal(el("speed-field").hidden, true, "Tap has no speed");
     assert.equal(el("north-field").hidden, false, "Tap still lines up with north");
     heading(180);
     t.mock.timers.tick(5000);
     assert.ok(turnedTo(93), "Tap never turns by itself");
-    assert.equal(controls.options().onDoubleTap?.(), true, "the double tap is used, not zoomed");
+    controls.options().onDoubleTap?.();
     assert.ok(turnedTo(180));
     check("compass-follow-auto", true);
     check("compass-speed-mid", true);
     heading(90);
     t.mock.timers.tick(1000);
-    assert.equal(controls.options().onDoubleTap?.(), false, "outside Tap, a double tap zooms");
+    assert.ok(turnedTo(90));
+    heading(200);
+    controls.options().onDoubleTap?.();
+    assert.ok(turnedTo(90), "outside Tap, a double tap does nothing");
     localStorage.removeItem("megamaps:compass-follow");
     localStorage.removeItem("megamaps:compass-speed");
     t.mock.timers.reset();

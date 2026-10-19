@@ -18,8 +18,8 @@ interface InteractionHost {
   rotationLocked?(): boolean;
   editing?(): boolean;
   tap?(point: Point): boolean;
-  /** A double tap the host used for something other than zooming in. */
-  doubleTap?(point: Point): boolean;
+  /** A double tap never zooms; only the host may use it (compass Tap). */
+  doubleTap?(point: Point): void;
   longPress?(point: Point): boolean;
   /** Whether an editable point is under this screen point (editing only). */
   grab?(point: Point): boolean;
@@ -47,7 +47,7 @@ export function attachInteractions(
     hadPinch = false,
     // Double-tap-and-drag zoom: one-handed, anchored where the finger landed.
     quickZoom: { anchor: Point; y: number; scale: number } | undefined,
-    // Two fingers tapped together zoom out, the reverse of a double tap.
+    // Two fingers tapped together zoom out.
     pairTap: { time: number; center: Point } | undefined,
     pressTimer: ReturnType<typeof setTimeout> | undefined,
     // Safari's trackpad pinch: its gesture scale counts from this camera scale.
@@ -70,17 +70,10 @@ export function attachInteractions(
     inertia = 0;
     host.stopAnimation();
   }
-  function doubleZoom(p: Point) {
+  function doubleTap(p: Point) {
     if (host.locked?.() || host.editing?.()) return;
     stop();
-    if (host.doubleTap?.(p)) return;
-    const camera = host.getCamera(),
-      { min } = host.limits();
-    const target =
-      camera.scale >= Math.max(1, min * 8)
-        ? min
-        : clampScale(camera.scale * 2.5);
-    host.animate(zoomAt(camera, target, p.x, p.y));
+    host.doubleTap?.(p);
   }
   function zoomOut(p: Point) {
     stop();
@@ -258,7 +251,7 @@ export function attachInteractions(
     if (!pointer.moved && !hadPinch && event.pointerType !== "mouse") {
       const now = performance.now();
       if (now - lastTap.time < 320 && distance(lastTap, pointer) < 32) {
-        doubleZoom(pointer);
+        doubleTap(pointer);
         lastTap.time = 0;
       } else lastTap = { ...pointer, time: now };
     }
@@ -362,9 +355,7 @@ export function attachInteractions(
     "dblclick",
     (event) => {
       event.preventDefault();
-      // Shift reverses it, as a two-finger tap does on touch.
-      if (!event.shiftKey) doubleZoom(point(event));
-      else if (!host.locked?.() && !host.editing?.()) zoomOut(point(event));
+      doubleTap(point(event));
     },
     { signal },
   );
