@@ -1548,14 +1548,12 @@ export class ViewerControls {
     this.heading = this.reading = undefined;
     this.viewer?.orient?.(undefined);
   }
-  /** In Tap, a double tap on the map turns it to the phone instead of zooming. */
+  /** In Tap, a double tap on the map turns it to the phone; otherwise it does nothing. */
   private orientOnTap() {
-    if (this.state.rotationMode !== "compass" || preference("compass-follow") !== "tap") return false;
-    if (this.reading !== undefined) {
-      this.heading = this.reading;
-      this.orient();
-    }
-    return true;
+    if (this.state.rotationMode !== "compass" || preference("compass-follow") !== "tap") return;
+    if (this.reading === undefined) return;
+    this.heading = this.reading;
+    this.orient();
   }
   /** The map's north points where the phone says north is. */
   private orient() {

@@ -53,7 +53,6 @@ function host(canvas: Canvas) {
       },
       doubleTap: () => {
         if (orienting) orients++;
-        return orienting;
       },
       longPress: () => {
         if (editing) return false;
@@ -164,21 +163,24 @@ test("double-tap and drag zooms with one finger around the tapped point", () => 
   assert.ok(Math.abs(h.camera().scale - 1 / Math.E) < 1e-6, "drag up zooms out");
   emit(canvas, "pointerup", pointer(1, 152, 50));
   assert.equal(h.animations(), 0, "a dragged double-tap is not a double-tap zoom");
-  // A plain double tap still zooms in.
-  emit(canvas, "pointerdown", pointer(1, 300, 300));
-  emit(canvas, "pointerup", pointer(1, 300, 300));
-  emit(canvas, "pointerdown", pointer(1, 300, 300));
-  emit(canvas, "pointerup", pointer(1, 300, 300));
-  assert.equal(h.animations(), 1);
-  // A double tap the host uses (turning the map) doesn't zoom; a dragged one still does.
-  h.setOrienting(true);
+  // A plain double tap or double click does nothing to the map.
   const scale = h.camera().scale;
+  emit(canvas, "pointerdown", pointer(1, 300, 300));
+  emit(canvas, "pointerup", pointer(1, 300, 300));
+  emit(canvas, "pointerdown", pointer(1, 300, 300));
+  emit(canvas, "pointerup", pointer(1, 300, 300));
+  emit(canvas, "dblclick", { clientX: 300, clientY: 300 });
+  emit(canvas, "dblclick", { clientX: 300, clientY: 300, shiftKey: true });
+  assert.equal(h.animations(), 0);
+  assert.equal(h.camera().scale, scale);
+  // The host may still use it (compass Tap turns the map); a dragged one still zooms.
+  h.setOrienting(true);
   emit(canvas, "pointerdown", pointer(1, 500, 500));
   emit(canvas, "pointerup", pointer(1, 500, 500));
   emit(canvas, "pointerdown", pointer(1, 500, 500));
   emit(canvas, "pointerup", pointer(1, 500, 500));
   assert.equal(h.orients(), 1);
-  assert.equal(h.animations(), 1);
+  assert.equal(h.animations(), 0);
   assert.equal(h.camera().scale, scale);
   emit(canvas, "pointerdown", pointer(1, 100, 600));
   emit(canvas, "pointerup", pointer(1, 100, 600));
@@ -211,17 +213,6 @@ test("a two-finger tap zooms out around its center; a pinch does not", () => {
   emit(canvas, "pointerup", pointer(1, 100, 100));
   emit(canvas, "pointerup", pointer(2, 260, 100));
   assert.equal(h.animations(), 1, "a pinch is not a tap");
-  // A single tap afterwards is still a tap, not a leftover pair.
-  emit(canvas, "pointerdown", pointer(1, 300, 300));
-  emit(canvas, "pointerup", pointer(1, 300, 300));
-  emit(canvas, "pointerdown", pointer(1, 300, 300));
-  emit(canvas, "pointerup", pointer(1, 300, 300));
-  assert.equal(h.animations(), 2, "double tap still zooms in");
-  // Shift reverses a mouse double-click the same way.
-  const zoomed = h.camera().scale;
-  emit(canvas, "dblclick", { clientX: 150, clientY: 100, shiftKey: true });
-  assert.equal(h.animations(), 3);
-  assert.ok(Math.abs(h.camera().scale - zoomed / 2.5) < 1e-9);
   h.interactions.dispose();
 });
 test("long press fires once without panning; moving or editing cancels it", async () => {
