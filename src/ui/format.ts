@@ -1,9 +1,10 @@
 import { locale, t } from "../i18n";
 import {
   dangerLevels, markerKinds, placeColor, waterLevels,
-  type DangerLevel, type MapMarker, type PlaceChange, type WaterLevel,
+  type MapMarker, type PlaceChange,
 } from "../viewer/navigation";
-import { waterColors } from "./place-icon";
+import { icons } from "./icons";
+import { placeIcon, waterColors } from "./place-icon";
 export { plural } from "../i18n";
 
 export function formatBytes(bytes: number) {
@@ -67,12 +68,19 @@ export function updatedAgo(time: number, now = Date.now()) {
 export const logDate = (time: number) =>
   new Date(time).toLocaleDateString(locale, { year: "numeric", month: "short", day: "2-digit" });
 
-/** A level as the place card shows it: its name, which step it is of how many, and its colour. */
-export interface LevelBadge { label: string; step: number; steps: number; color: string }
-export const waterBadge = (level: WaterLevel): LevelBadge =>
-  ({ label: waterLevels[level], step: level, steps: 3, color: waterColors[level] });
-export const dangerBadge = (level: DangerLevel): LevelBadge =>
-  ({ label: dangerLevels[level], step: level, steps: 2, color: placeColor({ kind: "unstable", danger: level }) });
+/** A level's steps as the edit form and the place card show them: each one's name, colour, pin, and
+ * a symbol of how deep or risky it is. */
+export interface LevelStep { level: number; label: string; color: string; icon: string; symbol: string }
+const waterSymbols = { 1: icons.ankle, 2: icons.knee, 3: icons.waist };
+const dangerSymbols = { 1: icons.moderate, 2: icons.severe };
+export const waterSteps: LevelStep[] = ([1, 2, 3] as const).map((level) => ({
+  level, label: waterLevels[level], color: waterColors[level],
+  icon: placeIcon("flooded", { water: level }), symbol: waterSymbols[level],
+}));
+export const dangerSteps: LevelStep[] = ([1, 2] as const).map((level) => ({
+  level, label: dangerLevels[level], color: placeColor({ kind: "unstable", danger: level }),
+  icon: placeIcon("unstable", { danger: level }), symbol: dangerSymbols[level],
+}));
 
 /** One change as shown in the history: the field it touched, then what it became. */
 export interface ChangeLine { field: string; from?: string; to?: string; detail?: string }

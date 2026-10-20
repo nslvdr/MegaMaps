@@ -31,8 +31,8 @@ import {
 } from "../viewer/navigation";
 import { lastUpdated, placeChanges, recordEdit } from "../viewer/place-history";
 import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
-import { icons } from "./icons";
-import { changeLine, dangerBadge, logDate, nextName, plural, updatedAgo, waterBadge, type LevelBadge } from "./format";
+import { icons, markerCalloutIcon } from "./icons";
+import { changeLine, dangerSteps, logDate, nextName, plural, updatedAgo, waterSteps, type LevelStep } from "./format";
 import { locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
@@ -577,22 +577,27 @@ export class ViewerControls {
     button.setAttribute("aria-label", label);
     button.title = label;
   }
-  /** A gauge of equal segments filled up to the level in its colour, then the level's name. */
-  private levelBadge({ label, step, steps, color }: LevelBadge) {
+  /** The level's field under its kind's symbol, then every step with its own symbol; the place's
+   * own step is filled in its colour. */
+  private levelScale(kind: "flooded" | "unstable", field: string, steps: LevelStep[], at: number) {
     const document = this.root.ownerDocument;
-    const badge = document.createElement("span");
-    badge.className = "level-badge";
-    badge.style.setProperty("--level", color);
-    const meter = document.createElement("span");
-    meter.className = "level-meter";
-    meter.setAttribute("aria-hidden", "true");
-    for (let bar = 1; bar <= steps; bar++) {
-      const fill = document.createElement("span");
-      if (bar <= step) fill.className = "on";
-      meter.append(fill);
-    }
-    badge.append(meter, label);
-    return badge;
+    const name = document.createElement("span");
+    name.className = "level-field";
+    name.innerHTML = markerCalloutIcon(kind);
+    name.append(field);
+    const scale = document.createElement("span");
+    scale.className = "level-scale";
+    scale.append(...steps.map(({ level, label, color, symbol }) => {
+      const step = document.createElement("span");
+      step.innerHTML = symbol;
+      step.append(label);
+      if (level === at) {
+        step.setAttribute("aria-current", "true");
+        step.style.setProperty("--level", color);
+      }
+      return step;
+    }));
+    return [name, scale];
   }
   /** The history as a timeline, newest first. Each entry shows its kind as an icon on the line, its
    * kind and date, then its note or a line per change. Reading ends where the place was added;
@@ -972,8 +977,8 @@ export class ViewerControls {
     const water = place?.kind === "flooded" ? place.water : undefined;
     const danger = place && dangerLevel(place);
     const levelLine = this.el("marker-detail-level");
-    levelLine.replaceChildren(...water ? [t("Water level"), this.levelBadge(waterBadge(water))]
-      : danger ? [t("Danger level"), this.levelBadge(dangerBadge(danger))] : []);
+    levelLine.replaceChildren(...water ? this.levelScale("flooded", t("Water level"), waterSteps, water)
+      : danger ? this.levelScale("unstable", t("Danger level"), dangerSteps, danger) : []);
     levelLine.hidden = !water && !danger;
     this.renderPlaceLog(place);
     // A route's length and walking time sit under its name, where a place says when it was updated.

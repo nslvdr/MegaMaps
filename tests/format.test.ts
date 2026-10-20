@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeLine, dangerBadge, lastUsed, nextName, updatedAgo, waterBadge } from "../src/ui/format";
+import { changeLine, lastUsed, nextName, updatedAgo } from "../src/ui/format";
 import type { PlaceChange } from "../src/viewer/navigation";
 
 test("cards say when a map was last opened, or added if never opened", () => {
@@ -52,6 +52,4 @@ test("an edit shows each change as its field, then what it became", () => {
     "a first level has nothing to come from");
   assert.deepEqual(water(2), { field: "Water level", detail: "removed" });
   assert.deepEqual(changeLine({ field: "danger", from: 1, to: 2 }), { field: "Danger level", from: "Moderate", to: "Severe" });
-  assert.deepEqual([waterBadge(2).label, waterBadge(2).step, waterBadge(2).steps], ["Knee", 2, 3], "a level fills its share of the meter");
-  assert.deepEqual([dangerBadge(1).label, dangerBadge(1).steps], ["Moderate", 2]);
 });
