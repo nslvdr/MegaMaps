@@ -29,10 +29,11 @@ import {
   type DangerLevel,
   type WaterLevel,
 } from "../viewer/navigation";
+import type { Trip } from "../viewer/trail";
 import { lastUpdated, placeChanges, recordEdit } from "../viewer/place-history";
 import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
 import { icons, markerCalloutIcon } from "./icons";
-import { changeLine, dangerSteps, logDate, nextName, plural, updatedAgo, waterSteps, type LevelStep } from "./format";
+import { changeLine, dangerSteps, logDate, nextName, plural, timeAgo, updatedAgo, waterSteps, type LevelStep } from "./format";
 import { locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
@@ -45,13 +46,15 @@ import {
   type OcrIndex,
 } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
-import { formatDistance, formatWalk, pathLength, travelSummary } from "../viewer/measure";
-const sheets = ["display", "rotation", "saved", "add"] as const;
+import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
+const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
 /** A day as a date input holds it, in local time. */
 const dayValue = (time: number) => {
   const date = new Date(time);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
+/** "2:05 PM": when a trip started or ended. */
+const clock = (time: number) => new Date(time).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 /** A picked day as a time: today keeps the hour, an earlier day is noon, so it reads the same day anywhere. */
 const dayTime = (day: string) => {
   if (day === dayValue(Date.now())) return Date.now();
@@ -107,7 +110,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select">>;
+    Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip">>;
   private ocr?: OcrIndex;
   private ocrMessage = t("Preparing text detection…");
   private searchMatches: MapSearchMatch[] = [];
@@ -131,6 +134,8 @@ export class ViewerControls {
   private scalePoints: Point[] = [];
   /** Undo steps for the measure or scale line: its points before each tap or drag. */
   private measureHistory: Point[][] = [];
+  /** The past trip whose summary is open. */
+  private viewingTrip?: string;
   /** The place being moved, and where it was. */
   private movingMarker?: string;
   private moveFrom?: Point;
@@ -337,16 +342,56 @@ export class ViewerControls {
     this.el("toast").hidden = this.el("toast-bar").hidden = !shown;
     if (!shown) this.toastUndo = undefined;
   }
-  /** The trail grows by one point; a mistaken one can be taken back from the toast. */
+  /** The trail grows by one point, and the first starts a trip; a mistaken one
+   * can be taken back from the toast. */
   private markTrail(point: Point) {
     const mark = { ...point, time: Date.now() };
     this.state.trail.push(mark);
     this.changed();
-    this.toast(t("Trail point added"), "done", () => {
+    this.toast(this.state.trail.length > 1 ? t("Trail point added") : t("Trip started"), "done", () => {
       this.state.trail = this.state.trail.filter((other) => other.time !== mark.time);
       this.changed();
       this.toast(t("Trail point removed"), "quiet");
     });
+  }
+  /** Ending a trip keeps it in Past trips and shows how it went. A single point
+   * never went anywhere, so it just ends. Either way it can be taken back. */
+  private endTrip() {
+    const points = this.state.trail;
+    if (!points.length) return;
+    const trip = points.length > 1 ? { id: crypto.randomUUID(), points, ended: Date.now() } : undefined;
+    this.state.trail = [];
+    if (trip) this.state.trips.push(trip);
+    this.sheet(undefined);
+    this.changed();
+    if (trip) this.showTrip(trip);
+    this.toast(t("Trip ended"), trip ? "done" : "removed", () => {
+      if (trip) this.state.trips = this.state.trips.filter((other) => other.id !== trip.id);
+      if (trip && this.viewingTrip === trip.id) this.dialog("trip-dialog").close();
+      this.state.trail = points;
+      this.changed();
+      this.toast(t("Trip restored"), "done");
+    });
+  }
+  /** A past trip, whole on the map above a card of how far and how long. */
+  private showTrip(trip: Trip) {
+    this.closePlaceDetails();
+    const card = this.dialog("trip-dialog");
+    const start = trip.points[0]!;
+    this.viewingTrip = trip.id;
+    this.el("trip-title").textContent = this.tripName(trip);
+    this.el("trip-times").textContent = `${clock(start.time)} – ${clock(trip.ended)}`;
+    const scale = this.state.metresPerPixel;
+    this.el("trip-distance").textContent = scale ? formatDistance(pathLength(trip.points) * scale) : "–";
+    this.el("trip-duration").textContent = formatMinutes(Math.round((trip.ended - start.time) / 60_000));
+    this.el("trip-points").textContent = String(trip.points.length);
+    showDialog(card, false);
+    this.viewer?.showTrip?.(trip.points);
+    this.viewer?.cover?.(card.offsetTop);
+    this.viewer?.fitPoints(trip.points);
+  }
+  private tripName(trip: Trip) {
+    return t("Trip {date}", { date: logDate(trip.points[0]!.time) });
   }
   /** Deletes stay two taps, and a few seconds to change your mind after. */
   private deleted(label: string, restore: () => void) {
@@ -377,6 +422,7 @@ export class ViewerControls {
     this.el("reset-rotation").hidden = name !== "rotation" || this.state.rotationMode === "compass";
     this.el("sheet-title-icon").innerHTML =
       name === "display" ? icons.sun
+      : name === "trail" ? icons.trail
       : name === "rotation" ? rotationModes[this.state.rotationMode].icon
       : name === "add" ? icons.add : icons.saved;
     this.el("search-close").hidden = name !== "search";
@@ -394,6 +440,8 @@ export class ViewerControls {
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
     // A hidden wheel cannot scroll, so it finds its degree once it shows.
     if (name === "rotation") this.renderRotation();
+    // How long ago is worked out as the panel opens.
+    if (name === "trail") this.renderTrail();
     this.renderTool();
   }
   /** Opens Search ready to type. */
@@ -743,6 +791,10 @@ export class ViewerControls {
   private onTap(point: Point) {
     if (!insideImage(point, this.map)) return;
     if (this.tool === "marker") this.openMarker(t("New place"), point);
+    if (this.tool === "trail") {
+      this.mode("browse");
+      this.markTrail(point);
+    }
     // Moving a place: a tap puts it there, as an alternative to dragging.
     const moving = this.movingPlace();
     if (moving) {
@@ -976,6 +1028,7 @@ export class ViewerControls {
   /** Read a saved place or route first, keeping editing behind an explicit action. */
   private showDetails(item: MapMarker | PlannedRoute) {
     this.sheet(undefined);
+    this.dialog("trip-dialog").close();
     const card = this.dialog("marker-dialog");
     const place = "label" in item ? item : undefined;
     this.viewingMarker = place?.id;
@@ -1056,10 +1109,12 @@ export class ViewerControls {
     this.cardModal = modal;
     showDialog(card, modal);
   }
-  /** Closes the place or route being read; true if there was one. */
+  /** Closes the place, route or trip being read; true if there was one. */
   private closePlaceDetails() {
+    const trip = this.dialog("trip-dialog"), wasTrip = trip.hasAttribute("open");
+    trip.close();
     const card = this.dialog("marker-dialog");
-    if (!card.hasAttribute("open") || this.cardModal) return false;
+    if (!card.hasAttribute("open") || this.cardModal) return wasTrip;
     card.close();
     return true;
   }
@@ -1146,7 +1201,7 @@ export class ViewerControls {
         this.stepSearch();
       }
     });
-    for (const sheet of ["display", "rotation", "saved"] as const)
+    for (const sheet of ["trail", "display", "rotation", "saved"] as const)
       this.click(`open-${sheet}`, () =>
         this.sheet(this.openSheet === sheet ? undefined : sheet),
       );
@@ -1279,6 +1334,17 @@ export class ViewerControls {
         });
     });
     this.click("add-marker", () => this.mode("marker"));
+    this.click("trip-start", () => this.mode("trail"));
+    this.click("trip-end", () => this.endTrip());
+    this.click("trip-close", () => this.dialog("trip-dialog").close());
+    // The trip leaves the map with its card. Closing to show another trip
+    // reopens the card before this runs, so it is left alone.
+    this.on(this.dialog("trip-dialog"), "close", () => {
+      if (this.dialog("trip-dialog").hasAttribute("open")) return;
+      this.viewingTrip = undefined;
+      this.viewer?.showTrip?.();
+      if (!this.dialog("marker-dialog").hasAttribute("open")) this.viewer?.cover?.();
+    });
     this.click("share-saved", () => this.onShare?.());
     for (const id of ["routes-order", "places-order"] as const)
       this.click(id, () => {
@@ -1439,7 +1505,7 @@ export class ViewerControls {
       this.formVersion++;
       for (const url of this.photoURLs.values()) void url.then((url) => url && URL.revokeObjectURL(url));
       this.photoURLs.clear();
-      this.viewer?.cover?.();
+      if (!this.viewingTrip) this.viewer?.cover?.();
       this.viewer?.previewPlace?.();
       this.viewer?.refreshLabels?.();
     });
@@ -1683,6 +1749,7 @@ export class ViewerControls {
         t("Drag the pin, or tap where it goes"),
       ],
       marker: [icons.pin, t("New place"), t("Tap the map where it goes")],
+      trail: [icons.here, t("Mark where you are"), t("Tap the map where you are")],
       route: [
         icons.route,
         route?.name ?? t("Route"),
@@ -1726,7 +1793,7 @@ export class ViewerControls {
     const cancelLabel = discarding ? t("Discard?") : t("Cancel");
     cancel.setAttribute("aria-label", cancelLabel);
     cancel.title = cancelLabel;
-    this.el("tool-actions").hidden = this.tool === "browse" || this.tool === "marker";
+    this.el("tool-actions").hidden = this.tool === "browse" || this.tool === "marker" || this.tool === "trail";
     this.el("route-undo").hidden = this.tool !== "route" && !measuring;
     this.el<HTMLButtonElement>("route-undo").disabled = measuring
       ? !tape.length && !this.measureHistory.length
@@ -1987,7 +2054,27 @@ export class ViewerControls {
   private deleteLabel(key: string) {
     return this.confirming === key ? t("Tap again to delete") : t("Delete");
   }
+  /** Before a trip: what it is and how to start. During one: how far it has come. */
+  private renderTrail() {
+    const trail = this.state.trail, start = trail[0], last = trail.at(-1);
+    // The chip carries a red dot, like the one on the map, while a trip is under way.
+    this.el("open-trail").classList.toggle("on-trip", !!start);
+    this.el("trip-help").hidden = this.el("trip-start").hidden = !!start;
+    this.el("trip-card").hidden = this.el("trip-end").hidden = !start;
+    this.el("trip-hint").textContent = start
+      ? t("To mark where you are, long-press the map and drag down.")
+      : t("You can also long-press the map and drag down.");
+    if (!start || !last) return;
+    const now = Date.now();
+    const started = dayValue(start.time) === dayValue(now) ? clock(start.time) : logDate(start.time);
+    this.el("trip-summary").textContent = t("Started {time} · {points}", { time: started, points: plural(trail.length, "point") });
+    const scale = this.state.metresPerPixel;
+    const marked = t("Last marked {when}", { when: timeAgo(last.time, now) });
+    this.el("trip-last").textContent = scale && trail.length > 1
+      ? `${formatDistance(pathLength(trail) * scale)} · ${marked}` : marked;
+  }
   private render() {
+    this.renderTrail();
     this.renderRotation();
     this.input("dark-map").checked = this.state.inverted;
     for (const level of BRIGHTNESS_LEVELS)
@@ -2102,10 +2189,41 @@ export class ViewerControls {
         ],
       });
     }
+    const trips = this.el("trip-list");
+    trips.replaceChildren();
+    this.el("trip-history-count").textContent = String(this.state.trips.length);
+    // Newest first: the trip just ended is the one most likely looked for.
+    for (const trip of [...this.state.trips].reverse()) {
+      const scale = this.state.metresPerPixel;
+      const minutes = Math.round((trip.ended - trip.points[0]!.time) / 60_000);
+      this.row(trips, {
+        key: trip.id,
+        label: this.tripName(trip),
+        meta: [clock(trip.points[0]!.time),
+          scale ? formatDistance(pathLength(trip.points) * scale) : plural(trip.points.length, "point"),
+          formatMinutes(minutes)].join(" · "),
+        icon: icons.trail,
+        jump: () => this.showTrip(trip),
+        actions: [{
+          label: this.deleteLabel(trip.id),
+          icon: icons.trash,
+          danger: true,
+          action: this.confirmDelete(trip.id, () => {
+            this.rowMenu = undefined;
+            const index = this.state.trips.indexOf(trip);
+            this.state.trips = this.state.trips.filter((other) => other.id !== trip.id);
+            if (this.viewingTrip === trip.id) this.dialog("trip-dialog").close();
+            this.changed();
+            this.deleted(this.tripName(trip), () => this.state.trips.splice(index, 0, trip));
+          }),
+        }],
+      });
+    }
     // Empty lists keep a short status message.
     for (const [container, empty] of [
       [markers, t("No places yet.")],
       [routes, t("No routes yet.")],
+      [trips, t("No trips yet.")],
     ] as const)
       if (!container.childElementCount) {
         const item = document.createElement("li");

@@ -56,7 +56,8 @@ const dangerPicks = dangerSteps
   .join("");
 
 // Map-first layout: almost nothing floats over the map.
-//   top corners   – Back on the left; Rotation and View on the right, both panels
+//   top corners   – Back on the left; Trail, Measure, Rotation and View on the
+//                   right; all but Measure open panels
 //   bottom pill   – Saved · Search · Add; Saved and Add open panels like View.
 //                   Placing, drawing or moving swaps the pill for a task card
 //                   with the same header (icon, title, X) and full-size actions
@@ -65,6 +66,7 @@ export const viewerMarkup = `
 <div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="${t("Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press, then drag up to add a place or down to mark where you are.")}"></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg><div id="hold-wheel" class="hold-wheel" aria-hidden="true" hidden>${holdArcs}<span class="hold-place">${icons.pin}</span><span class="hold-trail">${icons.trail}</span></div></div>
 <button class="glass corner-button corner-left" id="back" aria-label="${t("Back to library")}" title="${t("Back to library")}">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="${t("Map view controls")}">
+  <button id="open-trail" class="glass status-chip" data-sheet="trail" aria-label="${t("Trail")}" title="${t("Trail")}" aria-controls="sheet" aria-expanded="false">${icons.trail}</button>
   <button id="open-measure" class="glass status-chip" aria-label="${t("Measure")}" title="${t("Measure")}" aria-pressed="false">${icons.measure}</button>
   <button id="open-rotation" class="glass status-chip" data-sheet="rotation" aria-label="${t("Rotation")}" title="${t("Rotation")}" aria-controls="sheet" aria-expanded="false">${icons.rotationLock}</button>
   <button id="open-display" class="glass status-chip" data-sheet="display" aria-label="${t("View settings")}" title="${t("View settings")}" aria-controls="sheet" aria-expanded="false">${icons.sun}</button>
@@ -121,6 +123,17 @@ export const viewerMarkup = `
         <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
       </div>
     </div>
+    <div id="sheet-trail" data-panel="trail" data-title="${t("Trail")}" hidden>
+      <p id="trip-help" class="field-help">${t("Mark where you are as you walk, and see the way you came. Your trail stays on this device.")}</p>
+      <div id="trip-card" class="panel-card" hidden>
+        <div class="panel-row">${rowIcon(icons.trail)}<span class="row-text"><strong id="trip-summary"></strong><small id="trip-last"></small></span></div>
+      </div>
+      <button id="trip-start" class="panel-action">${icons.here}<span>${t("Start trip")}</span></button>
+      <button id="trip-end" class="panel-action" hidden>${icons.tripEnd}<span>${t("End trip")}</span></button>
+      <p id="trip-hint" class="field-help"></p>
+      <h3 id="trip-history-title" class="section-title trips">${icons.history}<span>${t("Past trips")}</span><small id="trip-history-count"></small></h3>
+      <ul id="trip-list" class="navigation-list" aria-labelledby="trip-history-title"></ul>
+    </div>
     <div id="sheet-saved" data-panel="saved" data-title="${t("Saved")}" hidden>
       <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>${t("Routes")}</span><small id="saved-routes-count"></small><button id="routes-order" class="section-menu" aria-label="${t("Order routes")}" aria-haspopup="menu" aria-expanded="false">${icons.filter}</button></h3>
       <ul id="route-list" class="navigation-list" aria-labelledby="saved-routes-title"></ul>
@@ -148,6 +161,14 @@ export const viewerMarkup = `
   </div>
   <span class="place-more" aria-hidden="true">${icons.chevronDown}</span>
   <form id="marker-form"><div id="marker-kinds" class="kind-field"><span id="marker-kind-title">${t("Icon and type")}</span><button type="button" id="marker-kind-toggle" class="kind-toggle" aria-haspopup="dialog" aria-controls="kind-dialog" aria-labelledby="marker-kind-title marker-kind-current"><span id="marker-kind-current" class="kind-current"></span><span class="kind-change">${t("Change")}${icons.arrow}</span></button></div><div id="marker-water" class="level-picker" role="group" aria-labelledby="marker-water-title" hidden><span id="marker-water-title">${t("Water level")}</span><div class="level-steps">${waterPicks}</div></div><div id="marker-danger" class="level-picker" role="group" aria-labelledby="marker-danger-title" hidden><span id="marker-danger-title">${t("Danger level")}</span><div class="level-steps">${dangerPicks}</div></div><label class="place-name"><span>${t("Name")}</span><input id="marker-label" required maxlength="100" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next"></label><label class="place-description"><span>${t("Description")}</span><textarea id="marker-description" maxlength="2000" rows="3"></textarea></label><div id="marker-log-field" class="place-photos-field" hidden><span id="marker-log-title">${t("History")}</span><ol id="marker-log-edit" class="place-log-list" aria-labelledby="marker-log-title"></ol></div><div id="marker-photos-field" class="place-photos-field"><span id="marker-photos-title">${t("Photos")}</span><ul id="marker-photo-list" class="photo-thumbs" aria-labelledby="marker-photos-title"><li><button type="button" id="marker-add-photos" class="photo-add" aria-label="${t("Add photos")}" title="${t("Add photos")}">${icons.plus}</button></li></ul></div><input type="file" id="marker-photo-input" accept="image/*" multiple hidden><div class="dialog-actions"><button type="button" id="marker-delete" class="quiet danger" hidden>${icons.trash}<span>${t("Delete")}</span></button><button type="button" id="marker-move" class="quiet" hidden>${icons.move}<span>${t("Move")}</span></button><button type="button" id="route-points" class="quiet" hidden>${icons.route}<span>${t("Edit points")}</span></button></div><div class="place-save"><button type="submit" id="marker-save" class="primary">${icons.check}<span>${t("Save")}</span></button></div></form>
+</dialog>
+<dialog id="trip-dialog" class="place-card trip-card" data-mode="view" aria-labelledby="trip-title">
+  <div class="dialog-header"><span class="dialog-title-icon" aria-hidden="true">${icons.trail}</span><div class="place-heading"><h2 id="trip-title"></h2><p id="trip-times" class="place-updated"></p></div><button type="button" id="trip-close" class="dialog-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></div>
+  <dl class="trip-stats">
+    <div><dt>${t("Distance")}</dt><dd id="trip-distance"></dd></div>
+    <div><dt>${t("Time")}</dt><dd id="trip-duration"></dd></div>
+    <div><dt>${t("Points")}</dt><dd id="trip-points"></dd></div>
+  </dl>
 </dialog>
 <dialog id="kind-dialog" class="kind-dialog" aria-labelledby="kind-title">${dialogHeader("kind-title", t("Icon and type"), icons.pin, "kind-close")}<div class="kind-picker" role="radiogroup" aria-labelledby="kind-title">${kindPicks}</div></dialog>
 <dialog id="photo-viewer" class="photo-viewer" aria-label="${t("Photos")}"><div class="photo-viewer-stage"><div class="photo-viewer-track"></div></div><button type="button" id="photo-viewer-close" class="dialog-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></dialog>

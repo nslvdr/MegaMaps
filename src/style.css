@@ -11,6 +11,7 @@
   --neon-add: #b6ff3b;
   --neon-lock: #ff9a3c;
   --neon-measure: #fff04d;
+  --neon-trail: #ff2a2a;
   --kind-route: #38d6ff;
   --kind-place: #ff9a5c;
   /* Shared type scale across the library, dialogs, and viewer. */
@@ -1936,6 +1937,28 @@ button.glass:active:not(:disabled) {
 .measure-dialog {
   --accent: var(--neon-measure);
 }
+/* Trail, like the dot that marks where you are, is red. While a trip is under
+   way its chip carries that dot. */
+#open-trail,
+.sheet[data-panel="trail"],
+[data-tool="trail"] .tool-bar,
+.trip-card {
+  --c: var(--neon-trail);
+}
+#open-trail {
+  position: relative;
+}
+#open-trail.on-trip::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-round);
+  background: var(--neon-trail);
+  box-shadow: 0 0 0 2px #000;
+}
 /* Rotation always has a mode, so like View it only lights up while open. */
 #open-rotation,
 .sheet[data-panel="rotation"] {
@@ -2450,6 +2473,32 @@ dialog.place-card::backdrop {
   color: var(--muted);
   font-size: var(--font-size-small);
 }
+/* A finished trip at a glance: three figures side by side under its day. */
+.trip-stats {
+  display: grid;
+  /* A count needs less room than a distance or a time. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  margin: var(--space-16) 0 0;
+}
+.trip-stats > div {
+  padding: var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--fill);
+  border: 1px solid var(--line);
+}
+.trip-stats dt {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+.trip-stats dd {
+  margin: var(--space-4) 0 0;
+  color: var(--c);
+  font-size: var(--font-size-heading);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* The history, newest first, under the description. */
 /* Spaced from what's shown above it, but not from the top of the details. */
 .place-log {
@@ -2677,7 +2726,7 @@ dialog.place-card::backdrop {
   color: var(--c);
 }
 /* View and Rotation open below their corner buttons; Saved keeps its bottom sheet. */
-.sheet:is([data-panel="display"], [data-panel="rotation"]) {
+.sheet:is([data-panel="trail"], [data-panel="display"], [data-panel="rotation"]) {
   top: calc(var(--hud-top) + 52px);
   bottom: auto;
   left: var(--edge-l);
@@ -3109,6 +3158,10 @@ label.panel-row {
 .section-title.places {
   --k: var(--kind-place);
 }
+#trip-list,
+.section-title.trips {
+  --k: var(--neon-trail);
+}
 .navigation-list {
   margin: 0;
   padding: 0;
@@ -3120,7 +3173,7 @@ label.panel-row {
 .navigation-row + .navigation-row {
   border-top: 1px solid color-mix(in srgb, var(--k) 14%, transparent);
 }
-.sheet[data-panel="saved"] .section-title {
+.sheet:is([data-panel="saved"], [data-panel="trail"]) .section-title {
   margin: var(--space-20) 0 var(--space-8);
   font-size: var(--font-size-small);
   font-weight: 600;
@@ -3462,17 +3515,14 @@ label.panel-row {
 .trail-dot {
   opacity: 0.4;
 }
-.trail-here {
-  --here: #ff2a2a;
-}
 .trail-mark {
-  fill: var(--here);
+  fill: var(--neon-trail);
   stroke: #000;
   stroke-width: 2.5;
 }
 .trail-pulse {
   fill: none;
-  stroke: var(--here);
+  stroke: var(--neon-trail);
   stroke-width: 2.5;
   opacity: 0;
   transform-box: fill-box;
@@ -3502,7 +3552,7 @@ label.panel-row {
    the finger is dragged into glows in its colour. */
 .hold-wheel {
   --place: var(--neon-add);
-  --trail: #fff;
+  --trail: var(--neon-trail);
   --off: #3a3e46;
   position: absolute;
   width: 172px;

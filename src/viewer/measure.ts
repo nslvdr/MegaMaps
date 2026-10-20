@@ -20,8 +20,11 @@ export function formatDistance(metres: number) {
 }
 
 /** "< 1 min", "6 min", "1 h 03" at the walking speed set in Settings. */
-export function formatWalk(metres: number) {
-  const minutes = Math.round((metres / 1000 / Number(preference("walking-speed"))) * 60);
+export const formatWalk = (metres: number) =>
+  formatMinutes(Math.round((metres / 1000 / Number(preference("walking-speed"))) * 60));
+
+/** "< 1 min", "6 min", "1 h 03". */
+export function formatMinutes(minutes: number) {
   if (minutes < 1) return t("< 1 min");
   if (minutes < 60) return t("{minutes} min", { minutes });
   return t("{hours} h {minutes}", { hours: Math.floor(minutes / 60), minutes: String(minutes % 60).padStart(2, "0") });

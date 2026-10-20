@@ -340,6 +340,11 @@ export class Viewer {
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
     this.invalidate();
   }
+  /** A finished trip, drawn over the map while its summary is open. */
+  showTrip(points?: Point[]) {
+    this.overlay?.setTrip(points);
+    this.invalidate();
+  }
   pulse(id: string) {
     this.overlay?.setFound(id);
     this.invalidate();

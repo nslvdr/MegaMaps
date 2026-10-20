@@ -1,25 +1,14 @@
 import type { Point } from "./camera";
 
-/** Where the user said they were, and when. */
+/** Where the user said they were, and when. The trail is the trip under way: it
+ * starts with its first point and ends when the user ends it. */
 export interface TrailPoint extends Point {
   time: number;
 }
-/** A gap this long between two points starts a new trail: another trip. */
-export const TRAIL_GAP_MS = 6 * 60 * 60 * 1000;
 /** The last point pulses for a while, then slower, then rests: an old position is a guess. */
 const FRESH_MS = 15 * 60 * 1000;
 const AGING_MS = 60 * 60 * 1000;
 export type TrailAge = "fresh" | "aging" | "old";
-
-/** The points as separate trips, each drawn as its own line. */
-export function trailSegments(trail: readonly TrailPoint[]) {
-  const segments: TrailPoint[][] = [];
-  for (const [i, point] of trail.entries()) {
-    if (!i || point.time - trail[i - 1]!.time >= TRAIL_GAP_MS) segments.push([]);
-    segments.at(-1)!.push(point);
-  }
-  return segments;
-}
 
 export const trailAge = (time: number, now: number): TrailAge =>
   now - time < FRESH_MS ? "fresh" : now - time < AGING_MS ? "aging" : "old";
@@ -34,3 +23,16 @@ export function trailAgeChange(time: number, now: number) {
 export const isTrailPoint = (value: unknown): value is TrailPoint =>
   typeof value === "object" && value !== null &&
   ["x", "y", "time"].every((key) => Number.isFinite((value as Record<string, unknown>)[key]));
+
+/** A finished trip, kept to look back on: every point marked, and when it ended. */
+export interface Trip {
+  id: string;
+  points: TrailPoint[];
+  ended: number;
+}
+export const isTrip = (value: unknown): value is Trip => {
+  if (typeof value !== "object" || value === null) return false;
+  const { id, points, ended } = value as Record<string, unknown>;
+  return typeof id === "string" && Number.isFinite(ended) &&
+    Array.isArray(points) && points.length > 1 && points.every(isTrailPoint);
+};

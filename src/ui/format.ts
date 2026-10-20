@@ -64,6 +64,16 @@ export function updatedAgo(time: number, now = Date.now()) {
   return t("Updated {when}", { when });
 }
 
+/** "just now", "12 minutes ago", "3 hours ago", "yesterday": how long since a trail point. */
+export function timeAgo(time: number, now = Date.now()) {
+  const minutes = Math.max(0, Math.round((now - time) / 60_000));
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  return minutes < 1 ? t("just now")
+    : minutes < 60 ? relative.format(-minutes, "minute")
+    : minutes < 48 * 60 ? relative.format(-Math.round(minutes / 60), "hour")
+    : relative.format(-Math.round(minutes / 1440), "day");
+}
+
 /** A log entry's day, with its year: logs reach back further than this year. */
 export const logDate = (time: number) =>
   new Date(time).toLocaleDateString(locale, { year: "numeric", month: "short", day: "2-digit" });
