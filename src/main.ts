@@ -221,7 +221,7 @@ const sharing = initSharing(app, {
     else if (destination.mode === "replace")
       showMessage(t("Share imported"), t("{removed} removed · {added} added.", { removed: plural(result.removed ?? 0, "item"), added: plural(result.added, "shared item") }));
     else if (result.updated)
-      showMessage(t("Share imported"), t("{added} added · {updated} with newer visits · {skipped} already imported and skipped.\nYour existing annotations and local edits were kept.", { added: plural(result.added, "item"), updated: plural(result.updated, "place"), skipped: result.skipped }));
+      showMessage(t("Share imported"), t("{added} added · {updated} with new history · {skipped} already imported and skipped.\nYour existing annotations and local edits were kept.", { added: plural(result.added, "item"), updated: plural(result.updated, "place"), skipped: result.skipped }));
     else showMessage(t("Share imported"), t("{added} added · {skipped} already imported and skipped.\nYour existing annotations and local edits were kept.", { added: plural(result.added, "item"), skipped: result.skipped }));
   },
 });

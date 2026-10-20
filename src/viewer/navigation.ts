@@ -19,22 +19,34 @@ export interface MapMarker {
   /** How dangerous a danger place is; without one it reads as high. */
   danger?: DangerLevel;
   created: number;
-  /** When someone last confirmed the place; absent means since it was created. */
-  lastSeen?: number;
-  /** When last seen was set; the later change wins a merge, so it can be corrected to an earlier day. */
-  seenAt?: number;
-  /** Dated notes on how the place has changed, in the order they were added. */
+  /** Visits, notes and edits, in the order they were added. */
   log?: PlaceLogEntry[];
   /** IDs of log entries deleted here, so a merge can't bring them back. Never shared. */
   deletedLog?: string[];
 }
+/** What one edit changed; names, types and levels keep both sides so history reads "A → B". */
+export type PlaceChange =
+  | { field: "name"; from: string; to: string }
+  | { field: "kind"; from: MapMarker["kind"]; to: MapMarker["kind"] }
+  | { field: "water"; from?: WaterLevel; to?: WaterLevel }
+  | { field: "danger"; from: DangerLevel; to: DangerLevel }
+  | { field: "description" }
+  | { field: "photos"; added: string[]; removed: string[] }
+  | { field: "point" };
+/** A note, an edit's changes, or neither: a visit. */
 export interface PlaceLogEntry {
   id: string;
   /** The day of the visit, as a timestamp; it can be earlier than when it was written. */
   date: number;
-  text: string;
+  text?: string;
+  changes?: PlaceChange[];
 }
-export const lastSeen = (marker: MapMarker) => marker.lastSeen ?? marker.created;
+/** Saves and shares from before 2026-10-20 kept a last seen date beside the log. It becomes
+ * a visit unless an entry already reaches that day; its ID is its date, so copies agree. */
+export function visitFromLastSeen(log: PlaceLogEntry[] | undefined, created: number, lastSeen?: number) {
+  if (!lastSeen || lastSeen <= created || log?.some((entry) => entry.date >= lastSeen)) return log;
+  return [...log ?? [], { id: `seen-${lastSeen}`, date: lastSeen }];
+}
 /** Saved by older versions; now loaded as places. */
 interface LegacyCheckpoint {
   id: string;
@@ -130,10 +142,13 @@ const retiredKindMoves: Partial<Record<(typeof legacyMarkerKinds)[number], MapMa
   "new-room": "room",
 };
 // Places saved before descriptions had a plain-text `note` instead.
+// Places saved before the unified history had last seen dates.
 type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
   kind: MapMarker["kind"] | (typeof legacyMarkerKinds)[number];
   description?: string;
   note?: string;
+  lastSeen?: number;
+  seenAt?: number;
 };
 type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
   mapId: string;
@@ -158,11 +173,15 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
     if (typeof stored.layers?.[name] === "boolean")
       layers[name] = stored.layers[name];
   const markers = [
-    ...(stored.markers ?? []).map(({ note, ...marker }): MapMarker => ({
-      ...marker,
-      description: marker.description ?? note ?? "",
-      kind: normalizeMarkerKind(marker.kind),
-    })),
+    ...(stored.markers ?? []).map(({ note, lastSeen, seenAt, ...marker }): MapMarker => {
+      const log = visitFromLastSeen(marker.log, marker.created, lastSeen);
+      return {
+        ...marker,
+        description: marker.description ?? note ?? "",
+        kind: normalizeMarkerKind(marker.kind),
+        ...(log ? { log } : {}),
+      };
+    }),
     ...(stored.checkpoints ?? []).map(
       (checkpoint): MapMarker => ({
         id: checkpoint.id,

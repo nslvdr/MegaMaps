@@ -1417,6 +1417,9 @@ dialog textarea {
   max-height: calc(10lh + 2 * var(--space-12) + 2px);
   resize: none;
 }
+dialog textarea::placeholder {
+  color: var(--muted);
+}
 /* iOS sizes native date inputs to their own content, ignoring width: 100%. */
 dialog input[type="date"] {
   -webkit-appearance: none;
@@ -2391,58 +2394,47 @@ dialog.place-card::backdrop {
   border-color: var(--level);
   background: color-mix(in srgb, var(--level) 12%, transparent);
 }
+/* "Water level ▬▬▭ Knee": the field muted, a gauge in the level's colour, then its name. */
 .place-detail-level {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
   margin: 0 0 var(--space-12);
-  color: var(--c);
-  font-weight: 600;
+  color: var(--muted);
 }
-/* How fresh the place is sits under its title, with a quick "Seen today?". */
+/* Equal segments filled up to the level: deeper or riskier fills more. */
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.level-meter {
+  display: inline-flex;
+  gap: 3px;
+}
+.level-meter span {
+  width: 16px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+.level-meter .on {
+  background: var(--level);
+}
+/* How fresh the place is sits under its title. */
 .place-heading {
   flex: 1;
   min-width: 0;
 }
-.place-seen {
+.place-updated {
   margin: var(--space-4) 0 0;
   color: var(--muted);
   font-size: var(--font-size-small);
 }
-/* Seen today? as a tinted bar under the header, until answered. */
-.seen-ask {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  margin-top: var(--space-16);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-.seen-ask > span {
-  flex: 1;
-  min-width: 0;
-}
-.seen-ask button {
-  min-height: 40px;
-  padding: 0 var(--space-12);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-small);
-}
-.seen-ask .quiet {
-  border-color: transparent;
-  background: none;
-  color: var(--muted);
-}
-.seen-ask .primary,
-.seen-ask .primary:is(:hover, :active):not(:disabled) {
-  background: var(--accent);
-  color: #1a0a00;
-}
-.seen-ask svg {
-  width: 18px;
-  height: 18px;
-}
-/* The journal, newest first, under the description. */
+/* The history, newest first, under the description. */
 /* Spaced from what's shown above it, but not from the top of the details. */
 .place-log {
   margin-top: 0;
@@ -2455,72 +2447,100 @@ dialog.place-card::backdrop {
   color: var(--muted);
   font-size: var(--font-size-small);
 }
-/* A timeline: the newest visit is a filled dot, older ones hollow, joined by a line. */
+/* A timeline: each entry's kind is an icon on the line, tinted for notes and edits and
+   quiet for visits and when the place was added; its kind and date head the entry. */
 .place-log-list {
   margin: var(--space-8) 0 0;
   padding: 0;
   list-style: none;
 }
-.place-log-list li {
+.place-log-list > li {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 28px 1fr auto;
   align-items: start;
-  column-gap: var(--space-8);
-  padding: 0 0 var(--space-8) var(--space-20);
+  column-gap: var(--space-12);
+  padding-bottom: var(--space-12);
   line-height: 1.35;
 }
-.place-log-list li:last-child {
+.place-log-list > li:last-child {
   padding-bottom: 0;
 }
-.place-log-list li::before {
+.place-log-list > li:not(:last-child)::after {
   content: "";
   position: absolute;
-  top: 5px;
-  left: 0;
-  width: 9px;
-  height: 9px;
-  box-sizing: border-box;
-  border: 2px solid var(--c);
-  border-radius: var(--radius-round);
-  background: var(--bg);
-}
-.place-log-list li:first-child::before {
-  background: var(--c);
-}
-.place-log-list li:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  /* From just under this dot to just above the next one. */
-  top: 17px;
-  bottom: -2px;
-  left: 4px;
+  /* From just under this icon to just above the next one. */
+  top: 30px;
+  bottom: 2px;
+  left: 13.5px;
   width: 1px;
-  background: color-mix(in srgb, var(--c) 45%, transparent);
+  background: color-mix(in srgb, var(--c) 40%, transparent);
 }
-/* Each entry is one line: its full date, then the note. */
-.place-log-list time {
+.log-node {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
+}
+:is([data-kind="visit"], [data-kind="added"]) > .log-node {
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  color: var(--muted);
+}
+.log-node svg {
+  width: 16px;
+  height: 16px;
+}
+.log-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin: 0;
+  padding-top: var(--space-4);
   color: var(--muted);
   font-size: var(--font-size-small);
 }
-.place-log-list time::after {
-  content: " · ";
-}
-.place-log-list p {
-  margin: 0;
+.log-head strong {
   color: var(--text);
-  font-size: var(--font-size-body);
+}
+.log-text {
+  margin: var(--space-4) 0 0;
+  color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* An edit: a line per change, the field muted before what it became. */
+.log-changes {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.log-changes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-4);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.log-changes span {
+  margin-right: var(--space-4);
+  color: var(--muted);
+}
+.log-changes svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
 .log-remove {
-  grid-column: 2;
-  grid-row: 1 / span 2;
   display: grid;
   place-items: center;
   width: 36px;
   height: 36px;
-  margin: -6px -6px 0 0;
+  margin: -4px -6px 0 0;
   padding: 0;
   background: none;
   color: var(--muted);

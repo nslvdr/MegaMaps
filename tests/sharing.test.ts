@@ -25,7 +25,7 @@ function image(width = 512, height = 256, salt = "original") {
 }
 async function fixture() {
   const original = image();
-  const manifest: ShareManifest = { format: "megamap", version: 4,
+  const manifest: ShareManifest = { format: "megamap", version: 5,
     map: { name: "Survey <2026>", width: 512, height: 256, fingerprint: await fingerprint(original) },
     markers: [{ id: "place-a", label: "Entrance <west>", description: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
     routes: [{ id: "route-a", name: "Way out", points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], draft: false, created: 2 }] };
@@ -106,7 +106,7 @@ test("place photos travel with their place, and version 1 notes arrive as descri
   const { description, ...place } = manifest.markers[0]!;
   const legacy = await readShare(rawFile({ ...manifest, version: 1, markers: [{ ...place, note: description }] }));
   assert.equal(legacy.manifest.markers[0]!.description, description);
-  assert.equal(legacy.manifest.version, 4, "older shares re-export in the current format");
+  assert.equal(legacy.manifest.version, 5, "older shares re-export in the current format");
 
   const encoded = (value: unknown, tail: Blob) => readShare(rawFile(value, tail));
   const bytes = new Blob(["first jpeg", "second"]);
@@ -249,7 +249,7 @@ test("route descriptions and ordered photos survive sharing, import and pruning"
   const { manifest } = await fixture();
   const legacy = await readShare(rawFile({ ...manifest, version: 2 }));
   assert.deepEqual(legacy.manifest.routes, manifest.routes, "version 2 routes remain readable");
-  assert.equal(legacy.manifest.version, 4);
+  assert.equal(legacy.manifest.version, 5);
 });
 
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
@@ -280,7 +280,7 @@ test("import routing recognizes the shared header regardless of filename or MIME
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
   const { manifest, original } = await fixture();
   await assert.rejects(readShare(new Blob(["not a MegaMaps file"])), /exported by MegaMaps/);
-  await assert.rejects(readShare(rawFile({ ...manifest, version: 5 })), /not supported/);
+  await assert.rejects(readShare(rawFile({ ...manifest, version: 6 })), /not supported/);
   await assert.rejects(readShare(rawFile({ ...manifest, map: { ...manifest.map, width: 0 } })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], point: { x: 513, y: 2 } }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], kind: "__proto__" }] })), /invalid/);
@@ -317,55 +317,59 @@ test("repeat imports preserve edits and deleted items while later shares add new
   assert.equal(state.markers.length, 1, "merging does not mutate the original snapshot");
 });
 
-test("last seen and log entries travel in shares; older files fall back to the creation date", async () => {
+test("history travels in shares; an older file's last seen becomes a visit", async () => {
   const { manifest } = await fixture();
-  const place = { ...manifest.markers[0]!, lastSeen: 50, seenAt: 60,
-    log: [{ id: "visit", date: 40, text: "Water to the knees" }], deletedLog: ["gone"] };
+  const place = { ...manifest.markers[0]!, deletedLog: ["gone"], log: [
+    { id: "note", date: 40, text: "Water to the knees" }, { id: "visit", date: 45 },
+    { id: "edit", date: 50, changes: [{ field: "name" as const, from: "Old", to: "New" },
+      { field: "water" as const, to: 2 as const }, { field: "photos" as const, added: ["p"], removed: [] }, { field: "point" as const }] },
+  ] };
   const decoded = await readShare(encodeShare({ ...manifest, markers: [place] }));
   const { deletedLog, ...shared } = place;
   assert.deepEqual(decoded.manifest.markers[0], shared, "deleted entry IDs stay on this device");
-  const older = await readShare(rawFile({ ...manifest, version: 3 }));
-  assert.equal(older.manifest.markers[0]!.lastSeen, undefined);
-  const invalid = (marker: object) => readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], ...marker }] }));
-  await assert.rejects(invalid({ lastSeen: -1 }), /invalid/);
-  await assert.rejects(invalid({ seenAt: "yesterday" }), /invalid/);
-  await assert.rejects(invalid({ log: [{ id: "a", date: 1, text: " " }] }), /invalid/, "an entry says something");
+  const older = await readShare(rawFile({ ...manifest, version: 4, markers: [{ ...manifest.markers[0], created: 10,
+    lastSeen: 60, seenAt: 70, log: [{ id: "note", date: 40, text: "Dry" }] }] }));
+  assert.deepEqual(older.manifest.markers[0]!.log, [{ id: "note", date: 40, text: "Dry" }, { id: "seen-60", date: 60 }]);
+  const invalid = (marker: object, version = 5) =>
+    readShare(rawFile({ ...manifest, version, markers: [{ ...manifest.markers[0], ...marker }] }));
+  await assert.rejects(invalid({ lastSeen: 60 }), /invalid/, "version 5 has no last seen");
+  await assert.rejects(invalid({ lastSeen: -1 }, 4), /invalid/);
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, text: " " }] }), /invalid/, "a note says something");
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1 }] }, 4), /invalid/, "version 4 entries are all notes");
   await assert.rejects(invalid({ log: [{ id: "a", date: 1, text: "x" }, { id: "a", date: 2, text: "y" }] }), /invalid/);
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, changes: [] }] }), /invalid/, "an edit changed something");
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, changes: [{ field: "colour" }] }] }), /invalid/);
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, changes: [{ field: "kind", from: "room", to: "<b>" }] }] }), /invalid/);
+  await assert.rejects(invalid({ log: [{ id: "a", date: 1, changes: [{ field: "water", to: 4 }] }] }), /invalid/);
 });
 
-test("merging a place already here keeps local text and adds newer visits and log entries", async () => {
+test("merging a place already here keeps local text and adds history it doesn't have", async () => {
   const { manifest } = await fixture();
   const state = defaultNavigation("map");
-  state.markers = [{ ...manifest.markers[0]!, label: "My name", lastSeen: 100,
-    log: [{ id: "mine", date: 90, text: "Dry" }, { id: "both", date: 80, text: "Shared" }], deletedLog: ["removed"] }];
-  const theirs = { ...manifest, markers: [{ ...manifest.markers[0]!, label: "Their name", lastSeen: 200,
-    log: [{ id: "both", date: 80, text: "Shared" }, { id: "theirs", date: 200, text: "Ceiling down" },
+  state.markers = [{ ...manifest.markers[0]!, label: "My name",
+    log: [{ id: "mine", date: 90, text: "Dry" }, { id: "both", date: 80 }], deletedLog: ["removed"] }];
+  const theirs = { ...manifest, markers: [{ ...manifest.markers[0]!, label: "Their name",
+    log: [{ id: "both", date: 80 }, { id: "theirs", date: 200, changes: [{ field: "point" as const }] },
       { id: "removed", date: 70, text: "Deleted here" }] }] };
   const merged = mergeAnnotations(state, theirs);
   const place = merged.state.markers[0]!;
   assert.equal(place.label, "My name");
-  assert.equal(place.lastSeen, 200);
   assert.deepEqual(place.log!.map((entry) => entry.id), ["mine", "both", "theirs"], "an entry deleted here stays deleted");
   assert.deepEqual([merged.added, merged.updated, merged.skipped], [1, 1, 0]);
 
-  const again = mergeAnnotations(merged.state, { ...theirs, markers: [{ ...theirs.markers[0]!, lastSeen: 10 }] });
-  assert.equal(again.state.markers[0], place, "an older visit changes nothing");
+  const again = mergeAnnotations(merged.state, theirs);
+  assert.equal(again.state.markers[0], place, "history already here changes nothing");
   assert.deepEqual([again.updated, again.skipped], [0, 2]);
 });
 
-test("visits and log entries made in another window survive a stale save", () => {
+test("history made in another window survives a stale save", () => {
   const stored = defaultNavigation("map");
   stored.markers = [{ id: "p", label: "P", description: "", kind: "landmark", point: { x: 1, y: 1 }, created: 1,
-    lastSeen: 300, log: [{ id: "other", date: 300, text: "From the other window" }] }];
+    log: [{ id: "other", date: 300 }, { id: "gone", date: 200, text: "Removed here" }] }];
   const next = defaultNavigation("map");
-  next.markers = [{ ...stored.markers[0]!, lastSeen: 100, log: [{ id: "here", date: 100, text: "Here" }],
-    deletedLog: ["other"] }];
+  next.markers = [{ ...stored.markers[0]!, log: [{ id: "here", date: 100, text: "Here" }], deletedLog: ["gone"] }];
   const saved = preserveUnseenImports(next, stored).markers[0]!;
-  assert.equal(saved.lastSeen, 300);
-  const corrected = preserveUnseenImports({ ...next, markers: [{ ...next.markers[0]!, seenAt: 400 }] },
-    { ...stored, markers: [{ ...stored.markers[0]!, seenAt: 350 }] }).markers[0]!;
-  assert.equal(corrected.lastSeen, 100, "a later correction to an earlier day sticks");
-  assert.deepEqual(saved.log!.map((entry) => entry.id), ["here"], "a deletion here wins over the stale copy");
+  assert.deepEqual(saved.log!.map((entry) => entry.id), ["here", "other"], "a deletion here wins over the stale copy");
 });
 
 test("matching hashes originals rather than trusting filenames or dimensions; export selections stay independent", async () => {

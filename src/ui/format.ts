@@ -1,4 +1,9 @@
 import { locale, t } from "../i18n";
+import {
+  dangerLevels, markerKinds, placeColor, waterLevels,
+  type DangerLevel, type MapMarker, type PlaceChange, type WaterLevel,
+} from "../viewer/navigation";
+import { waterColors } from "./place-icon";
 export { plural } from "../i18n";
 
 export function formatBytes(bytes: number) {
@@ -43,8 +48,8 @@ export function nextName(base: string, names: Iterable<string>) {
   return `${base} ${highest + 1}`;
 }
 
-/** "Seen today", "Seen 3 weeks ago", "Seen 14 months ago": how fresh a place's information is. */
-export function seenAgo(time: number, now = Date.now()) {
+/** "Updated today", "Updated 3 weeks ago", "Updated 14 months ago": how fresh a place's information is. */
+export function updatedAgo(time: number, now = Date.now()) {
   const day = (t: number) => {
     const date = new Date(t);
     return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
@@ -55,9 +60,40 @@ export function seenAgo(time: number, now = Date.now()) {
     : days < 60 ? relative.format(-Math.round(days / 7), "week")
     : days < 730 ? relative.format(-Math.round(days / 30.44), "month")
     : relative.format(-Math.round(days / 365.25), "year");
-  return t("Seen {when}", { when });
+  return t("Updated {when}", { when });
 }
 
 /** A log entry's day, with its year: logs reach back further than this year. */
 export const logDate = (time: number) =>
   new Date(time).toLocaleDateString(locale, { year: "numeric", month: "short", day: "2-digit" });
+
+/** A level as the place card shows it: its name, which step it is of how many, and its colour. */
+export interface LevelBadge { label: string; step: number; steps: number; color: string }
+export const waterBadge = (level: WaterLevel): LevelBadge =>
+  ({ label: waterLevels[level], step: level, steps: 3, color: waterColors[level] });
+export const dangerBadge = (level: DangerLevel): LevelBadge =>
+  ({ label: dangerLevels[level], step: level, steps: 2, color: placeColor({ kind: "unstable", danger: level }) });
+
+/** One change as shown in the history: the field it touched, then what it became. */
+export interface ChangeLine { field: string; from?: string; to?: string; detail?: string }
+const kindName = (kind: MapMarker["kind"]) => (markerKinds[kind] ?? markerKinds.landmark).label;
+export function changeLine(change: PlaceChange): ChangeLine {
+  switch (change.field) {
+    case "name": return { field: t("Name"), from: change.from, to: change.to };
+    case "kind": return { field: t("Type"), from: kindName(change.from), to: kindName(change.to) };
+    case "water": return {
+      field: t("Water level"),
+      ...change.to ? { from: change.from && waterLevels[change.from], to: waterLevels[change.to] } : { detail: t("removed") },
+    };
+    case "danger": return { field: t("Danger level"), from: dangerLevels[change.from], to: dangerLevels[change.to] };
+    case "description": return { field: t("Description"), detail: t("edited") };
+    case "photos": {
+      const { added: { length: added }, removed: { length: removed } } = change;
+      return { field: t("Photos"), detail: [
+        ...added ? [added === 1 ? t("1 added") : t("{count} added", { count: added })] : [],
+        ...removed ? [removed === 1 ? t("1 removed") : t("{count} removed", { count: removed })] : [],
+      ].join(", ") };
+    }
+    case "point": return { field: t("Position"), detail: t("moved") };
+  }
+}
