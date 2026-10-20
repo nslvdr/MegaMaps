@@ -2394,35 +2394,51 @@ dialog.place-card::backdrop {
   border-color: var(--level);
   background: color-mix(in srgb, var(--level) 12%, transparent);
 }
-/* "Water level ▬▬▭ Knee": the field muted, a gauge in the level's colour, then its name. */
+/* "Water level" under its kind's symbol, above every step with its own symbol,
+   read-only: the place's own step is filled in its colour, the others stay muted. */
 .place-detail-level {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: var(--space-8);
   margin: 0 0 var(--space-12);
   color: var(--muted);
 }
-/* Equal segments filled up to the level: deeper or riskier fills more. */
-.level-badge {
-  display: inline-flex;
+.level-field,
+.level-scale > span {
+  display: flex;
   align-items: center;
   gap: var(--space-8);
-  color: var(--text);
-  font-weight: 600;
+}
+.level-field svg {
+  width: 16px;
+  height: 16px;
+}
+.level-scale {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--fill);
+}
+.level-scale > span {
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-small);
   white-space: nowrap;
 }
-.level-meter {
-  display: inline-flex;
-  gap: 3px;
-}
-.level-meter span {
+.level-scale svg {
+  flex: none;
   width: 16px;
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  height: 16px;
 }
-.level-meter .on {
+.level-scale > [aria-current] {
   background: var(--level);
+  color: var(--bg);
+  font-weight: 700;
 }
 /* How fresh the place is sits under its title. */
 .place-heading {

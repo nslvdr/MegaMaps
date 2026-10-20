@@ -1447,11 +1447,12 @@ test("a flooded place's water level and a danger place's level show on its pin a
     input.dispatchEvent(new window.Event("change"));
   };
   const save = () => el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
-  // "Water level: Knee (2/3)": the level's name and how many of its bars are filled.
+  // "Water level: Knee (2/3)": the level's own step, then which of how many steps it is.
   const level = () => {
     const line = el("marker-detail-level");
-    return `${line.firstChild!.textContent}: ${line.querySelector(".level-badge")!.textContent} `
-      + `(${line.querySelectorAll(".level-meter .on").length}/${line.querySelectorAll(".level-meter > span").length})`;
+    const steps = [...line.querySelectorAll(".level-scale > span")];
+    const at = steps.findIndex((step) => step.hasAttribute("aria-current"));
+    return `${line.firstChild!.textContent}: ${steps[at]!.textContent} (${at + 1}/${steps.length})`;
   };
   try {
     assert.ok(el("marker-list").querySelector(".water-gauge"), "Saved shows the level beside the pin");
