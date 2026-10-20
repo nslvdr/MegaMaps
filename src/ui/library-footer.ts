@@ -61,7 +61,7 @@ export function initLibraryFooter(home: HTMLElement, findUpdate?: () => Promise<
     internet.querySelector("strong")!.textContent = reachable ? t("Online") : t("Offline");
     // Missing offline files are a problem; having no signal underground is normal.
     offline.dataset.state = shell.ready ? "available" : "unavailable";
-    offline.textContent = shell.ready ? t("Works offline") : t("Not saved offline");
+    offline.textContent = shell.ready ? t("Offline ready") : t("Not saved offline");
 
     // Only the live site knows about new versions; offline keeps the last answer.
     if (!reachable || !findUpdate) return;

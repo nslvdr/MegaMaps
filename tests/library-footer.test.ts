@@ -64,7 +64,7 @@ test("footer reports offline use and connection separately and stamps the loaded
       document.getElementById("offline-availability")!.textContent,
     ];
     await refresh();
-    assert.deepEqual(read(), ["idle", "Offline", "available", "Works offline"]);
+    assert.deepEqual(read(), ["idle", "Offline", "available", "Offline ready"]);
     assert.equal(document.querySelector("time")!.textContent, "08/10 07:05");
 
     browser.onLine = true;
@@ -75,7 +75,7 @@ test("footer reports offline use and connection separately and stamps the loaded
     reachable = false;
     cached = true;
     await refresh();
-    assert.deepEqual(read(), ["idle", "Offline", "available", "Works offline"]);
+    assert.deepEqual(read(), ["idle", "Offline", "available", "Offline ready"]);
 
     // While a map is open the footer is hidden: connection changes wait.
     home.hidden = true;
