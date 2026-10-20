@@ -486,9 +486,16 @@ small {
   background: none;
   text-align: left;
 }
-/* A ready update turns lime and pulses a dot on its icon until installed. */
+/* A ready update turns lime and the whole zone blinks until installed. */
 .footer-updated[data-state="ready"] {
   --c: var(--neon-add);
+  animation: update-dot 1.4s ease-in-out infinite;
+}
+.footer-updated[data-state="ready"] strong {
+  color: var(--neon-add);
+}
+.footer-updated .update-dot {
+  animation: none;
 }
 .footer-icon,
 .settings-icon {

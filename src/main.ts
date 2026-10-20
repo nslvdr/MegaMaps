@@ -97,13 +97,21 @@ const settings = initSettingsPage(settingsPage, {
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
 });
+// Versions installed automatically this session, so a failed one waits for a tap instead of retrying.
+const autoInstalled = new Set<string>();
 // The footer checks quietly while the library shows; Settings mirrors its answer.
+// Unless Settings asks first, a found update installs by itself once nothing else is going on.
 const refreshFooter = initLibraryFooter(home, canUpdate
   ? async () => {
-      if (updates.busy) return false;
-      const ready = Boolean(await findAppUpdate(loadedVersion));
-      settings.setUpdateReady(ready);
-      return ready;
+      if (updates.busy) return true;
+      const update = await findAppUpdate(loadedVersion);
+      settings.setUpdateReady(Boolean(update));
+      if (update && preference("update-install") === "auto" && !autoInstalled.has(update.version)
+        && !importing && !ocrJob && !home.hidden && !document.querySelector("dialog[open]")) {
+        autoInstalled.add(update.version);
+        updates.start(update);
+      }
+      return Boolean(update);
     }
   : undefined);
 let controls: ViewerControls | undefined;

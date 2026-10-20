@@ -26,7 +26,7 @@ const releaseDate = (date: Date) =>
   new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
 const button = (icon: string, label: string) => `${icon}<span>${label}</span>`;
 
-// Check first, ask before downloading, then show each step until the app restarts.
+// Check first, ask before downloading (unless started automatically), then show each step until the app restarts.
 export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActions) {
   const part = <T extends HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!;
   const icon = part("update-title-icon"), title = part("update-title"), body = part("update-body");
@@ -218,6 +218,13 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     open() {
       if (!dialog.open) showDialog(dialog);
       if (!busy) void check();
+    },
+    /** Install a found update without asking, showing each step until the restart. */
+    start(update: AppUpdate) {
+      if (busy) return;
+      if (!dialog.open) showDialog(dialog);
+      found = update;
+      void install();
     },
     /** Explain why updating isn't possible right now. */
     explain(heading: string, message: string) {
