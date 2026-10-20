@@ -23,7 +23,7 @@ import {
   Crosshair,
   Cylinder,
   DoorOpen,
-  Droplets,
+  Droplet,
   Download,
   Ellipsis,
   EllipsisVertical,
@@ -170,7 +170,7 @@ export const icons = {
   note: svg(MessageSquareText),
   visit: svg(Footprints),
   // Each water and danger level, deeper or riskier as it goes.
-  ankle: svg(Droplets),
+  ankle: svg(Droplet),
   knee: svg(Waves),
   waist: svg(WavesLadder),
   moderate: svg(CircleAlert),
