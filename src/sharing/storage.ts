@@ -87,7 +87,7 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     const blob = prepared.photos.get(id)!;
     return { id, type: blob.type || "image/jpeg", bytes: blob.size };
   });
-  const manifest: ShareManifest = { format: "megamap", version: 4, map: prepared.map,
+  const manifest: ShareManifest = { format: "megamap", version: 5, map: prepared.map,
     markers: chosen,
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),

@@ -208,8 +208,8 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       setImportLabel(icons.rotateRight, t("Replace on {name}", { name }));
     } else {
       note.textContent = own && own.places + own.routes
-        ? t("Keeps your {places} and {routes} and adds the new ones. Places you already have only gain newer visits and log entries.", { places: plural(own.places, "place"), routes: plural(own.routes, "route") })
-        : t("Keeps this map as it is and adds the new ones. Places you already have only gain newer visits and log entries.");
+        ? t("Keeps your {places} and {routes} and adds the new ones. Places you already have only gain new history entries.", { places: plural(own.places, "place"), routes: plural(own.routes, "route") })
+        : t("Keeps this map as it is and adds the new ones. Places you already have only gain new history entries.");
       setImportLabel(icons.merge, t("Merge into {name}", { name }));
     }
   }

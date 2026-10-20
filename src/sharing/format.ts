@@ -3,7 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
-import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, type MapMarker, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
+import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, visitFromLastSeen, type MapMarker, type PlaceChange, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -19,7 +19,7 @@ const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export interface SharePhoto { id: string; type: string; bytes: number }
 export interface ShareManifest {
   format: "megamap";
-  version: 4;
+  version: 5;
   map: { name: string; width: number; height: number; fingerprint: string };
   image?: { name: string; type: string; bytes: number };
   markers: MapMarker[];
@@ -74,8 +74,8 @@ function invalid(): never {
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
   // Version 1 predates photos and named descriptions `note`; version 2 routes have neither;
-  // version 3 places have no last seen date or log.
-  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
+  // version 3 places have no log; up to version 4 a last seen date sat beside a log of notes.
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -120,32 +120,71 @@ export function validateManifest(value: unknown): ShareManifest {
   };
   const version = value.version;
   const time = (value: unknown) => integer(value, 0, Number.MAX_SAFE_INTEGER);
+  const kind = (value: unknown) => typeof value === "string" &&
+    ((legacyMarkerKinds as readonly string[]).includes(value) || Object.hasOwn(markerKinds, value));
+  const photoIds = (value: unknown) => {
+    if (!Array.isArray(value) || value.length > MAX_PHOTOS_PER_ITEM * 2 || !value.every((id) => name(id, 200))) invalid();
+    return value as string[];
+  };
+  const level = <T>(value: unknown, valid: (value: unknown) => value is T) => {
+    if (value !== undefined && !valid(value)) invalid();
+    return value as T | undefined;
+  };
+  const change = (value: unknown): PlaceChange => {
+    if (!object(value)) invalid();
+    switch (value.field) {
+      case "name":
+        if (!name(value.from, 100) || !name(value.to, 100)) invalid();
+        return { field: "name", from: value.from, to: value.to };
+      case "kind":
+        if (!kind(value.from) || !kind(value.to)) invalid();
+        return { field: "kind", from: normalizeMarkerKind(value.from as Parameters<typeof normalizeMarkerKind>[0]),
+          to: normalizeMarkerKind(value.to as Parameters<typeof normalizeMarkerKind>[0]) };
+      case "water": {
+        const from = level(value.from, isWaterLevel), to = level(value.to, isWaterLevel);
+        return { field: "water", ...(from ? { from } : {}), ...(to ? { to } : {}) };
+      }
+      case "danger":
+        if (!isDangerLevel(value.from) || !isDangerLevel(value.to)) invalid();
+        return { field: "danger", from: value.from, to: value.to };
+      case "photos":
+        return { field: "photos", added: photoIds(value.added), removed: photoIds(value.removed) };
+      case "description":
+      case "point":
+        return { field: value.field };
+      default:
+        invalid();
+    }
+  };
+  // Version 5 entries are notes, edits, or neither: visits.
   const log = (value: unknown) => {
-    if (value === undefined) return {};
+    if (value === undefined) return undefined;
     if (!Array.isArray(value) || value.length > MAX_LOG_PER_PLACE) invalid();
     const entryIds = new Set<string>();
-    const entries = value.map((entry: unknown): PlaceLogEntry => {
-      if (!object(entry) || !name(entry.id, 200) || entryIds.has(entry.id) ||
-          !time(entry.date) || !text(entry.text, 2000) || !entry.text.trim()) invalid();
+    return value.map((entry: unknown): PlaceLogEntry => {
+      if (!object(entry) || !name(entry.id, 200) || entryIds.has(entry.id) || !time(entry.date) ||
+          (entry.text !== undefined && (!text(entry.text, 2000) || !entry.text.trim())) ||
+          (version !== 5 && entry.text === undefined) ||
+          (entry.changes !== undefined && (version !== 5 || !Array.isArray(entry.changes) ||
+            !entry.changes.length || entry.changes.length > 10))) invalid();
       entryIds.add(entry.id);
-      return { id: entry.id, date: entry.date, text: entry.text };
+      return { id: entry.id, date: entry.date, ...(typeof entry.text === "string" ? { text: entry.text } : {}),
+        ...(Array.isArray(entry.changes) ? { changes: entry.changes.map(change) } : {}) };
     });
-    return entries.length ? { log: entries } : {};
   };
   const markers = value.markers.map((value: unknown): MapMarker => {
     if (!object(value)) invalid();
     const description = version === 1 ? value.note : value.description;
     if (!name(value.label, 100) || !text(description, 2000) ||
-        typeof value.kind !== "string" ||
-        (!(legacyMarkerKinds as readonly string[]).includes(value.kind) && !Object.hasOwn(markerKinds, value.kind)) ||
+        !kind(value.kind) ||
         (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water))) ||
         (value.danger !== undefined && (value.kind !== "unstable" || !isDangerLevel(value.danger))) ||
-        (value.lastSeen !== undefined && !time(value.lastSeen)) ||
-        (value.seenAt !== undefined && !time(value.seenAt))) invalid();
-    return { ...identity(value, "marker"), label: value.label, description,
-      ...ownPhotos(value),
-      ...(time(value.lastSeen) ? { lastSeen: value.lastSeen } : {}),
-      ...(time(value.seenAt) ? { seenAt: value.seenAt } : {}), ...log(value.log),
+        (value.lastSeen !== undefined && (version === 5 || !time(value.lastSeen))) ||
+        (value.seenAt !== undefined && (version === 5 || !time(value.seenAt)))) invalid();
+    const place = identity(value, "marker");
+    const entries = visitFromLastSeen(log(value.log), place.created, time(value.lastSeen) ? value.lastSeen : undefined);
+    return { ...place, label: value.label, description,
+      ...ownPhotos(value), ...(entries?.length ? { log: entries } : {}),
       kind: normalizeMarkerKind(value.kind as Parameters<typeof normalizeMarkerKind>[0]),
       ...(isWaterLevel(value.water) ? { water: value.water } : {}),
       ...(isDangerLevel(value.danger) ? { danger: value.danger } : {}), point: point(value.point) };
@@ -175,7 +214,7 @@ export function validateManifest(value: unknown): ShareManifest {
   if (value.from !== undefined && !name(value.from, 100)) invalid();
   if (!image && markers.length + routes.length === 0)
     throw new Error(t("Select at least one place or route, or include the map image."));
-  return { format: "megamap", version: 4,
+  return { format: "megamap", version: 5,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
     ...(north !== undefined ? { northOffset: north } : {}),

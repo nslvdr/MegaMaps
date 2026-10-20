@@ -587,8 +587,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("marker-edit");
     input("marker-description", "");
     submit("marker-form");
-    assert.equal(el("marker-details").hidden, true, "a place with nothing to read shows only its header");
-    assert.equal(el("marker-detail-seen").textContent, "Seen today", "the header still says how fresh it is");
+    assert.equal(el("marker-detail-description").hidden, true, "a cleared description leaves no gap");
+    assert.equal(el("marker-detail-log").hidden, false, "its edits are still there to read");
+    assert.equal(el("marker-detail-updated").textContent, "Updated today", "the header still says how fresh it is");
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     // Saved list renders names as text, never markup.
@@ -1446,11 +1447,17 @@ test("a flooded place's water level and a danger place's level show on its pin a
     input.dispatchEvent(new window.Event("change"));
   };
   const save = () => el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  // "Water level: Knee (2/3)": the level's name and how many of its bars are filled.
+  const level = () => {
+    const line = el("marker-detail-level");
+    return `${line.firstChild!.textContent}: ${line.querySelector(".level-badge")!.textContent} `
+      + `(${line.querySelectorAll(".level-meter .on").length}/${line.querySelectorAll(".level-meter > span").length})`;
+  };
   try {
     assert.ok(el("marker-list").querySelector(".water-gauge"), "Saved shows the level beside the pin");
     controls.options().onMarker(state.markers[0]!);
     assert.equal(el("marker-details").hidden, false, "the level alone is worth reading");
-    assert.equal(el("marker-detail-level").textContent, "Water level: Knee");
+    assert.equal(level(), "Water level: Knee (2/3)");
     assert.ok(el("marker-dialog-title-icon").querySelector(".water-gauge"));
 
     el("marker-edit").dispatchEvent(new window.Event("click"));
@@ -1473,7 +1480,7 @@ test("a flooded place's water level and a danger place's level show on its pin a
     const danger = (level: number) => document.querySelector<HTMLElement>(`.level-step[data-danger="${level}"]`)!;
     const pinFill = () => el("marker-dialog-title-icon").querySelector(".place-icon > circle")!.getAttribute("fill");
     controls.options().onMarker(state.markers[1]!);
-    assert.equal(el("marker-detail-level").textContent, "Danger level: Severe", "danger without a level is severe");
+    assert.equal(level(), "Danger level: Severe (2/2)", "danger without a level is severe");
     assert.equal(pinFill(), "#ff4d4d");
     el("marker-edit").dispatchEvent(new window.Event("click"));
     assert.equal(el("marker-danger").hidden, false);
@@ -1484,7 +1491,7 @@ test("a flooded place's water level and a danger place's level show on its pin a
     assert.equal(danger(1).getAttribute("aria-pressed"), "true", "tapping the chosen danger step keeps it");
     save();
     assert.equal(state.markers[1]!.danger, 1);
-    assert.equal(el("marker-detail-level").textContent, "Danger level: Moderate");
+    assert.equal(level(), "Danger level: Moderate (1/2)");
     assert.equal(pinFill(), "#ff8a1f", "moderate danger is orange");
 
     el("marker-edit").dispatchEvent(new window.Event("click"));
@@ -1498,7 +1505,7 @@ test("a flooded place's water level and a danger place's level show on its pin a
   }
 });
 
-test("a place shows when it was last seen and keeps a dated log, added from its card and pruned in Edit", async (t) => {
+test("a place keeps one history: visits and notes from its card, edits and moves as they are saved", async () => {
   const { window, document } = parseHTML(
     `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
   );
@@ -1531,76 +1538,85 @@ test("a place shows when it was last seen and keeps a dated log, added from its 
   const el = (id: string) => document.getElementById(id)!;
   const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
   const submit = (id: string) => el(id).dispatchEvent(new window.Event("submit", { cancelable: true }));
-  const entries = (list = "marker-log-list") => [...el(list).querySelectorAll("p")].map((p) => p.lastChild!.textContent);
+  // A note as its text, a visit or the place's addition as its kind,
+  // and an edit as a line per change, its field first: "Name Hall → Great hall".
+  const entries = (list = "marker-log-list") => [...el(list).children].map((item) => {
+    const changes = [...item.querySelectorAll(".log-changes li")];
+    return changes.length ? changes.map((line) => [...line.childNodes]
+      .map((node) => node.nodeName.toLowerCase() === "svg" ? "→" : node.textContent).join(" ")).join("\n")
+      : (item.querySelector(".log-text") ?? item.querySelector(".log-head strong"))!.textContent;
+  });
+  const daysAgo = (days: number) => {
+    const date = new Date(Date.now() - days * day);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
   const addEntry = (date: string, text: string) => {
+    let focused = false;
+    el("entry-text").focus = () => { focused = true; };
     click("marker-add-entry");
+    assert.ok(focused, "the keyboard opens for a note");
     if (date) (el("entry-date") as HTMLInputElement).value = date;
     (el("entry-text") as HTMLTextAreaElement).value = text;
     submit("entry-form");
   };
+  const place = () => state.markers[0]!;
+  (el("marker-form") as HTMLFormElement).requestSubmit = () => submit("marker-form");
   try {
-    controls.options().onMarker(state.markers[0]!);
-    assert.equal(el("marker-detail-seen").textContent, "Seen 13 months ago", "a place starts as seen when it was created");
-    assert.equal(el("marker-seen-ask").hidden, false);
-    click("marker-seen-no");
-    assert.equal(el("marker-seen-ask").hidden, true, "No only hides the question");
-    assert.equal(state.markers[0]!.lastSeen, undefined);
-    click("marker-cancel");
-    controls.options().onMarker(state.markers[0]!);
-    assert.equal(el("marker-seen-ask").hidden, false, "it asks again next time");
-    click("marker-seen-yes");
-    assert.equal(el("marker-detail-seen").textContent, "Seen today");
-    assert.equal(el("marker-seen-ask").hidden, true, "a place seen today isn't asked about");
-    assert.ok(Math.abs(state.markers[0]!.lastSeen! - Date.now()) < 1000);
+    controls.options().onMarker(place());
+    assert.equal(el("marker-detail-updated").textContent, "Updated 13 months ago", "a place starts as updated when it was added");
+    assert.equal(el("marker-detail-log").hidden, true, "with no history there is no list");
 
-    state.markers[0]!.lastSeen = Date.now() - 30 * day;
-    addEntry("2024-03-04", "Water to the knees");
-    const place = () => state.markers[0]!;
-    assert.equal(place().log!.length, 1);
-    assert.equal(new Date(place().log![0]!.date).getFullYear(), 2024);
-    assert.ok(place().lastSeen! > Date.now() - 31 * day, "a backdated entry never moves last seen back");
-    addEntry("", "Dry");
-    assert.ok(place().lastSeen! > Date.now() - 1000, "an entry for today updates last seen");
-    assert.deepEqual(entries(), ["Dry", "Water to the knees"], "newest first");
-    assert.equal(el("marker-detail-description").textContent, "Big pillar room", "the description stays");
+    addEntry("", "");
+    assert.deepEqual(place().log!.map(({ text, changes }) => [text, changes]), [[undefined, undefined]], "Add with no note is a visit");
+    assert.equal(el("toast").textContent, "Visit added to Hall");
+    assert.equal(el("marker-detail-updated").textContent, "Updated today");
+    addEntry(daysAgo(30), "Water to the knees");
+    assert.equal(el("toast").textContent, "Note added to Hall");
+    assert.equal(el("marker-detail-updated").textContent, "Updated today", "a backdated note doesn't make the place older");
+    assert.deepEqual(entries(), ["Visited", "Water to the knees", "Added"], "newest first, ending where it was added");
     assert.equal(el("marker-log-list").querySelector("button"), null, "reading stays read-only");
 
-    // A new entry opens ready to type, and X asks before dropping a typed note.
-    const focus = t.mock.method(el("entry-text"), "focus");
+    // X asks before dropping a typed note.
     click("marker-add-entry");
-    assert.equal(focus.mock.callCount(), 1, "the note gets the keyboard");
-    const add = el("entry-add") as HTMLButtonElement;
-    assert.equal(add.disabled, true, "Add waits for a note");
     (el("entry-text") as HTMLTextAreaElement).value = "Half-written";
-    el("entry-text").dispatchEvent(new window.Event("input"));
-    assert.equal(add.disabled, false);
     click("entry-cancel");
     assert.equal(el("entry-dialog").hasAttribute("open"), true, "X with a note asks first");
     click("entry-cancel");
     assert.equal(el("entry-dialog").hasAttribute("open"), false);
     assert.equal(place().log!.length, 2, "the discarded note isn't added");
-    click("marker-add-entry");
-    click("entry-cancel");
-    assert.equal(el("entry-dialog").hasAttribute("open"), false, "an empty entry closes at once");
 
+    // Saving an edit says what changed; removing an entry is only tidying.
     click("marker-edit");
-    assert.equal(el("marker-add-entry").hidden, true, "editing has no journal button");
-    assert.equal(el("marker-detail-seen").hidden, true);
-    assert.equal(el("marker-seen-ask").hidden, true, "editing doesn't ask");
-    assert.deepEqual(entries("marker-log-edit"), ["Dry", "Water to the knees"]);
+    assert.equal(el("marker-add-entry").hidden, true, "editing has no history button");
+    assert.deepEqual(entries("marker-log-edit"), ["Visited", "Water to the knees"]);
     const removes = el("marker-log-edit").querySelectorAll<HTMLElement>(".log-remove");
     assert.equal(removes.length, 2);
     removes[1]!.dispatchEvent(new window.Event("click"));
-    const seenDate = el("marker-seen-date") as HTMLInputElement;
-    assert.equal(el("marker-seen-field").hidden, false);
-    seenDate.value = "2025-02-03";
+    (el("marker-label") as HTMLInputElement).value = "Great hall";
     submit("marker-form");
-    assert.deepEqual(place().log!.map((entry) => entry.text), ["Dry"]);
-    assert.equal(new Date(place().lastSeen!).toDateString(), new Date(2025, 1, 3).toDateString(),
-      "Edit can set last seen to an earlier day");
-    assert.ok(place().seenAt! > Date.now() - 1000, "the correction is newer than the visits it overrides");
     assert.equal(place().deletedLog!.length, 1, "the deleted entry is remembered so a merge can't restore it");
-    assert.deepEqual(entries(), ["Dry"]);
+    assert.deepEqual(entries(), ["Name Hall → Great hall", "Visited", "Added"]);
+    click("marker-edit");
+    submit("marker-form");
+    assert.equal(place().log!.length, 2, "an unchanged save adds nothing");
+    click("marker-edit");
+    (el("marker-description") as HTMLTextAreaElement).value = "Big pillar room, dry";
+    submit("marker-form");
+    assert.deepEqual(entries()[0], "Name Hall → Great hall\nDescription edited", "a later edit the same day joins the first");
+
+    // A move is an edit too; one put back is not.
+    click("marker-edit");
+    click("marker-move");
+    controls.options().onTap?.({ x: 700, y: 600 });
+    click("tool-cancel");
+    assert.equal(place().log!.length, 2);
+    controls.options().onMarker(place());
+    click("marker-edit");
+    click("marker-move");
+    controls.options().onTap?.({ x: 700, y: 600 });
+    click("tool-done");
+    controls.options().onMarker(place());
+    assert.deepEqual(entries()[0], "Name Hall → Great hall\nDescription edited\nPosition moved");
   } finally {
     await controls.dispose();
   }

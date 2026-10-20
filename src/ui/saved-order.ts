@@ -1,16 +1,18 @@
 import { t } from "../i18n";
 import type { Preferences } from "../preferences";
-import { lastSeen, markerKinds, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { markerKinds, type MapMarker, type PlannedRoute } from "../viewer/navigation";
+import { lastUpdated } from "../viewer/place-history";
 
 export type PlaceOrder = Preferences["place-order"];
 export type RouteOrder = Preferences["route-order"];
-/** Menu order; routes have no type or visits, so they offer only the first three. */
+/** Menu order; routes have no type or history, so they offer only the first three.
+ * `seen` is stored from when it sorted by last seen. */
 export const placeOrders = {
   newest: t("Newest"),
   oldest: t("Oldest"),
   name: t("A–Z"),
   type: t("Type"),
-  seen: t("Last seen"),
+  seen: t("Last updated"),
 } satisfies Record<PlaceOrder, string>;
 export const routeOrders = {
   newest: placeOrders.newest,
@@ -30,7 +32,7 @@ export function orderPlaces(markers: readonly MapMarker[], order: PlaceOrder) {
     oldest: (a, b) => a.created - b.created,
     name: (a, b) => byName(a.label, b.label),
     type: (a, b) => kindRank.indexOf(a.kind) - kindRank.indexOf(b.kind) || byName(a.label, b.label),
-    seen: (a, b) => lastSeen(b) - lastSeen(a),
+    seen: (a, b) => lastUpdated(b) - lastUpdated(a),
   };
   return [...markers].sort(compare[order]);
 }
