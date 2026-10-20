@@ -675,7 +675,7 @@ small {
   width: 100%;
   height: 100%;
   z-index: -1;
-  opacity: 0.4;
+  opacity: 0.28;
 }
 .plan-cave path,
 .plan-cave ellipse {
@@ -748,25 +748,9 @@ small {
   color: var(--muted);
 }
 .landing .install-open {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--space-8);
   width: min(100%, var(--surface-max-width));
   min-height: 56px;
-  border: 1.5px solid #ffffff38;
   border-radius: var(--radius-pill);
-  background: var(--bg);
-  color: var(--text);
-  font-size: var(--font-size-body);
-  font-weight: 600;
-}
-.landing .install-open:active {
-  background: #161616;
-}
-.landing .install-open svg {
-  width: 20px;
-  height: 20px;
 }
 
 /* Install steps, acted out by a phone that taps through them. */

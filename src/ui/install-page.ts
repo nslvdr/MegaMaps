@@ -22,8 +22,8 @@ const row = (icon: string, label: string, detail: string) =>
   `<li class="share-row"><span class="share-row-icon">${icon}</span><span class="share-row-label">${label}<small>${detail}</small></span></li>`;
 export const installMarkup = `<section id="install" class="landing" aria-labelledby="landing-title" hidden>
 <button type="button" id="landing-language">${language === "fr" ? "English" : "Français"}</button>
-<div class="landing-intro">${logo(88)}<h1 id="landing-title">Mega Maps</h1><p>${t("Quarry and cave plans you can read underground, without signal.")}</p></div>
-<button type="button" class="install-open">${icons.download}<span>${t("Install")}</span></button>
+<div class="landing-intro">${logo(88)}<h1 id="landing-title">Mega Maps</h1><p>${t("A reader for underground plans that works offline.")}</p></div>
+<button type="button" class="primary install-open">${icons.download}<span>${t("Install")}</span></button>
 </section>
 <dialog id="install-dialog" class="install-dialog" aria-labelledby="install-title">${dialogHeader("install-title", t("Install Mega Maps"), icons.download, "install-close")}
 <p>${t("Three taps, and Mega Maps lives on your home screen, full screen and offline.")}</p>
