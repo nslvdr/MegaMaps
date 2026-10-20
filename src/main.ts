@@ -32,6 +32,7 @@ import { language, locale, t } from "./i18n";
 import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
+import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
 
 document.documentElement.lang = language;
 document.documentElement.dataset.labels = preference("label-size");
@@ -45,6 +46,7 @@ app.innerHTML = `
     ${libraryFooterMarkup}
   </main>
   ${settingsMarkup}
+  ${installMarkup}
   <section id="viewer" class="viewer" aria-label="${t("Map viewer")}" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
   <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", t("Import"), icons.download, "import-cancel")}<p>${t("What would you like to add?")}</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">${t("New map")}<small>${t("JPEG, PNG or WebP image")}</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">${t("Shared file")}<small>${t(".megamap with places and routes")}</small></span>${icons.arrow}</button></div></dialog>
@@ -851,6 +853,11 @@ initTapAway("dialog, #settings");
 lockPageZoom();
 void registerOfflineShell().then(refreshFooter);
 async function start() {
+  // Maps imported in a browser tab stay there, so a tab only shows how to install.
+  if (import.meta.env.PROD && !isInstalled()) {
+    home.hidden = true;
+    return initInstallPage(element("install"), element("install-dialog"));
+  }
   await mutate(async () => {
     for (const map of await listMaps())
       if (map.status !== "ready") await deleteStoredMap(map);
