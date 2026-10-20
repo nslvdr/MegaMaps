@@ -124,3 +124,22 @@ test("being current, an already downloaded update and failures each explain them
   await settle();
   assert.equal(attempts, 1);
 });
+
+test("an automatic update installs without asking and restarts once ready", async () => {
+  let finish: (installed: boolean) => void = () => {};
+  let finds = 0;
+  const app = setup({
+    find: async () => { finds++; return available; },
+    install: () => new Promise((resolve) => { finish = resolve; }),
+  });
+  app.updates.start(available);
+  assert.equal(app.dialog.open, true, "the steps stay visible");
+  assert.equal(app.dialog.dataset.state, "installing");
+  assert.equal(finds, 0, "the found update is used as is");
+  assert.equal(app.visible("update-actions"), false, "nothing to agree to");
+  assert.equal(app.updates.busy, true);
+  finish(true);
+  await settle();
+  assert.equal(app.dialog.dataset.state, "restarting");
+  assert.equal(app.restarted(), 1);
+});

@@ -14,6 +14,8 @@ const choices = {
   "compass-speed": ["mid", "high", "live"],
   /** Pace for travel times, in km/h. */
   "walking-speed": ["4", "2", "3", "5"],
+  /** Whether a found update installs by itself or waits for the user to agree. */
+  "update-install": ["auto", "ask"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };
