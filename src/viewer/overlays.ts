@@ -10,6 +10,7 @@ import {
   type MapMarker,
   type NavigationState,
 } from "./navigation";
+import { trailAge, trailAgeChange } from "./trail";
 const NS = "http://www.w3.org/2000/svg";
 const node = <K extends keyof SVGElementTagNameMap>(
   tag: K,
@@ -48,6 +49,8 @@ interface PathItem {
 const FOUND_MS = 2200;
 /** The Measure control's neon, as --neon-measure in style.css. */
 const MEASURE_COLOR = "#fff04d";
+/** The Trail control's neon, as --neon-trail in style.css. */
+const TRAIL_COLOR = "#ff2a2a";
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
@@ -59,9 +62,12 @@ export class NavigationOverlay {
   private found?: string;
   private selected?: string;
   private foundTimer?: ReturnType<typeof setTimeout>;
+  private ageTimer?: ReturnType<typeof setTimeout>;
   private preview?: Pick<MapMarker, "point" | "kind">;
   /** The line being measured, or the two ends of the scale being set. */
   private measure?: Point[];
+  /** A finished trip being looked back on. */
+  private trip?: Point[];
   private state?: NavigationState;
   constructor(private svg: SVGSVGElement) {}
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
@@ -93,6 +99,10 @@ export class NavigationOverlay {
   }
   setMeasure(points?: Point[]) {
     this.measure = points;
+    if (this.state) this.rebuild(this.state);
+  }
+  setTrip(points?: Point[]) {
+    this.trip = points;
     if (this.state) this.rebuild(this.state);
   }
   // Search owns matching place labels, avoiding duplicate callouts at the same pin.
@@ -153,6 +163,48 @@ export class NavigationOverlay {
       this.points.push({ element, point });
       return { element, body };
     };
+    // The trail is faint and lowest: a record, not something to read.
+    clearTimeout(this.ageTimer);
+    const trail = node("g", { class: "trail" });
+    this.svg.append(trail);
+    path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", "stroke-dasharray": "3 7", class: "trail-line" });
+    path(trail, state.trail, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, true);
+    const here = state.trail.at(-1);
+    if (here) {
+      const element = node("g", { class: "trail-here" });
+      element.append(node("circle", { r: "18", class: "trail-pulse" }), node("circle", { r: "8", class: "trail-mark" }));
+      trail.append(element);
+      this.points.push({ element, point: here });
+      // The pulse slows, then stops, as the position gets older.
+      const age = () => {
+        const now = Date.now();
+        element.dataset.age = trailAge(here.time, now);
+        const next = trailAgeChange(here.time, now);
+        if (next !== undefined) this.ageTimer = setTimeout(age, next);
+      };
+      age();
+    }
+    // A past trip, whatever the layers: bright and whole, from start to end.
+    if (this.trip) {
+      const trip = node("g", { class: "trip" });
+      this.svg.append(trip);
+      path(trip, this.trip, { stroke: CASING, "stroke-width": "9" });
+      path(trip, this.trip, { stroke: TRAIL_COLOR, "stroke-width": "4.5" });
+      path(trip, this.trip, { stroke: CASING, "stroke-width": "8" }, true);
+      path(trip, this.trip, { stroke: TRAIL_COLOR, "stroke-width": "4" }, true);
+      // Its ends wear a route's start and end pins, in red.
+      const ends = [
+        [this.trip[0], icons.routeStart, TRAIL_COLOR, CASING],
+        [this.trip.at(-1), icons.routeEnd, CASING, TRAIL_COLOR],
+      ] as const;
+      for (const [point, markup, fill, stroke] of ends) {
+        if (!point) continue;
+        const icon = pinIcon(pin(trip, point).body, markup, 20);
+        icon.setAttribute("fill", fill);
+        icon.setAttribute("stroke", stroke);
+        icon.setAttribute("stroke-width", "3.6");
+      }
+    }
     // Lines first so every pin and label sits above them.
     const routes = group("routes");
     for (const route of state.routes) {
@@ -262,6 +314,7 @@ export class NavigationOverlay {
           reservePoint(point, route.id === this.editing ? 10 : 8);
     if (this.preview) reservePoint(this.preview.point, 18);
     for (const point of this.measure ?? []) reservePoint(point, 10);
+    for (const point of this.trip ?? []) reservePoint(point, 8);
   }
   /** Draws one frame; returns whether a label is still gliding or fading.
    * Zoomed out, `named` is false and only pins show. */
@@ -336,6 +389,7 @@ export class NavigationOverlay {
   }
   dispose() {
     clearTimeout(this.foundTimer);
+    clearTimeout(this.ageTimer);
     this.svg.replaceChildren();
   }
 }

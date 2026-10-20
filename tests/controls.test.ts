@@ -1099,8 +1099,33 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, false, "closing search restores the navbar");
     state.markers = originalMarkers;
 
-    // Long-press drops a place.
-    controls.options().onLongPress?.({ x: 2000, y: 2100 });
+    // Long-press opens the wheel; lifting in its middle does nothing.
+    const hold = (screen = { x: 200, y: 300 }) => controls.options().onHold!({ x: 2000, y: 2100 }, screen)!;
+    let press = hold();
+    assert.equal(el("hold-wheel").hidden, false);
+    press.move({ x: 200, y: 230 });
+    assert.equal(el("hold-wheel").dataset.choice, "place");
+    press.move({ x: 215, y: 310 });
+    assert.equal(el("hold-wheel").dataset.choice, undefined, "back in the middle, nothing is chosen");
+    press.end({ x: 215, y: 310 });
+    assert.equal(el("hold-wheel").hidden, true);
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    assert.equal(state.trail.length, 0);
+    // Down, even far to one side, marks the trail at the pressed point, with an Undo.
+    press = hold();
+    press.end({ x: 290, y: 305 });
+    assert.equal(state.trail.length, 1);
+    assert.deepEqual({ ...state.trail[0], time: 0 }, { x: 2000, y: 2100, time: 0 });
+    assert.equal(el("toast").textContent, "Trip started", "the first point starts a trip");
+    click("toast-undo");
+    assert.equal(state.trail.length, 0);
+    // A cancelled hold (a second finger) does nothing.
+    press = hold();
+    press.move({ x: 200, y: 200 });
+    press.end();
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    // Up drops a place.
+    hold().end({ x: 180, y: 240 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1",
       "a new place starts as the kind last added");
@@ -1893,6 +1918,104 @@ test("Measure asks for the map's scale once, then measures lines and gives route
     await controls.flush();
     assert.equal((await loadNavigation(map.id))?.metresPerPixel, 0.25, "the scale is kept with the map");
   } finally {
+    await controls.dispose();
+  }
+});
+
+test("the Trail panel starts a trip, ends it with a summary, and keeps it in Past trips", async (t) => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog"))
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => {
+        if (!dialog.hasAttribute("open")) return;
+        dialog.removeAttribute("open");
+        dialog.dispatchEvent(new window.Event("close"));
+      } },
+    });
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "trail", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  state.metresPerPixel = 0.5;
+  const tools: string[] = [];
+  const shown: (Point[] | undefined)[] = [];
+  const framed: Point[][] = [];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool(tool) { tools.push(tool); }, updateNavigation() {}, jumpTo() {},
+    fitPoints(points) { framed.push(points); }, showTrip(points) { shown.push(points); },
+  });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
+  const tap = (x: number, y: number) => controls.options().onTap({ x, y });
+  const markHere = (x: number, y: number) => {
+    const hold = controls.options().onHold!({ x, y }, { x: 200, y: 300 })!;
+    hold.end({ x: 200, y: 360 });
+  };
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: new Date(2026, 9, 20, 14, 5).getTime() });
+  try {
+    click("open-trail");
+    assert.equal(el("trip-start").hidden, false);
+    assert.equal(el("trip-end").hidden, true, "there is nothing to end before a trip");
+    assert.equal(el("trip-list").textContent, "No trips yet.");
+    // Starting asks where you are, and the tap there is the trip's first point.
+    click("trip-start");
+    assert.equal(tools.at(-1), "trail");
+    tap(100, 100);
+    assert.equal(tools.at(-1), "browse", "one tap marks it and the map is back");
+    assert.equal(el("toast").textContent, "Trip started");
+    assert.equal(el("open-trail").classList.contains("on-trip"), true, "the chip shows a trip is under way");
+
+    // Under way, points come from the long-press wheel; the panel only reports and ends.
+    t.mock.timers.tick(30 * 60_000);
+    markHere(100, 300);
+    t.mock.timers.tick(65 * 60_000);
+    click("open-trail");
+    assert.equal(el("trip-start").hidden, true);
+    assert.equal(el("trip-summary").textContent, "Started 2:05 PM · 2 points");
+    assert.equal(el("trip-last").textContent, "100 m · Last marked 1 hour ago");
+
+    // Ending keeps the trip and shows it whole, with how far and how long.
+    click("trip-end");
+    assert.deepEqual(state.trail, []);
+    assert.equal(el("open-trail").classList.contains("on-trip"), false);
+    assert.equal(state.trips.length, 1);
+    assert.equal(el("trip-dialog").hasAttribute("open"), true);
+    assert.equal(el("trip-title").textContent, "Trip Oct 20, 2026");
+    assert.equal(el("trip-times").textContent, "2:05 PM – 3:40 PM");
+    assert.deepEqual([el("trip-distance").textContent, el("trip-duration").textContent, el("trip-points").textContent],
+      ["100 m", "1 h 35", "2"]);
+    assert.deepEqual(shown.at(-1), [{ x: 100, y: 100 }, { x: 100, y: 300 }].map((p, i) => ({ ...p, time: state.trips[0]!.points[i]!.time })));
+    assert.equal(framed.length, 1, "the map frames the whole trip");
+    click("trip-close");
+    assert.equal(shown.at(-1), undefined, "closing takes the trip off the map");
+
+    // Past trips, newest first, open the same summary again.
+    click("open-trail");
+    click("trip-start");
+    tap(500, 500);
+    markHere(600, 500);
+    click("open-trail");
+    click("trip-end");
+    click("open-trail");
+    const rows = [...el("trip-list").querySelectorAll(".navigation-row")];
+    assert.deepEqual(rows.map((row) => row.querySelector(".row-detail")?.textContent),
+      ["3:40 PM · 50 m · < 1 min", "2:05 PM · 100 m · 1 h 35"]);
+    rows[1]!.querySelector(".navigation-jump")!.dispatchEvent(new window.Event("click"));
+    assert.equal(el("sheet").hidden, true);
+    assert.equal(el("trip-duration").textContent, "1 h 35");
+    assert.equal(shown.at(-1)?.length, 2);
+  } finally {
+    t.mock.timers.reset();
     await controls.dispose();
   }
 });

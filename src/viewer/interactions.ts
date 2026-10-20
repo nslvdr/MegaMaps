@@ -2,12 +2,20 @@ import { zoomAt, transformAt, type Camera, type Point } from "./camera";
 interface Pointer extends Point {
   start: Point;
   moved: boolean;
-  /** A long press already handled this pointer. */
+  /** A long press took this pointer: it no longer pans or taps. */
   held?: boolean;
+  /** Follows the held finger until it lifts; gone once interrupted. */
+  hold?: Hold;
   /** Landed on an editable point; moving drags it instead of the map. */
   grabbed?: boolean;
 }
 const LONG_PRESS_MS = 500;
+/** What a long press does with the finger that made it. */
+export interface Hold {
+  move(point: Point): void;
+  /** Lifted here, or interrupted (a second finger, a cancel) with no point. */
+  end(point?: Point): void;
+}
 interface InteractionHost {
   getCamera(): Camera;
   setCamera(camera: Camera): void;
@@ -20,7 +28,7 @@ interface InteractionHost {
   tap?(point: Point): boolean;
   /** A double tap never zooms; only the host may use it (compass Tap). */
   doubleTap?(point: Point): void;
-  longPress?(point: Point): boolean;
+  longPress?(point: Point): Hold | undefined;
   /** Whether an editable point is under this screen point (editing only). */
   grab?(point: Point): boolean;
   drag?(point: Point): void;
@@ -55,6 +63,11 @@ export function attachInteractions(
   const cancelPress = () => {
     clearTimeout(pressTimer);
     pressTimer = undefined;
+  };
+  const endHold = (pointer: Pointer, at?: Point) => {
+    const hold = pointer.hold;
+    pointer.hold = undefined;
+    hold?.end(at);
   };
   const point = (event: { clientX: number; clientY: number }) => {
     const rect = canvas.getBoundingClientRect();
@@ -91,12 +104,14 @@ export function attachInteractions(
       stop();
       canvas.setPointerCapture(event.pointerId);
       const p = point(event);
-      // A second finger turns a drag back into a pinch.
-      for (const other of points.values())
+      // A second finger turns a drag back into a pinch, and cancels a hold.
+      for (const other of points.values()) {
+        endHold(other);
         if (other.grabbed) {
           if (other.moved) host.cancelDrag?.();
           other.grabbed = false;
         }
+      }
       const grabbed =
         !points.size && !!host.editing?.() && !!host.grab?.(p);
       points.set(event.pointerId, { ...p, start: p, moved: false, grabbed });
@@ -118,8 +133,10 @@ export function attachInteractions(
             const held = points.get(id);
             if (!held || held.moved || points.size !== 1 || host.locked?.())
               return;
-            if (host.longPress?.(held)) {
+            const hold = host.longPress?.(held);
+            if (hold) {
               held.held = true;
+              held.hold = hold;
               lastTap.time = 0;
             }
           }, LONG_PRESS_MS);
@@ -154,7 +171,10 @@ export function attachInteractions(
         pairTap = undefined;
         cancelPress();
       }
-      if (old.held) return;
+      if (old.held) {
+        old.hold?.move(p);
+        return;
+      }
       points.set(event.pointerId, { ...old, ...p, moved });
       if (old.grabbed) {
         if (moved) host.drag?.(p);
@@ -223,12 +243,14 @@ export function attachInteractions(
     const zooming = quickZoom;
     if (!points.size) quickZoom = undefined;
     if (event.type === "pointercancel" || event.type === "lostpointercapture") {
+      endHold(pointer);
       if (pointer.grabbed && pointer.moved) host.cancelDrag?.();
       lastTap.time = 0;
       pairTap = undefined;
       velocity = { x: 0, y: 0 };
       return;
     }
+    endHold(pointer, point(event));
     if (host.locked?.()) return;
     if (pointer.grabbed && pointer.moved) {
       host.drop?.(point(event));
@@ -366,7 +388,9 @@ export function attachInteractions(
     stop,
     reset() {
       stop();
+      const held = [...points.values()];
       points.clear();
+      for (const pointer of held) endHold(pointer);
       quickZoom = undefined;
       pairTap = undefined;
       trackpadPinch = undefined;

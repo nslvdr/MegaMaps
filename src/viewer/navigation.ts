@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import type { Camera, Point, Size } from "./camera";
 import { screenToWorld, cameraAt } from "./camera";
+import { isTrailPoint, isTrip, type TrailPoint, type Trip } from "./trail";
 export interface SavedView {
   center: Point;
   scale: number;
@@ -97,6 +98,10 @@ export interface NavigationState {
   touchLocked: boolean;
   markers: MapMarker[];
   routes: PlannedRoute[];
+  /** The trip under way: where the user marked themselves, oldest first. Kept on this device, never shared. */
+  trail: TrailPoint[];
+  /** Trips that have ended, oldest first. Kept on this device, never shared. */
+  trips: Trip[];
   /** Stable imported identities, retained when an imported item is deleted. */
   importedItems?: string[];
   /** Incremented by Replace so older windows cannot restore removed annotations. */
@@ -108,8 +113,9 @@ export const DEFAULT_DIMMING = 0.85;
 export const BRIGHTNESS_LEVELS = [1, DEFAULT_DIMMING, 0.75, 0.65, 0.55] as const;
 export const brightnessPercent = (level: number) => Math.round(level * 100);
 /** marker: tap to drop a new place · route: draw/edit · move: reposition a place ·
- *  measure: tap a line to read its length · scale: tap two ends of a known length */
-export type Tool = "browse" | "marker" | "route" | "move" | "measure" | "scale";
+ *  measure: tap a line to read its length · scale: tap two ends of a known length ·
+ *  trail: tap where you are */
+export type Tool = "browse" | "marker" | "route" | "move" | "measure" | "scale" | "trail";
 export function defaultNavigation(mapId: string): NavigationState {
   return {
     mapId,
@@ -120,6 +126,8 @@ export function defaultNavigation(mapId: string): NavigationState {
     touchLocked: false,
     markers: [],
     routes: [],
+    trail: [],
+    trips: [],
     layers: {
       places: true,
       routes: true,
@@ -150,9 +158,11 @@ type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
   lastSeen?: number;
   seenAt?: number;
 };
-type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
+type StoredNavigation = Partial<Omit<NavigationState, "markers" | "trail" | "trips">> & {
   mapId: string;
   markers?: StoredMarker[];
+  trail?: unknown;
+  trips?: unknown;
   position?: unknown;
   checkpoints?: LegacyCheckpoint[];
   rotationLocked?: boolean;
@@ -196,7 +206,9 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const routes = (stored.routes ?? defaults.routes).filter(
     (route) => !route.draft || route.points.length > 0,
   );
-  return { ...defaults, ...current, markers, routes, layers };
+  const trail = Array.isArray(stored.trail) ? stored.trail.filter(isTrailPoint) : [];
+  const trips = Array.isArray(stored.trips) ? stored.trips.filter(isTrip) : [];
+  return { ...defaults, ...current, markers, routes, trail, trips, layers };
 }
 // Distinct, high-contrast colors on both black and light maps.
 export const routeColors = ["#38d6ff", "#ff6bd6", "#ffd23f", "#7dff8a", "#b18cff"];

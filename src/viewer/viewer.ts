@@ -17,7 +17,7 @@ import {
   transformAt,
 } from "./camera";
 import { TileCache } from "./cache";
-import { attachInteractions } from "./interactions";
+import { attachInteractions, type Hold } from "./interactions";
 import {
   defaultNavigation,
   captureView,
@@ -58,8 +58,9 @@ export interface ViewerOptions {
   onSearchResult?(index: number): void;
   /** A browsing double tap; the map itself never zooms on one. */
   onDoubleTap?(): void;
-  /** Long press on the map while browsing, in image coordinates. */
-  onLongPress?(point: Point): void;
+  /** Long press on the map while browsing: `point` in image coordinates, `screen` on the map.
+   * The returned hold follows the finger, in the same screen coordinates, until it lifts. */
+  onHold?(point: Point, screen: Point): Hold | undefined;
   /** A route point or the moving place was picked up (before it changes). */
   onDragStart?(): void;
   /** It was put down (moved) or put back (interrupted). */
@@ -154,10 +155,8 @@ export class Viewer {
       cancelDrag: () => this.cancelDrag(),
       longPress: (screen) => {
         const point = screenToWorld(this.camera, screen);
-        if (this.tool !== "browse" || !insideImage(point, this.map)) return false;
-        if (!this.options?.onLongPress) return false;
-        this.options.onLongPress(point);
-        return true;
+        if (this.tool !== "browse" || !insideImage(point, this.map)) return undefined;
+        return this.options?.onHold?.(point, screen);
       },
     });
     // A mouse learns what a click would do before clicking: pins and labels
@@ -339,6 +338,11 @@ export class Viewer {
   setSearch(matches: MapSearchMatch[], active: boolean, selected = 0) {
     this.searchOverlay?.set(matches, active, selected);
     this.overlay?.setSearchMarkers(active ? matches.flatMap(match => match.marker ? [match.marker.id] : []) : []);
+    this.invalidate();
+  }
+  /** A finished trip, drawn over the map while its summary is open. */
+  showTrip(points?: Point[]) {
+    this.overlay?.setTrip(points);
     this.invalidate();
   }
   pulse(id: string) {

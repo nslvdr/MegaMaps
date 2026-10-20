@@ -11,6 +11,7 @@
   --neon-add: #b6ff3b;
   --neon-lock: #ff9a3c;
   --neon-measure: #fff04d;
+  --neon-trail: #ff2a2a;
   --kind-route: #38d6ff;
   --kind-place: #ff9a5c;
   /* Shared type scale across the library, dialogs, and viewer. */
@@ -1936,6 +1937,28 @@ button.glass:active:not(:disabled) {
 .measure-dialog {
   --accent: var(--neon-measure);
 }
+/* Trail, like the dot that marks where you are, is red. While a trip is under
+   way its chip carries that dot. */
+#open-trail,
+.sheet[data-panel="trail"],
+[data-tool="trail"] .tool-bar,
+.trip-card {
+  --c: var(--neon-trail);
+}
+#open-trail {
+  position: relative;
+}
+#open-trail.on-trip::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-round);
+  background: var(--neon-trail);
+  box-shadow: 0 0 0 2px #000;
+}
 /* Rotation always has a mode, so like View it only lights up while open. */
 #open-rotation,
 .sheet[data-panel="rotation"] {
@@ -2450,6 +2473,32 @@ dialog.place-card::backdrop {
   color: var(--muted);
   font-size: var(--font-size-small);
 }
+/* A finished trip at a glance: three figures side by side under its day. */
+.trip-stats {
+  display: grid;
+  /* A count needs less room than a distance or a time. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  margin: var(--space-16) 0 0;
+}
+.trip-stats > div {
+  padding: var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--fill);
+  border: 1px solid var(--line);
+}
+.trip-stats dt {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+.trip-stats dd {
+  margin: var(--space-4) 0 0;
+  color: var(--c);
+  font-size: var(--font-size-heading);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* The history, newest first, under the description. */
 /* Spaced from what's shown above it, but not from the top of the details. */
 .place-log {
@@ -2677,7 +2726,7 @@ dialog.place-card::backdrop {
   color: var(--c);
 }
 /* View and Rotation open below their corner buttons; Saved keeps its bottom sheet. */
-.sheet:is([data-panel="display"], [data-panel="rotation"]) {
+.sheet:is([data-panel="trail"], [data-panel="display"], [data-panel="rotation"]) {
   top: calc(var(--hud-top) + 52px);
   bottom: auto;
   left: var(--edge-l);
@@ -3109,6 +3158,10 @@ label.panel-row {
 .section-title.places {
   --k: var(--kind-place);
 }
+#trip-list,
+.section-title.trips {
+  --k: var(--neon-trail);
+}
 .navigation-list {
   margin: 0;
   padding: 0;
@@ -3120,7 +3173,7 @@ label.panel-row {
 .navigation-row + .navigation-row {
   border-top: 1px solid color-mix(in srgb, var(--k) 14%, transparent);
 }
-.sheet[data-panel="saved"] .section-title {
+.sheet:is([data-panel="saved"], [data-panel="trail"]) .section-title {
   margin: var(--space-20) 0 var(--space-8);
   font-size: var(--font-size-small);
   font-weight: 600;
@@ -3452,6 +3505,119 @@ label.panel-row {
   50% {
     opacity: 0.35;
   }
+}
+
+/* The trail: faint dashes through each point marked, and the last one, where
+   the user said they were, pulsing while it is recent. */
+.trail-line {
+  opacity: 0.3;
+}
+.trail-dot {
+  opacity: 0.4;
+}
+.trail-mark {
+  fill: var(--neon-trail);
+  stroke: #000;
+  stroke-width: 2.5;
+}
+.trail-pulse {
+  fill: none;
+  stroke: var(--neon-trail);
+  stroke-width: 2.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.trail-here[data-age="fresh"] .trail-pulse {
+  animation: trail-pulse 2s ease-out infinite;
+}
+.trail-here[data-age="aging"] .trail-pulse {
+  stroke-opacity: 0.5;
+  animation: trail-pulse 4s ease-out infinite;
+}
+.trail-here[data-age="old"] .trail-mark {
+  opacity: 0.5;
+}
+@keyframes trail-pulse {
+  from {
+    opacity: 0.9;
+    transform: scale(0.45);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+/* Long-press wheel, centred on the finger: two neon half rings, and the one
+   the finger is dragged into glows in its colour. */
+.hold-wheel {
+  --place: var(--neon-add);
+  --trail: var(--neon-trail);
+  --off: #3a3e46;
+  position: absolute;
+  width: 172px;
+  height: 172px;
+  margin: -86px 0 0 -86px;
+  border-radius: var(--radius-round);
+  background: rgb(0 0 0 / 0.45);
+  pointer-events: none;
+  animation: pop-in 0.14s ease-out;
+}
+.hold-arcs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hold-arc {
+  fill: none;
+  stroke: var(--off);
+  stroke-width: 7px;
+  stroke-linecap: round;
+  transition: stroke 0.12s, stroke-width 0.12s var(--ease-out);
+}
+.hold-wheel > span {
+  position: absolute;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  border-radius: var(--radius-round);
+  border: 2px solid var(--off);
+  background: #000;
+  color: var(--muted);
+  transition: transform 0.12s var(--ease-out), color 0.12s, border-color 0.12s;
+}
+.hold-wheel > span svg {
+  width: 20px;
+  height: 20px;
+}
+.hold-place {
+  top: 4px;
+}
+.hold-trail {
+  bottom: 4px;
+}
+.hold-wheel[data-choice="place"] .place,
+.hold-wheel[data-choice="trail"] .trail {
+  stroke: var(--lit);
+  stroke-width: 10px;
+  filter: drop-shadow(0 0 6px var(--lit));
+}
+.hold-wheel[data-choice="place"] .hold-place,
+.hold-wheel[data-choice="trail"] .hold-trail {
+  color: var(--lit);
+  border-color: var(--lit);
+  transform: scale(1.2);
+}
+.hold-wheel[data-choice="place"] {
+  --lit: var(--place);
+}
+.hold-wheel[data-choice="trail"] {
+  --lit: var(--trail);
 }
 
 @media (max-height: 520px) {
