@@ -37,6 +37,7 @@ import { locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
+import { wheelChoice } from "./hold-wheel";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
@@ -266,11 +267,28 @@ export class ViewerControls {
       onDoubleTap: () => this.orientOnTap(),
       // A result's label flies to that result, like stepping to it.
       onSearchResult: (index) => this.showMatch(index),
-      // Long-press drops a place without going through Add.
-      onLongPress: (point) => {
+      // Long-press opens a wheel under the finger: drag up and lift to add a
+      // place there, down to mark the trail; lifting in the middle does nothing.
+      onHold: (point, screen) => {
         if (this.tool !== "browse") return;
-        navigator.vibrate?.(12);
-        this.openMarker(t("New place"), point);
+        const wheel = this.el("hold-wheel");
+        wheel.style.left = `${screen.x}px`;
+        wheel.style.top = `${screen.y}px`;
+        delete wheel.dataset.choice;
+        wheel.hidden = false;
+        return {
+          move: (at) => {
+            const choice = wheelChoice(screen, at);
+            if (choice) wheel.dataset.choice = choice;
+            else delete wheel.dataset.choice;
+          },
+          end: (at) => {
+            wheel.hidden = true;
+            const choice = at && wheelChoice(screen, at);
+            if (choice === "place") this.openMarker(t("New place"), point);
+            else if (choice === "trail") this.markTrail(point);
+          },
+        };
       },
       onDragStart: () => {
         const line = this.measuring() ? this.tape() : this.tool === "route" ? this.route()?.points : undefined;
@@ -318,6 +336,17 @@ export class ViewerControls {
   private showToast(shown: boolean) {
     this.el("toast").hidden = this.el("toast-bar").hidden = !shown;
     if (!shown) this.toastUndo = undefined;
+  }
+  /** The trail grows by one point; a mistaken one can be taken back from the toast. */
+  private markTrail(point: Point) {
+    const mark = { ...point, time: Date.now() };
+    this.state.trail.push(mark);
+    this.changed();
+    this.toast(t("Trail point added"), "done", () => {
+      this.state.trail = this.state.trail.filter((other) => other.time !== mark.time);
+      this.changed();
+      this.toast(t("Trail point removed"), "quiet");
+    });
   }
   /** Deletes stay two taps, and a few seconds to change your mind after. */
   private deleted(label: string, restore: () => void) {

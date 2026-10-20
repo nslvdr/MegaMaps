@@ -120,7 +120,7 @@ The original remains locally stored. Metadata is committed as ready **only after
 
 The main-menu footer shows the release date of the loaded version, internet connectivity, live-site availability and verified offline-shell readiness. A fresh request checks the live site; cached files cannot produce a successful online check. When the browser reports a network but the site cannot be reached, internet connectivity is shown as unconfirmed. Offline readiness covers application files. Maps are stored locally when import completes; the footer does not check map tiles.
 
-Drag to pan; pinch to zoom. **Double-tap and drag** down/up zooms with one thumb; a plain double tap zooms in (at deep zoom it returns to fit) and a **two-finger tap** zooms out. **Long-press** the map to drop a place. Wheel/trackpad zoom is centered on the cursor; with a mouse, double-click zooms in and Shift+double-click zooms out.
+Drag to pan; pinch to zoom. **Double-tap and drag** down/up zooms with one thumb; a plain double tap zooms in (at deep zoom it returns to fit) and a **two-finger tap** zooms out. **Long-press** the map to open a wheel under your finger: keep holding, drag up and lift to drop a place there, or drag down to mark your **trail**; lifting in the middle cancels. The trail is a faint dashed line through every point you marked, and the last one pulses for a while so you know where you said you were (a gap of six hours or more starts a new trip). It stays on this device and is not shared. Wheel/trackpad zoom is centered on the cursor; with a mouse, double-click zooms in and Shift+double-click zooms out.
 
 The map fills the screen. Fingers move it, so there are no zoom or pan buttons; only a few controls float over it:
 

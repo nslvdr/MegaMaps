@@ -1099,8 +1099,33 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(dock.hidden, false, "closing search restores the navbar");
     state.markers = originalMarkers;
 
-    // Long-press drops a place.
-    controls.options().onLongPress?.({ x: 2000, y: 2100 });
+    // Long-press opens the wheel; lifting in its middle does nothing.
+    const hold = (screen = { x: 200, y: 300 }) => controls.options().onHold!({ x: 2000, y: 2100 }, screen)!;
+    let press = hold();
+    assert.equal(el("hold-wheel").hidden, false);
+    press.move({ x: 200, y: 230 });
+    assert.equal(el("hold-wheel").dataset.choice, "place");
+    press.move({ x: 215, y: 310 });
+    assert.equal(el("hold-wheel").dataset.choice, undefined, "back in the middle, nothing is chosen");
+    press.end({ x: 215, y: 310 });
+    assert.equal(el("hold-wheel").hidden, true);
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    assert.equal(state.trail.length, 0);
+    // Down, even far to one side, marks the trail at the pressed point, with an Undo.
+    press = hold();
+    press.end({ x: 290, y: 305 });
+    assert.equal(state.trail.length, 1);
+    assert.deepEqual({ ...state.trail[0], time: 0 }, { x: 2000, y: 2100, time: 0 });
+    assert.equal(el("toast").textContent, "Trail point added");
+    click("toast-undo");
+    assert.equal(state.trail.length, 0);
+    // A cancelled hold (a second finger) does nothing.
+    press = hold();
+    press.move({ x: 200, y: 200 });
+    press.end();
+    assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    // Up drops a place.
+    hold().end({ x: 180, y: 240 });
     assert.equal(el("marker-dialog").hasAttribute("open"), true);
     assert.equal((el("marker-label") as HTMLInputElement).value, "Entrance 1",
       "a new place starts as the kind last added");

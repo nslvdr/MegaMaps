@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import type { Camera, Point, Size } from "./camera";
 import { screenToWorld, cameraAt } from "./camera";
+import { isTrailPoint, type TrailPoint } from "./trail";
 export interface SavedView {
   center: Point;
   scale: number;
@@ -97,6 +98,8 @@ export interface NavigationState {
   touchLocked: boolean;
   markers: MapMarker[];
   routes: PlannedRoute[];
+  /** Where the user marked themselves, oldest first. Kept on this device, never shared. */
+  trail: TrailPoint[];
   /** Stable imported identities, retained when an imported item is deleted. */
   importedItems?: string[];
   /** Incremented by Replace so older windows cannot restore removed annotations. */
@@ -120,6 +123,7 @@ export function defaultNavigation(mapId: string): NavigationState {
     touchLocked: false,
     markers: [],
     routes: [],
+    trail: [],
     layers: {
       places: true,
       routes: true,
@@ -150,9 +154,10 @@ type StoredMarker = Omit<MapMarker, "kind" | "description"> & {
   lastSeen?: number;
   seenAt?: number;
 };
-type StoredNavigation = Partial<Omit<NavigationState, "markers">> & {
+type StoredNavigation = Partial<Omit<NavigationState, "markers" | "trail">> & {
   mapId: string;
   markers?: StoredMarker[];
+  trail?: unknown;
   position?: unknown;
   checkpoints?: LegacyCheckpoint[];
   rotationLocked?: boolean;
@@ -196,7 +201,8 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   const routes = (stored.routes ?? defaults.routes).filter(
     (route) => !route.draft || route.points.length > 0,
   );
-  return { ...defaults, ...current, markers, routes, layers };
+  const trail = Array.isArray(stored.trail) ? stored.trail.filter(isTrailPoint) : [];
+  return { ...defaults, ...current, markers, routes, trail, layers };
 }
 // Distinct, high-contrast colors on both black and light maps.
 export const routeColors = ["#38d6ff", "#ff6bd6", "#ffd23f", "#7dff8a", "#b18cff"];

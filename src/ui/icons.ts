@@ -169,6 +169,7 @@ export const icons = {
   added: svg(MapPinPlus),
   note: svg(MessageSquareText),
   visit: svg(Footprints),
+  trail: svg(Footprints),
   // Each water and danger level, deeper or riskier as it goes.
   ankle: svg(Droplet),
   knee: svg(Waves),

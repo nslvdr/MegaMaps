@@ -10,6 +10,7 @@ import {
   type MapMarker,
   type NavigationState,
 } from "./navigation";
+import { trailAge, trailAgeChange, trailSegments } from "./trail";
 const NS = "http://www.w3.org/2000/svg";
 const node = <K extends keyof SVGElementTagNameMap>(
   tag: K,
@@ -59,6 +60,7 @@ export class NavigationOverlay {
   private found?: string;
   private selected?: string;
   private foundTimer?: ReturnType<typeof setTimeout>;
+  private ageTimer?: ReturnType<typeof setTimeout>;
   private preview?: Pick<MapMarker, "point" | "kind">;
   /** The line being measured, or the two ends of the scale being set. */
   private measure?: Point[];
@@ -153,6 +155,29 @@ export class NavigationOverlay {
       this.points.push({ element, point });
       return { element, body };
     };
+    // The trail is faint and lowest: a record, not something to read.
+    clearTimeout(this.ageTimer);
+    const trail = node("g", { class: "trail" });
+    this.svg.append(trail);
+    for (const segment of trailSegments(state.trail)) {
+      path(trail, segment, { stroke: "#fff", "stroke-width": "2", "stroke-dasharray": "3 7", class: "trail-line" });
+      path(trail, segment, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, true);
+    }
+    const here = state.trail.at(-1);
+    if (here) {
+      const element = node("g", { class: "trail-here" });
+      element.append(node("circle", { r: "18", class: "trail-pulse" }), node("circle", { r: "8", class: "trail-mark" }));
+      trail.append(element);
+      this.points.push({ element, point: here });
+      // The pulse slows, then stops, as the position gets older.
+      const age = () => {
+        const now = Date.now();
+        element.dataset.age = trailAge(here.time, now);
+        const next = trailAgeChange(here.time, now);
+        if (next !== undefined) this.ageTimer = setTimeout(age, next);
+      };
+      age();
+    }
     // Lines first so every pin and label sits above them.
     const routes = group("routes");
     for (const route of state.routes) {
@@ -336,6 +361,7 @@ export class NavigationOverlay {
   }
   dispose() {
     clearTimeout(this.foundTimer);
+    clearTimeout(this.ageTimer);
     this.svg.replaceChildren();
   }
 }

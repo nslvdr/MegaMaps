@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { attachInteractions } from "../src/viewer/interactions";
-import { screenToWorld, type Camera } from "../src/viewer/camera";
+import { screenToWorld, type Camera, type Point } from "../src/viewer/camera";
 class Canvas extends EventTarget {
   clientHeight = 844;
   getBoundingClientRect() {
@@ -28,6 +28,7 @@ function host(canvas: Canvas) {
     orienting = false,
     orients = 0,
     animations = 0;
+  const holds: { moves: Point[]; end?: Point | "cancelled" }[] = [];
   const interactions = attachInteractions(
     canvas as unknown as HTMLCanvasElement,
     {
@@ -55,9 +56,14 @@ function host(canvas: Canvas) {
         if (orienting) orients++;
       },
       longPress: () => {
-        if (editing) return false;
+        if (editing) return undefined;
         presses++;
-        return true;
+        const hold: (typeof holds)[number] = { moves: [] };
+        holds.push(hold);
+        return {
+          move: (point) => hold.moves.push(point),
+          end: (point) => (hold.end = point ?? "cancelled"),
+        };
       },
     },
   );
@@ -79,6 +85,7 @@ function host(canvas: Canvas) {
     },
     taps: () => taps,
     presses: () => presses,
+    holds,
     orients: () => orients,
     animations: () => animations,
   };
@@ -245,6 +252,29 @@ test("long press fires once without panning; moving or editing cancels it", asyn
   emit(canvas, "pointerup", pointer(1, 100, 100));
   assert.equal(h.presses(), 1);
   assert.equal(h.taps(), 1, "while editing, a slow tap still places a point");
+  h.interactions.dispose();
+});
+test("a held finger is followed until it lifts; a second finger cancels the hold", async () => {
+  Object.defineProperty(globalThis, "cancelAnimationFrame", {
+    value: () => {},
+    configurable: true,
+  });
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const canvas = new Canvas(),
+    h = host(canvas);
+  emit(canvas, "pointerdown", pointer(1, 100, 100));
+  await wait(560);
+  emit(canvas, "pointermove", pointer(1, 100, 160));
+  emit(canvas, "pointerup", pointer(1, 100, 170));
+  assert.deepEqual(h.holds[0], { moves: [{ x: 100, y: 160 }], end: { x: 100, y: 170 } });
+  emit(canvas, "pointerdown", pointer(1, 100, 100));
+  await wait(560);
+  emit(canvas, "pointerdown", pointer(2, 200, 100));
+  emit(canvas, "pointermove", pointer(1, 100, 40));
+  emit(canvas, "pointerup", pointer(1, 100, 40));
+  emit(canvas, "pointerup", pointer(2, 200, 100));
+  assert.deepEqual(h.holds[1], { moves: [], end: "cancelled" }, "ends once, as cancelled");
+  assert.deepEqual(h.camera(), { x: 0, y: 0, scale: 1 }, "the held finger never pans");
   h.interactions.dispose();
 });
 

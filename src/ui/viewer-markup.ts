@@ -18,6 +18,9 @@ const rowIcon = (icon: string, tint = "") =>
 // The whole icon tile toggles its layer through a native, keyboard-accessible input.
 const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
+// The long-press wheel's two half rings, top for a place and bottom for the
+// trail, with a small gap where they meet at the sides.
+const holdArcs = `<svg class="hold-arcs" viewBox="-86 -86 172 172"><path class="hold-arc place" d="M-63.2 -10.2A64 64 0 0 1 63.2 -10.2"/><path class="hold-arc trail" d="M63.2 10.2A64 64 0 0 1 -63.2 10.2"/></svg>`;
 // Rotation is one list: each row is a mode, or Compass mode with how it follows.
 const rotationChoice = (id: string, label: string, help: string, icon: string) =>
   `<label class="panel-row choice-row"><input type="radio" name="rotation" id="${id}">${rowIcon(icon)}<span class="row-text"><strong>${label}</strong><small>${help}</small></span><i class="choice-check">${icons.check}</i></label>`;
@@ -59,7 +62,7 @@ const dangerPicks = dangerSteps
 //                   with the same header (icon, title, X) and full-size actions
 // Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="${t("Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press to add a place.")}"></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg></div>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="${t("Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press, then drag up to add a place or down to mark where you are.")}"></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg><div id="hold-wheel" class="hold-wheel" aria-hidden="true" hidden>${holdArcs}<span class="hold-place">${icons.pin}</span><span class="hold-trail">${icons.trail}</span></div></div>
 <button class="glass corner-button corner-left" id="back" aria-label="${t("Back to library")}" title="${t("Back to library")}">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="${t("Map view controls")}">
   <button id="open-measure" class="glass status-chip" aria-label="${t("Measure")}" title="${t("Measure")}" aria-pressed="false">${icons.measure}</button>
