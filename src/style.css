@@ -2701,8 +2701,14 @@ dialog.place-card::backdrop {
   color: var(--muted);
   font-size: var(--font-size-small);
 }
+/* A long nickname wraps; the date keeps its line. */
 .log-head strong {
+  min-width: 0;
   color: var(--text);
+  overflow-wrap: anywhere;
+}
+.log-head time {
+  flex: none;
 }
 .log-text {
   margin: var(--space-4) 0 0;

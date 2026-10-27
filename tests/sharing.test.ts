@@ -209,6 +209,37 @@ test("shares carry the sender's name from settings only when one is set", async 
   assert.throws(() => validateManifest({ ...manifest, from: "x".repeat(101) }), /invalid/);
 });
 
+test("sent places, routes and history carry who added them, and keep it when passed on", async () => {
+  const source = record("authored-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", image());
+  const { manifest } = await fixture();
+  const state = { ...defaultNavigation(source.id), routes: manifest.routes, markers: [
+    { ...manifest.markers[0]!, log: [{ id: "visit", date: 5 }, { id: "note", date: 6, text: "Wet", by: "Léa" }] },
+    { ...manifest.markers[0]!, id: "place-b", by: "Léa" },
+  ] };
+  const share = async () => (await readShare(exportFile(await prepareExport(source, state),
+    { markers: ["place-a", "place-b"], routes: ["route-a"], includeImage: false }))).manifest;
+  const unnamed = await share();
+  assert.deepEqual(unnamed.markers.map((place) => place.by), [undefined, "Léa"], "without a nickname, nothing is filled in");
+
+  await saveSetting("share-name", "Alex");
+  const shared = await share();
+  await saveSetting("share-name", "");
+  assert.deepEqual(shared.markers.map((place) => place.by), ["Alex", "Léa"]);
+  assert.deepEqual(shared.markers[0]!.log!.map((entry) => entry.by), ["Alex", "Léa"]);
+  assert.equal(shared.routes[0]!.by, "Alex");
+  assert.equal(state.markers[0]!.by, undefined, "sending leaves the places here as they were");
+
+  const merged = mergeAnnotations({ ...defaultNavigation("authored-destination"),
+    markers: [{ ...manifest.markers[0]!, log: [{ id: "visit", date: 5 }] }] }, shared).state;
+  assert.deepEqual(merged.markers.map((place) => place.by), [undefined, "Léa"], "a place already here keeps its own author");
+  assert.deepEqual(merged.markers[0]!.log!.map((entry) => entry.by), [undefined, "Léa"]);
+  assert.throws(() => validateManifest({ ...shared, routes: [{ ...shared.routes[0]!, by: " " }] }), /invalid/);
+  assert.throws(() => validateManifest({ ...shared, markers: [{ ...shared.markers[1]!,
+    log: [{ id: "x", date: 1, by: "x".repeat(101) }] }] }), /invalid/);
+});
+
 test("map north travels in shares, fills in an untuned map and never undoes local tuning", async () => {
   const original = image(512, 256, "north");
   const source = record("north-source");

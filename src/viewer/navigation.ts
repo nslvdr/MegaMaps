@@ -20,6 +20,8 @@ export interface MapMarker {
   /** How dangerous a danger place is; without one it reads as high. */
   danger?: DangerLevel;
   created: number;
+  /** The nickname of whoever added it, filled in when it's sent; none means it was added here. */
+  by?: string;
   /** Visits, notes and edits, in the order they were added. */
   log?: PlaceLogEntry[];
   /** IDs of log entries deleted here, so a merge can't bring them back. Never shared. */
@@ -41,6 +43,8 @@ export interface PlaceLogEntry {
   date: number;
   text?: string;
   changes?: PlaceChange[];
+  /** Whoever wrote it, as for places. */
+  by?: string;
 }
 /** Saves and shares from before 2026-10-20 kept a last seen date beside the log. It becomes
  * a visit unless an entry already reaches that day; its ID is its date, so copies agree. */
@@ -64,6 +68,8 @@ export interface PlannedRoute {
   photos?: string[];
   points: Point[];
   created: number;
+  /** Whoever drew it, as for places. */
+  by?: string;
   draft: boolean;
 }
 export interface Layers {

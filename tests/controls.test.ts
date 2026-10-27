@@ -1646,6 +1646,16 @@ test("a place keeps one history: visits and notes from its card, edits and moves
     click("tool-done");
     controls.options().onMarker(place());
     assert.deepEqual(entries()[0], "Name Hall → Great hall\nDescription edited\nPosition moved");
+
+    // What came from someone else says who, even a place with no history yet.
+    state.markers.push({ id: "shaft", point: { x: 900, y: 600 }, label: "Shaft", description: "",
+      kind: "shaft", created: Date.now() - day, by: "Léa" });
+    controls.options().onMarker(state.markers[1]!);
+    assert.equal(el("marker-details").hidden, false);
+    assert.deepEqual(entries(), ["Added by Léa"]);
+    state.markers[1]!.log = [{ id: "seen", date: Date.now(), by: "Sam" }];
+    controls.options().onMarker(state.markers[1]!);
+    assert.deepEqual(entries(), ["Visited by Sam", "Added by Léa"]);
   } finally {
     await controls.dispose();
   }

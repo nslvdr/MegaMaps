@@ -57,6 +57,13 @@ test("edits on one day fold into one entry that keeps where each change started"
   assert.equal(lastUpdated(hall()), 100, "with no history, a place was last updated when it was added");
 });
 
+test("an edit never folds into someone else's edit from the same day", () => {
+  const place = hall({ log: [{ id: "lea", date: noon, changes: [{ field: "point" }], by: "Léa" }] });
+  recordEdit(place, [{ field: "description" }], noon + 60_000);
+  assert.deepEqual(place.log!.map((entry) => entry.by), ["Léa", undefined]);
+  assert.equal(place.deletedLog, undefined);
+});
+
 test("a last seen date from an older save becomes a visit, once", () => {
   const load = (marker: object) => normalizeNavigation({ mapId: "m", markers: [{ ...hall(), ...marker }] }).markers[0]!;
   const migrated = load({ lastSeen: 500, seenAt: 600, log: [{ id: "note", date: 400, text: "Dry" }] });
