@@ -17,6 +17,7 @@ import {
 import { readHeader } from "../src/processing/headers";
 import { decodePNG, unfilter } from "../src/processing/png";
 import { TILE_SIZE } from "../src/types";
+import { MOST_TILES } from "../src/viewer/cache";
 
 function png(
   width: number,
@@ -118,12 +119,22 @@ test("panning keeps the tile level, and that level fits the decode budget everyw
   for (const scale of [0.25, 0.3, 0.35, 0.4, 0.5, 0.7])
     for (const rotation of [0, 0.3, Math.PI / 4]) {
       const at = (x: number, y: number) => cameraAt({ x, y }, viewport, scale, rotation);
-      const level = tileLevel(levels, at(4500, 4500), viewport, 2);
+      const level = tileLevel(levels, at(4500, 4500), viewport, 2, 22);
       for (let x = 3000; x < 4200; x += 7)
         for (const y of [4000, 4133, 4271]) {
-          assert.equal(tileLevel(levels, at(x, y), viewport, 2), level, `${scale} ${rotation} at ${x},${y}`);
+          assert.equal(tileLevel(levels, at(x, y), viewport, 2, 22), level, `${scale} ${rotation} at ${x},${y}`);
           assert.ok(visibleTiles(levels[level]!, at(x, y), viewport).length <= 22);
         }
+    }
+});
+test("on a 3x phone, tiles are never stretched past 1.5x their pixels", () => {
+  const levels = pyramid(9000, 9000),
+    viewport = { width: 393, height: 852 };
+  for (let hundredths = 30; hundredths <= 300; hundredths++)
+    for (const rotation of [0, 0.3, Math.PI / 4]) {
+      const shown = hundredths / 100,
+        level = tileLevel(levels, cameraAt({ x: 4500, y: 4500 }, viewport, shown / 3, rotation), viewport, 3, MOST_TILES);
+      if (level) assert.ok(shown * 2 ** level <= 1.5, `${shown} at level ${level}`);
     }
 });
 test("map edges and corners can be centered at fit and native zoom, including rotation", () => {

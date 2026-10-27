@@ -105,15 +105,13 @@ export function chooseLevel(levels: Level[], scale: number, dpr: number) {
     Math.max(0, Math.floor(Math.log2(1 / (scale * dpr)))),
   );
 }
-// Decoded tiles a view may need at once; the cache budget holds a few more.
-const MOST_TILES = 22;
 /** The sharpest level whose tiles fit the decode budget wherever the screen is
  * panned. Counting only the tiles shown now would switch levels mid-pan, as
  * rows and columns of the grid slide in and out, and the map would flicker
  * between sharp and coarse tiles. */
-export function tileLevel(levels: Level[], camera: Camera, viewport: Size, dpr: number) {
+export function tileLevel(levels: Level[], camera: Camera, viewport: Size, dpr: number, most: number) {
   let level = chooseLevel(levels, camera.scale, dpr);
-  while (level < levels.length - 1 && mostTiles(levels[level]!, camera, viewport) > MOST_TILES)
+  while (level < levels.length - 1 && mostTiles(levels[level]!, camera, viewport) > most)
     level++;
   return level;
 }
