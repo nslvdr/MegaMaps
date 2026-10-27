@@ -11,7 +11,7 @@ import { saveMap } from "../storage/database";
 import { readHeader } from "./headers";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
-import { decodeJPEG } from "./jpeg";
+import { CUT, DECODED, cropJPEG, decodeJPEG } from "./jpeg";
 import { tileBand, buildParents } from "./tiles";
 const reply = (message: WorkerReply) => postMessage(message);
 onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
@@ -80,10 +80,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       record.id,
       progress,
     );
-    let decoder =
-      header.format === "jpeg"
-        ? "libjpeg scanlines / OPFS coefficient spill"
-        : "PNG streaming scanlines";
+    let decoder = header.format === "jpeg" ? DECODED : "PNG streaming scanlines";
     async function native() {
       if (header.width * header.height > NATIVE_PIXEL_LIMIT)
         throw new Error(
@@ -110,9 +107,20 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         bitmap.close();
       }
     }
-    if (header.format === "jpeg")
-      await decodeJPEG(file, header, record.id, record.backend, consume);
-    else if (header.format === "png") {
+    if (header.format === "jpeg") {
+      const cropped =
+        record.backend === "opfs" &&
+        (await cropJPEG(file, header, record.id, async (x, y, tile) => {
+          await measuredStore.put(record.id, tileKey(0, x, y), tile);
+          progress();
+        }));
+      if (cropped) decoder = CUT;
+      else {
+        // Restart the count: the decode rewrites every level-0 tile.
+        done = tileBytes = 0;
+        await decodeJPEG(file, header, record.id, record.backend, consume);
+      }
+    } else if (header.format === "png") {
       try {
         await decodePNG(file, header, consume);
       } catch (error) {
@@ -120,7 +128,14 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         else throw error;
       }
     } else await native();
-    await buildParents(levels, canvas, measuredStore, record.id, progress);
+    await buildParents(
+      levels,
+      canvas,
+      measuredStore,
+      record.id,
+      progress,
+      header.format === "jpeg" ? "image/jpeg" : "image/png",
+    );
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {
       ...record,

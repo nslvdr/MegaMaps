@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import { TILE_SIZE, tileKey, type MapRecord } from "../types";
 import { payloadStore } from "./payloads";
+import { readHeader } from "../processing/headers";
 export type VerificationReply =
   | { type: "progress"; checked: number; total: number }
   | { type: "done" }
@@ -20,19 +21,16 @@ onmessage = async (event: MessageEvent<MapRecord>) => {
         for (let x = 0; x < level.cols; x++) {
           const key = tileKey(index, x, y),
             blob = await store.get(map.id, key);
-          const header = new Uint8Array(await blob.slice(0, 24).arrayBuffer());
           const expectedWidth = Math.min(
               TILE_SIZE,
               level.width - x * TILE_SIZE,
             ),
             expectedHeight = Math.min(TILE_SIZE, level.height - y * TILE_SIZE);
           // Check size before decoding: a corrupted header must never trigger a huge bitmap.
+          const header = await readHeader(blob).catch(() => undefined);
           if (
-            header.length !== 24 ||
-            header[0] !== 137 ||
-            String.fromCharCode(...header.subarray(1, 8)) !== "PNG\r\n\x1a\n" ||
-            new DataView(header.buffer).getUint32(16) !== expectedWidth ||
-            new DataView(header.buffer).getUint32(20) !== expectedHeight
+            header?.width !== expectedWidth ||
+            header.height !== expectedHeight
           )
             throw new Error(t("Tile {key} is damaged.", { key }));
           const bitmap = await createImageBitmap(blob);

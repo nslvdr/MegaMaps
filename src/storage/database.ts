@@ -90,6 +90,8 @@ export async function renameMap(id: string, name: string) {
   if (!trimmed) throw new Error(t("Enter a map name."));
   return patchMap(id, { name: trimmed }, t("Could not save the map name."));
 }
+export const recordTiles = (id: string, patch: Pick<MapRecord, "decoder" | "tileBytes">) =>
+  patchMap(id, patch, "Could not save the map’s tiles.");
 // The library lists the maps in use first.
 export const markOpened = (id: string, opened = Date.now()) =>
   patchMap(id, { opened }, t("Could not note when the map was opened."));

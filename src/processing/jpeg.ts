@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { Backend, ImageHeader } from "../types";
+import { TILE_SIZE, type Backend, type ImageHeader } from "../types";
 import type { RowConsumer } from "./png";
 interface SyncFile {
   read(buffer: ArrayBufferView, options: { at: number }): number;
@@ -18,6 +18,8 @@ export interface JPEGModule {
   _decoder_finish(): number;
   _decoder_close(): void;
   _decoder_error(): number;
+  _cropper_open(): number;
+  _cropper_row(row: number): number;
   UTF8ToString(pointer: number): string;
   ioError?: string;
 }
@@ -31,22 +33,29 @@ export interface JPEGOptions {
     offset: number,
     count: number,
   ) => number;
+  writeTile?: (x: number, y: number, bytes: Uint8Array<ArrayBuffer>) => void;
   wasmBinary?: Uint8Array;
 }
 export type JPEGFactory = (options: JPEGOptions) => Promise<JPEGModule>;
+/** Map record notes. Maps still marked DECODED are shrunk in the background. */
+export const DECODED = "libjpeg scanlines / OPFS coefficient spill",
+  CUT = "libjpeg lossless DCT crops / OPFS coefficient spill",
+  UNCUT = "libjpeg scanlines / could not cut DCT crops";
 export async function loadJPEG(): Promise<JPEGFactory> {
   const url = new URL("/codecs/jpeg.js", location.origin).href;
   const module: { default: JPEGFactory } = await import(/* @vite-ignore */ url);
   return module.default;
 }
-// Each import gets its own worker/WASM instance. Terminating it releases the heap.
-export async function decodeJPEG(
+// Each run gets its own WASM instance. Dropping it releases the heap.
+async function runCodec<T>(
   file: Blob,
   header: ImageHeader,
   id: string,
   backend: Backend,
-  consume: RowConsumer,
-  createDecoder: () => Promise<JPEGFactory> = loadJPEG,
+  spill: boolean,
+  createDecoder: () => Promise<JPEGFactory>,
+  work: (module: JPEGModule) => Promise<T>,
+  writeTile?: JPEGOptions["writeTile"],
 ) {
   const handles: SyncFile[] = [];
   let input: SyncFile | undefined, compressed: Uint8Array | undefined;
@@ -59,7 +68,7 @@ export async function decodeJPEG(
       ).getDirectoryHandle(id);
       const original = (await dir.getFileHandle("original")) as SyncHandle;
       input = await original.createSyncAccessHandle();
-      if (header.progressive) {
+      if (spill) {
         for (let i = 0; i < 4; i++) {
           const handle = (await dir.getFileHandle(`scratch-${i}`, {
             create: true,
@@ -100,33 +109,9 @@ export async function decodeJPEG(
         if (operation === 2) return handle.write(bytes, { at: offset });
         return 0;
       },
+      writeTile,
     });
-    try {
-      const width = module._decoder_open();
-      if (!width)
-        throw new Error(
-          module.ioError ?? module.UTF8ToString(module._decoder_error()),
-        );
-      if (width !== header.width || module._decoder_height() !== header.height)
-        throw new Error(t("JPEG dimensions changed during decoding."));
-      for (let y = 0; y < header.height; y++) {
-        const pointer = module._decoder_row();
-        if (!pointer)
-          throw new Error(
-            module.ioError ?? module.UTF8ToString(module._decoder_error()),
-          );
-        await consume(
-          new Uint8ClampedArray(module.HEAPU8.buffer, pointer, width * 4),
-          y,
-        );
-      }
-      if (!module._decoder_finish())
-        throw new Error(
-          module.ioError ?? module.UTF8ToString(module._decoder_error()),
-        );
-    } finally {
-      module._decoder_close();
-    }
+    return await work(module);
   } finally {
     input?.close();
     for (const handle of handles) handle.close();
@@ -134,4 +119,92 @@ export async function decodeJPEG(
       for (let i = 0; i < handles.length; i++)
         await dir.removeEntry(`scratch-${i}`).catch(() => {});
   }
+}
+export function decodeJPEG(
+  file: Blob,
+  header: ImageHeader,
+  id: string,
+  backend: Backend,
+  consume: RowConsumer,
+  createDecoder: () => Promise<JPEGFactory> = loadJPEG,
+) {
+  return runCodec(
+    file,
+    header,
+    id,
+    backend,
+    !!header.progressive,
+    createDecoder,
+    async (module) => {
+      try {
+        const width = module._decoder_open();
+        if (!width)
+          throw new Error(
+            module.ioError ?? module.UTF8ToString(module._decoder_error()),
+          );
+        if (
+          width !== header.width ||
+          module._decoder_height() !== header.height
+        )
+          throw new Error(t("JPEG dimensions changed during decoding."));
+        for (let y = 0; y < header.height; y++) {
+          const pointer = module._decoder_row();
+          if (!pointer)
+            throw new Error(
+              module.ioError ?? module.UTF8ToString(module._decoder_error()),
+            );
+          await consume(
+            new Uint8ClampedArray(module.HEAPU8.buffer, pointer, width * 4),
+            y,
+          );
+        }
+        if (!module._decoder_finish())
+          throw new Error(
+            module.ioError ?? module.UTF8ToString(module._decoder_error()),
+          );
+      } finally {
+        module._decoder_close();
+      }
+    },
+  );
+}
+/**
+ * Cuts level-0 tiles from the original's DCT blocks without re-encoding.
+ * Resolves false when this JPEG cannot be cut; the caller then decodes it.
+ */
+export function cropJPEG(
+  file: Blob,
+  header: ImageHeader,
+  id: string,
+  put: (x: number, y: number, tile: Blob) => Promise<void>,
+  createDecoder: () => Promise<JPEGFactory> = loadJPEG,
+) {
+  let row: Blob[] = [];
+  return runCodec(
+    file,
+    header,
+    id,
+    "opfs",
+    true,
+    createDecoder,
+    async (module) => {
+      try {
+        if (module._cropper_open() !== header.width) return false;
+        for (let y = 0; y * TILE_SIZE < header.height; y++) {
+          if (!module._cropper_row(y)) return false;
+          const tiles = row;
+          row = [];
+          for (const [x, tile] of tiles.entries()) await put(x, y, tile);
+        }
+        return true;
+      } finally {
+        module._decoder_close();
+      }
+    },
+    (x, _y, bytes) => {
+      row[x] = new Blob([bytes], {
+        type: "image/jpeg",
+      });
+    },
+  );
 }

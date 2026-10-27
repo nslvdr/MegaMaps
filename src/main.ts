@@ -4,6 +4,7 @@ import { tileKey, type MapRecord } from "./types";
 import { listMaps, markOpened, renameMap } from "./storage/database";
 import { payloadStore, deleteAllData, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
+import { startShrinking } from "./processing/shrink";
 import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { findAppUpdate, installAppUpdate } from "./app-update";
@@ -239,20 +240,48 @@ async function shareMap(map: MapRecord, item?: { kind: "marker" | "route"; id: s
   }
 }
 // An origin-wide lock prevents launch cleanup from racing another tab's import.
+// Shrinking older maps steps aside for any change and resumes after it.
 async function mutate<T>(work: () => Promise<T>): Promise<T> {
-  if (navigator.locks)
-    return navigator.locks.request(
-      "map-viewer-storage",
-      { ifAvailable: true },
-      (lock) => {
-        if (!lock)
-          throw new Error(
-            t("Mega Maps is preparing a map in another window. Let it finish first."),
-          );
-        return work();
-      },
-    );
-  return work();
+  await stopShrinking();
+  try {
+    if (navigator.locks)
+      return await navigator.locks.request(
+        "map-viewer-storage",
+        { ifAvailable: true },
+        (lock) => {
+          if (!lock)
+            throw new Error(
+              t("Mega Maps is preparing a map in another window. Let it finish first."),
+            );
+          return work();
+        },
+      );
+    return await work();
+  } finally {
+    shrinkMaps();
+  }
+}
+let shrinking: ReturnType<typeof startShrinking> | undefined;
+// Maps imported with PNG tiles shrink quietly; the open map and its text scan are left alone.
+function shrinkMaps() {
+  if (shrinking || !navigator.locks) return;
+  const job = startShrinking(
+    (id) => id === currentMap?.id || id === ocrJob?.mapId,
+    (id) => {
+      const url = thumbnails.get(id);
+      if (url) URL.revokeObjectURL(url);
+      thumbnails.delete(id);
+    },
+  );
+  shrinking = job;
+  void job.done.then(() => {
+    if (shrinking === job) shrinking = undefined;
+  });
+}
+async function stopShrinking() {
+  const job = shrinking;
+  shrinking = undefined;
+  await job?.stop();
 }
 const appTitle = document.title;
 /** The open map names the tab and the app switcher entry. */
@@ -276,6 +305,7 @@ function closeViewer() {
   viewerSection.hidden = true;
   home.hidden = false;
   void refreshFooter();
+  shrinkMaps();
   document.body.classList.remove("viewing");
   void refresh()
     .then(() => {
@@ -292,6 +322,7 @@ async function openMap(map: MapRecord) {
   viewer = undefined;
   if (!home.hidden) libraryScroll = window.scrollY;
   currentMap = map;
+  if (shrinking?.mapId === map.id) void stopShrinking();
   map.opened = Date.now();
   void markOpened(map.id, map.opened).catch(() => {});
   showTitle();
@@ -760,6 +791,7 @@ async function runOcr(
   };
   ocrJob = job;
   ocrErrors.delete(map.id);
+  if (shrinking?.mapId === map.id) await stopShrinking();
   const update = () => {
     if (currentMap?.id === map.id)
       controls?.updateOcr(previous, job.message, job.fraction);
@@ -889,6 +921,7 @@ async function start() {
   const resume = await lastMap();
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
+  shrinkMaps();
 }
 // A dev server on a new port starts empty; it brings back the shared dev maps.
 async function restoreDevData() {
