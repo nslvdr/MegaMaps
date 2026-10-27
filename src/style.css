@@ -1336,9 +1336,10 @@ dialog > button {
   --accent: var(--neon-saved);
   padding: 0;
 }
-/* Fills the dialog, so a tap that reaches the dialog itself fell on the backdrop. */
+/* Fills the dialog, so a tap that reaches the dialog itself fell on the backdrop.
+   Even all round: the dialog already floats above the home indicator. */
 .action-sheet-body {
-  padding: var(--surface-padding);
+  padding: var(--space-20);
 }
 .action-sheet .dialog-header {
   align-items: center;
@@ -1350,10 +1351,20 @@ dialog > button {
   flex: none;
   width: 48px;
   height: 48px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  color: var(--muted);
+}
+/* A place's, route's or trip's own icon, bare as in its Saved row. */
+.action-sheet-icon:not(:has(img)) {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  overflow: visible;
+}
+.action-sheet-icon svg {
+  width: 28px;
+  height: 28px;
 }
 .action-sheet-icon img {
   width: 100%;
@@ -1381,7 +1392,7 @@ dialog > button {
 }
 .action-sheet-list {
   display: grid;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -1400,7 +1411,7 @@ dialog > button {
   text-align: left;
 }
 .action-sheet-item + .action-sheet-item {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .action-sheet-item svg {
   width: 20px;
@@ -1416,8 +1427,20 @@ dialog > button {
     background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
 }
+/* Delete is a row like the actions, in its own red group. */
 .action-sheet .danger {
+  justify-content: flex-start;
+  gap: var(--space-12);
   width: 100%;
+  min-height: 52px;
+  padding: var(--space-8) var(--space-16);
+  font-weight: 600;
+  text-align: left;
+}
+/* :where keeps the shared pressed and armed states in charge. */
+.action-sheet .danger:where(:not(.armed)) {
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, #000);
 }
 .action-sheet-list + .danger {
   margin-top: var(--space-12);
