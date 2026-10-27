@@ -43,14 +43,14 @@ export function tileBand(
   };
   return consume;
 }
-// Zoomed-out tiles of a JPEG are JPEG too; PNG keeps transparency and sharp lines.
+// Zoomed-out tiles are PNG even for a JPEG map: each level is built from the
+// one below, so JPEG would blur thin lines a little more at every level.
 export async function buildParents(
   levels: Level[],
   canvas: OffscreenCanvas,
   store: PayloadStore,
   id: string,
   progress: () => void,
-  type: "image/png" | "image/jpeg" = "image/png",
 ) {
   // Parents read one child at a time. No whole intermediate resolution is decoded.
   for (let index = 1; index < levels.length; index++) {
@@ -73,7 +73,7 @@ export async function buildParents(
               await store.get(id, tileKey(index - 1, cx, cy)),
             );
             try {
-              // Whole pixels: a half-covered edge pixel would turn dark in JPEG.
+              // Whole pixels: a half-covered edge pixel would turn half transparent.
               ctx.drawImage(
                 bitmap,
                 (dx * TILE_SIZE) / 2,
@@ -88,7 +88,7 @@ export async function buildParents(
         await store.put(
           id,
           tileKey(index, x, y),
-          await canvas.convertToBlob({ type, quality: 0.92 }),
+          await canvas.convertToBlob({ type: "image/png" }),
         );
         progress();
       }

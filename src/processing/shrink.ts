@@ -1,7 +1,7 @@
 import { language } from "../i18n";
 import { listMaps, recordTiles } from "../storage/database";
 import type { MapRecord } from "../types";
-import { CUT, DECODED, UNCUT } from "./jpeg";
+import { CUT, DECODED, JPEG_PARENTS, UNCUT } from "./jpeg";
 import type { ShrinkReply } from "./shrink.worker";
 function shrink(map: MapRecord, signal: AbortSignal) {
   return new Promise<ShrinkReply | undefined>((resolve) => {
@@ -23,7 +23,8 @@ function shrink(map: MapRecord, signal: AbortSignal) {
   });
 }
 /**
- * Maps imported with PNG tiles get lossless JPEG tiles in the background, one
+ * Maps imported with PNG tiles get lossless JPEG tiles in the background, and
+ * maps cut with blurry JPEG zoomed-out levels get PNG ones, one
  * at a time under the storage lock. It skips busy maps and ends when there is
  * nothing left, when another window holds storage, or when stopped. A stopped
  * map keeps working tiles and is shrunk on a later run.
@@ -42,7 +43,7 @@ export function startShrinking(
         (map) =>
           map.status === "ready" &&
           map.backend === "opfs" &&
-          map.decoder === DECODED &&
+          (map.decoder === DECODED || map.decoder === JPEG_PARENTS) &&
           !tried.has(map.id) &&
           !busy(map.id),
       );
