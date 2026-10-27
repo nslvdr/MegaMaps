@@ -1,7 +1,7 @@
 import { InferenceSession, Tensor } from "onnxruntime-web/wasm";
 import { sessionOptions } from "./detector";
+import { LINE_HEIGHT } from "./scan";
 
-export const LINE_HEIGHT = 48;
 const ORIENTATION_WIDTH = 160,
   ORIENTATION_HEIGHT = 80;
 

@@ -3,7 +3,11 @@ import { TILE_SIZE, type ImportProgress } from "../types";
 import { OcrTileCache } from "./tiles";
 import { addOcrLine, OCR_VERSION, type OcrIndex, type OcrLine } from "./index";
 import { regionPoint, type TextRegion } from "./regions";
-import { LINE_HEIGHT, type LineImage, type LineReading } from "./recognizer";
+import type { LineImage, LineReading } from "./recognizer";
+
+/** The recognizer reads lines this many pixels tall. Kept here, not beside the
+ * recognizer, so the page doesn't load ONNX Runtime just for this number. */
+export const LINE_HEIGHT = 48;
 
 export const OCR_WINDOW = 1024;
 export const OCR_OVERLAP = 256;
