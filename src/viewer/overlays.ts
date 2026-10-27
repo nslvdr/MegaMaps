@@ -72,10 +72,17 @@ export function arrows(points: Point[]) {
   }
   return d;
 }
+type OverlayCallout = {
+  callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number;
+  /** Build order, which breaks priority ties the same way on every sort. */
+  order: number; markerId?: string; routeId?: string;
+};
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
-  private callouts: { callout: MapCallout; point: Point; padding: number; layer: Layer; priority: number; markerId?: string; routeId?: string }[] = [];
+  private callouts: OverlayCallout[] = [];
+  /** Each place's pin and route's group, which wear "selected". */
+  private selectable: { id: string; element: SVGGElement }[] = [];
   private searchMarkers = new Set<string>();
   private anchors: CalloutBounds[] = [];
   private editing?: string;
@@ -108,10 +115,25 @@ export class NavigationOverlay {
       for (const element of this.svg.querySelectorAll(".found")) element.classList.remove("found");
     }, FOUND_MS);
   }
+  // Updated in place: tapping a place on a phone shouldn't rebuild every pin and label.
   setSelected(id?: string) {
     if (id === this.selected) return;
     this.selected = id;
-    if (this.state) this.rebuild(this.state);
+    for (const item of this.selectable) item.element.classList.toggle("selected", item.id === id);
+    for (const item of this.callouts) this.raise(item);
+    this.sortCallouts();
+  }
+  /** The selected, moving or edited item claims more room and places its label first. */
+  private raise(item: OverlayCallout) {
+    const raised = item.markerId
+      ? item.markerId === this.moving || item.markerId === this.selected
+      : item.routeId === this.editing || item.routeId === this.selected;
+    item.padding = item.markerId ? (raised ? 18 : 12) : (raised ? 10 : 8);
+    item.priority = raised ? (item.markerId ? 2 : 1) : 0;
+  }
+  // Higher priority claims space first; sorted on changes, not on every frame.
+  private sortCallouts() {
+    this.callouts.sort((a, b) => b.priority - a.priority || a.order - b.order);
   }
   /** An unsaved place, lifted like a moving pin while its details are chosen. */
   setPreview(place?: Pick<MapMarker, "point" | "kind">) {
@@ -139,6 +161,7 @@ export class NavigationOverlay {
     this.svg.replaceChildren();
     this.points = [];
     this.paths = [];
+    this.selectable = [];
     // Labels carry on from where they were, so a rebuild does not make them jump.
     const previous = new Map(this.callouts.map(item => [item.markerId ?? item.routeId, item.callout]));
     this.callouts = [];
@@ -166,7 +189,7 @@ export class NavigationOverlay {
     };
     const label = (
       parent: SVGGElement, text: string, point: Point,
-      icon: string, color: string, padding: number, layer: Layer, priority = 0, markerId?: string, routeId?: string,
+      icon: string, color: string, layer: Layer, markerId?: string, routeId?: string,
     ) => {
       const callout = new MapCallout(icon, color);
       callout.element.classList.add("overlay-label");
@@ -174,7 +197,9 @@ export class NavigationOverlay {
       const before = previous.get(markerId ?? routeId);
       if (before) callout.follow(before);
       parent.append(callout.element);
-      this.callouts.push({ callout, point, padding, layer, priority, markerId, routeId });
+      const item = { callout, point, padding: 0, layer, priority: 0, order: this.callouts.length, markerId, routeId };
+      this.raise(item);
+      this.callouts.push(item);
     };
     const pin = (parent: SVGGElement, point: Point) => {
       const element = node("g");
@@ -239,6 +264,7 @@ export class NavigationOverlay {
         class: active ? "route editing" : route.id === this.found ? "route found" : "route",
       });
       if (selected) layer.classList.add("selected");
+      this.selectable.push({ id: route.id, element: layer });
       routes.append(layer);
       path(layer, route.points, { stroke: CASING, "stroke-width": "9", class: "route-casing" });
       path(layer, route.points, {
@@ -267,8 +293,7 @@ export class NavigationOverlay {
         icon.setAttribute("fill", color);
         icon.setAttribute("stroke", CASING);
         icon.setAttribute("stroke-width", "3.6");
-        const raised = active || selected;
-        label(layer, route.name, start, icons.route, color, raised ? 10 : 8, "routes", raised ? 1 : 0, undefined, route.id);
+        label(layer, route.name, start, icons.route, color, "routes", undefined, route.id);
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
@@ -289,9 +314,9 @@ export class NavigationOverlay {
       if (marker.id === this.moving) element.classList.add("moving");
       else if (marker.id === this.found) element.classList.add("found");
       if (marker.id === this.selected) element.classList.add("selected");
+      this.selectable.push({ id: marker.id, element });
       placeBody(body, marker.kind, marker);
-      const raised = marker.id === this.moving || marker.id === this.selected;
-      label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, raised ? 18 : 12, "places", raised ? 2 : 0, marker.id);
+      label(places, marker.label, marker.point, markerCalloutIcon(marker.kind), color, "places", marker.id);
     }
     // Shown even with the places layer hidden: it is what the user is adding.
     if (this.preview) {
@@ -310,8 +335,7 @@ export class NavigationOverlay {
       path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, "dots");
       path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, "dots");
     }
-    // Higher priority claims space first; sorted here, not on every frame.
-    this.callouts.sort((a, b) => b.priority - a.priority);
+    this.sortCallouts();
   }
   private visible(layer: Layer) {
     return !!this.svg.parentElement?.classList.contains("spotlight") ||

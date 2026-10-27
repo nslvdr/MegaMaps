@@ -382,3 +382,43 @@ test("a double search result reveals where its pair meets and the saved places i
   assert.equal(svg.querySelectorAll("mask polygon").length, 1);
   search.dispose();
 });
+
+test("selecting in place keeps every pin and label and lays them out as a rebuild would", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const [inPlace, rebuilt] = [...document.querySelectorAll<SVGSVGElement>("svg")];
+  const state = defaultNavigation("select");
+  // Crowded, so the selected label's priority decides who gets the space.
+  state.markers = ["a", "b", "c", "d"].map((id, index) =>
+    ({ id, kind: "landmark" as const, label: `Place ${id}`, description: "", point: { x: 200 + index * 14, y: 200 }, created: 0 }));
+  state.routes = [{ id: "walk", name: "Walk", created: 0, draft: false, points: [{ x: 190, y: 210 }, { x: 260, y: 230 }] }];
+  const viewport = { width: 400, height: 400 }, camera = { x: 0, y: 0, scale: 1 };
+  const layout = (svg: SVGSVGElement) => {
+    overlay(svg).draw(camera, viewport);
+    now += 1000;
+    overlay(svg).draw(camera, viewport);
+    return [...svg.querySelectorAll(".map-callout")].map(callout =>
+      callout.hasAttribute("hidden") ? "hidden" : callout.getAttribute("transform"));
+  };
+  const overlays = new Map<SVGSVGElement, NavigationOverlay>();
+  const overlay = (svg: SVGSVGElement) => overlays.get(svg)!;
+  overlays.set(inPlace!, new NavigationOverlay(inPlace!));
+  overlays.set(rebuilt!, new NavigationOverlay(rebuilt!));
+  overlay(inPlace!).rebuild(state);
+  layout(inPlace!);
+  const before = [...inPlace!.querySelectorAll("g")];
+  for (const id of ["c", "walk", "d", undefined]) {
+    overlay(inPlace!).setSelected(id);
+    overlay(rebuilt!).setSelected(id);
+    overlay(rebuilt!).rebuild(state);
+    assert.deepEqual(layout(inPlace!), layout(rebuilt!), `labels sit as after a rebuild with ${id} selected`);
+    const marked = (svg: SVGSVGElement) => [...svg.querySelectorAll(".selected")]
+      .map(element => [element.getAttribute("class"), element.getAttribute("transform")]);
+    assert.deepEqual(marked(inPlace!), marked(rebuilt!));
+  }
+  assert.deepEqual([...inPlace!.querySelectorAll("g")], before, "no pin or label was rebuilt");
+  overlay(inPlace!).dispose();
+  overlay(rebuilt!).dispose();
+});
