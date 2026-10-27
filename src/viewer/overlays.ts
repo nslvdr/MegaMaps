@@ -40,8 +40,12 @@ type Layer = keyof Layers;
 interface PathItem {
   element: SVGPathElement;
   points: Point[];
-  dots?: boolean;
+  /** Its points as dots, or a chevron along each segment pointing the way it goes. */
+  shape?: "dots" | "arrows";
 }
+/** A chevron's half width and half depth, and the shortest segment that gets one. */
+const ARROW = 3.5;
+const ARROW_GAP = 40;
 // Screen-space SVG keeps lines/labels legible without another raster surface.
 // Text is assigned through textContent; imported/user names never become markup.
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
@@ -51,6 +55,23 @@ const FOUND_MS = 2200;
 const MEASURE_COLOR = "#fff04d";
 /** The Trail control's neon, as --neon-trail in style.css. */
 const TRAIL_COLOR = "#ff2a2a";
+/** A chevron halfway along each segment long enough on screen, pointing from
+ * its first point to its second. */
+export function arrows(points: Point[]) {
+  let d = "";
+  const at = (x: number, y: number) => `${x.toFixed(1)},${y.toFixed(1)}`;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!, b = points[i]!,
+      length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < ARROW_GAP) continue;
+    const ux = (b.x - a.x) / length, uy = (b.y - a.y) / length,
+      mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    d += `M${at(mx - ARROW * ux - ARROW * uy, my - ARROW * uy + ARROW * ux)}` +
+      `L${at(mx + ARROW * ux, my + ARROW * uy)}` +
+      `L${at(mx - ARROW * ux + ARROW * uy, my - ARROW * uy - ARROW * ux)}`;
+  }
+  return d;
+}
 export class NavigationOverlay {
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
@@ -131,7 +152,7 @@ export class NavigationOverlay {
       parent: SVGGElement,
       points: Point[],
       attributes: Record<string, string>,
-      dots = false,
+      shape?: PathItem["shape"],
     ) => {
       const element = node("path", {
         fill: "none",
@@ -140,7 +161,7 @@ export class NavigationOverlay {
         ...attributes,
       });
       parent.append(element);
-      this.paths.push({ element, points, dots });
+      this.paths.push({ element, points, shape });
       return element;
     };
     const label = (
@@ -168,7 +189,9 @@ export class NavigationOverlay {
     const trail = node("g", { class: "trail" });
     this.svg.append(trail);
     path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", "stroke-dasharray": "3 7", class: "trail-line" });
-    path(trail, state.trail, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, true);
+    path(trail, state.trail, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, "dots");
+    // Which way the user went, to find the way back.
+    path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", class: "trail-arrow" }, "arrows");
     const here = state.trail.at(-1);
     if (here) {
       const element = node("g", { class: "trail-here" });
@@ -190,8 +213,9 @@ export class NavigationOverlay {
       this.svg.append(trip);
       path(trip, this.trip, { stroke: CASING, "stroke-width": "9" });
       path(trip, this.trip, { stroke: TRAIL_COLOR, "stroke-width": "4.5" });
-      path(trip, this.trip, { stroke: CASING, "stroke-width": "8" }, true);
-      path(trip, this.trip, { stroke: TRAIL_COLOR, "stroke-width": "4" }, true);
+      path(trip, this.trip, { stroke: CASING, "stroke-width": "8" }, "dots");
+      path(trip, this.trip, { stroke: TRAIL_COLOR, "stroke-width": "4" }, "dots");
+      path(trip, this.trip, { stroke: CASING, "stroke-width": "2" }, "arrows");
       // Its ends wear a route's start and end pins, in red.
       const ends = [
         [this.trip[0], icons.routeStart, TRAIL_COLOR, CASING],
@@ -227,13 +251,13 @@ export class NavigationOverlay {
         layer,
         route.points,
         { stroke: CASING, "stroke-width": "8", class: "route-dot-casing" },
-        true,
+        "dots",
       );
       path(
         layer,
         route.points,
         { stroke: color, "stroke-width": "4", class: "route-dot" },
-        true,
+        "dots",
       );
       const start = route.points[0];
       if (start) {
@@ -283,8 +307,8 @@ export class NavigationOverlay {
       this.svg.append(tape);
       path(tape, this.measure, { stroke: CASING, "stroke-width": "8" });
       path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "4", "stroke-dasharray": "12 8" });
-      path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, true);
-      path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, true);
+      path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, "dots");
+      path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, "dots");
     }
     // Higher priority claims space first; sorted here, not on every frame.
     this.callouts.sort((a, b) => b.priority - a.priority);
@@ -328,13 +352,13 @@ export class NavigationOverlay {
     );
     // A route's five paths share its points: casing, line and flow draw one
     // outline and both dot layers another, so each is built once per frame.
-    let points: Point[] | undefined, line = "", dots = "";
+    let points: Point[] | undefined, screen: Point[] = [], line = "", dots = "";
     for (const path of this.paths) {
       if (path.points !== points) {
         points = path.points;
+        screen = points.map((point) => worldToScreen(camera, point));
         line = dots = "";
-        for (const [i, point] of points.entries()) {
-          const p = worldToScreen(camera, point);
+        for (const [i, p] of screen.entries()) {
           const x = p.x.toFixed(1),
             y = p.y.toFixed(1);
           line += `${i ? "L" : "M"}${x},${y}`;
@@ -342,7 +366,7 @@ export class NavigationOverlay {
           dots += `M${x},${y}h0`;
         }
       }
-      path.element.setAttribute("d", path.dots ? dots : line);
+      path.element.setAttribute("d", path.shape === "dots" ? dots : path.shape === "arrows" ? arrows(screen) : line);
     }
     for (const pin of this.points) {
       const p = worldToScreen(camera, pin.point);

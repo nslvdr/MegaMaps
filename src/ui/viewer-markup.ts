@@ -18,9 +18,9 @@ const rowIcon = (icon: string, tint = "") =>
 // The whole icon tile toggles its layer through a native, keyboard-accessible input.
 const layerToggle = (id: string, label: string, icon: string) =>
   `<label class="layer-toggle ${id}"><input type="checkbox" role="switch" id="layer-${id}" aria-label="${label}">${icon}<span>${label}</span><small class="layer-count" id="layer-${id}-count" aria-hidden="true"></small></label>`;
-// The long-press wheel's two half rings, top for a place and bottom for the
-// trail, with a small gap where they meet at the sides.
-const holdArcs = `<svg class="hold-arcs" viewBox="-86 -86 172 172"><path class="hold-arc place" d="M-63.2 -10.2A64 64 0 0 1 63.2 -10.2"/><path class="hold-arc trail" d="M63.2 10.2A64 64 0 0 1 -63.2 10.2"/></svg>`;
+// The long-press wheel's three rings, a third each with a small gap between:
+// up-left for a place, up-right back to the last mark, down for the trail.
+const holdArcs = `<svg class="hold-arcs" viewBox="-86 -86 172 172"><path class="hold-arc place" d="M-59.3 24A64 64 0 0 1 -8.9 -63.4"/><path class="hold-arc back" d="M8.9 -63.4A64 64 0 0 1 59.3 24"/><path class="hold-arc trail" d="M50.4 39.4A64 64 0 0 1 -50.4 39.4"/></svg>`;
 // Rotation is one list: each row is a mode, or Compass mode with how it follows.
 const rotationChoice = (id: string, label: string, help: string, icon: string) =>
   `<label class="panel-row choice-row"><input type="radio" name="rotation" id="${id}">${rowIcon(icon)}<span class="row-text"><strong>${label}</strong><small>${help}</small></span><i class="choice-check">${icons.check}</i></label>`;
@@ -63,7 +63,7 @@ const dangerPicks = dangerSteps
 //                   with the same header (icon, title, X) and full-size actions
 // Pinch and drag move the map, so there are no zoom or pan buttons.
 export const viewerMarkup = `
-<div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="${t("Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press, then drag up to add a place or down to mark where you are.")}"></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg><div id="hold-wheel" class="hold-wheel" aria-hidden="true" hidden>${holdArcs}<span class="hold-place">${icons.pin}</span><span class="hold-trail">${icons.trail}</span></div></div>
+<div class="map-stage" id="map-stage"><canvas id="map-canvas" role="img" aria-label="${t("Map: drag to pan; pinch or double-tap and drag to zoom, two-finger tap to zoom out; long-press, then drag up-left to add a place, up-right to go back to your last mark, or down to mark where you are.")}"></canvas><div class="map-shade" aria-hidden="true"></div><svg id="search-overlay" class="search-overlay" aria-hidden="true" hidden></svg><svg id="map-overlay" class="map-overlay" aria-hidden="true"></svg><div id="hold-wheel" class="hold-wheel" aria-hidden="true" hidden>${holdArcs}<span class="hold-place">${icons.pin}</span><span class="hold-back">${icons.here}</span><span class="hold-trail">${icons.trail}</span><strong id="hold-label" class="hold-label"></strong></div></div>
 <button class="glass corner-button corner-left" id="back" aria-label="${t("Back to library")}" title="${t("Back to library")}">${icons.arrow}</button>
 <div id="display-chips" class="display-chips" role="group" aria-label="${t("Map view controls")}">
   <button id="open-trail" class="glass status-chip" data-sheet="trail" aria-label="${t("Trail")}" title="${t("Trail")}" aria-controls="sheet" aria-expanded="false">${icons.trail}</button>
@@ -129,6 +129,7 @@ export const viewerMarkup = `
         <div class="panel-row">${rowIcon(icons.trail)}<span class="row-text"><strong id="trip-summary"></strong><small id="trip-last"></small></span></div>
       </div>
       <button id="trip-start" class="panel-action">${icons.here}<span>${t("Start trip")}</span></button>
+      <button id="trip-back" class="panel-action" hidden>${icons.here}<span>${t("Go to last mark")}</span></button>
       <button id="trip-end" class="panel-action" hidden>${icons.tripEnd}<span>${t("End trip")}</span></button>
       <p id="trip-hint" class="field-help"></p>
       <h3 id="trip-history-title" class="section-title trips">${icons.history}<span>${t("Past trips")}</span><small id="trip-history-count"></small></h3>
@@ -169,6 +170,10 @@ export const viewerMarkup = `
     <div><dt>${t("Time")}</dt><dd id="trip-duration"></dd></div>
     <div><dt>${t("Points")}</dt><dd id="trip-points"></dd></div>
   </dl>
+</dialog>
+<dialog id="mark-dialog" class="place-card trip-card" data-mode="view" aria-labelledby="mark-title">
+  <div class="dialog-header"><span class="dialog-title-icon" aria-hidden="true">${icons.trail}</span><div class="place-heading"><h2 id="mark-title">${t("Last mark")}</h2><p id="mark-time" class="place-updated"></p></div><button type="button" id="mark-edit" class="dialog-edit" aria-label="${t("Edit mark")}" title="${t("Edit mark")}">${icons.edit}</button><button type="button" id="mark-close" class="dialog-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></div>
+  <div id="mark-actions" class="dialog-actions mark-actions" hidden><button type="button" id="mark-delete" class="quiet danger">${icons.trash}<span>${t("Delete")}</span></button><button type="button" id="mark-move" class="quiet">${icons.move}<span>${t("Move")}</span></button></div>
 </dialog>
 <dialog id="kind-dialog" class="kind-dialog" aria-labelledby="kind-title">${dialogHeader("kind-title", t("Icon and type"), icons.pin, "kind-close")}<div class="kind-picker" role="radiogroup" aria-labelledby="kind-title">${kindPicks}</div></dialog>
 <dialog id="photo-viewer" class="photo-viewer" aria-label="${t("Photos")}"><div class="photo-viewer-stage"><div class="photo-viewer-track"></div></div><button type="button" id="photo-viewer-close" class="dialog-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></dialog>

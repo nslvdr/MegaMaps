@@ -2093,8 +2093,12 @@ button.glass:active:not(:disabled) {
 .place-save > button {
   width: 100%;
 }
-#marker-form > .dialog-actions > :first-child {
+#marker-form > .dialog-actions > :first-child,
+.mark-actions > :first-child {
   flex-basis: 0;
+}
+.mark-actions {
+  margin-top: var(--space-16);
 }
 #marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
   display: none;
@@ -3515,6 +3519,9 @@ label.panel-row {
 .trail-dot {
   opacity: 0.4;
 }
+.trail-arrow {
+  opacity: 0.6;
+}
 .trail-mark {
   fill: var(--neon-trail);
   stroke: #000;
@@ -3548,10 +3555,11 @@ label.panel-row {
     transform: scale(1.7);
   }
 }
-/* Long-press wheel, centred on the finger: two neon half rings, and the one
-   the finger is dragged into glows in its colour. */
+/* Long-press wheel, centred on the finger: three neon rings, and the one the
+   finger is dragged into glows in its colour, with its name above the wheel. */
 .hold-wheel {
   --place: var(--neon-add);
+  --back: var(--neon-saved);
   --trail: var(--neon-trail);
   --off: #3a3e46;
   position: absolute;
@@ -3577,47 +3585,83 @@ label.panel-row {
   stroke-linecap: round;
   transition: stroke 0.12s, stroke-width 0.12s var(--ease-out);
 }
+/* Each icon sits on its ring, in the middle of its third. */
 .hold-wheel > span {
   position: absolute;
+  top: 50%;
   left: 50%;
   display: grid;
   place-items: center;
   width: 36px;
   height: 36px;
-  margin-left: -18px;
+  margin: -18px 0 0 -18px;
   border-radius: var(--radius-round);
   border: 2px solid var(--off);
   background: #000;
   color: var(--muted);
-  transition: transform 0.12s var(--ease-out), color 0.12s, border-color 0.12s;
+  transform: translate(var(--at));
+  transition: transform 0.12s var(--ease-out), color 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .hold-wheel > span svg {
   width: 20px;
   height: 20px;
 }
 .hold-place {
-  top: 4px;
+  --at: -55.4px, -32px;
+}
+.hold-back {
+  --at: 55.4px, -32px;
 }
 .hold-trail {
-  bottom: 4px;
+  --at: 0px, 64px;
+}
+/* With no trip under way there is no mark to go back to. */
+.hold-wheel[data-back="off"] .back {
+  opacity: 0.4;
+}
+.hold-wheel[data-back="off"] .hold-back {
+  opacity: 0.5;
 }
 .hold-wheel[data-choice="place"] .place,
+.hold-wheel[data-choice="back"] .back,
 .hold-wheel[data-choice="trail"] .trail {
   stroke: var(--lit);
   stroke-width: 10px;
   filter: drop-shadow(0 0 6px var(--lit));
 }
 .hold-wheel[data-choice="place"] .hold-place,
+.hold-wheel[data-choice="back"] .hold-back,
 .hold-wheel[data-choice="trail"] .hold-trail {
   color: var(--lit);
   border-color: var(--lit);
-  transform: scale(1.2);
+  transform: translate(var(--at)) scale(1.2);
 }
 .hold-wheel[data-choice="place"] {
   --lit: var(--place);
 }
+.hold-wheel[data-choice="back"] {
+  --lit: var(--back);
+}
 .hold-wheel[data-choice="trail"] {
   --lit: var(--trail);
+}
+/* Straight above the wheel, where the two upper thirds meet, so the finger
+   choosing either of them sits to one side of it. */
+.hold-label {
+  position: absolute;
+  bottom: calc(100% + var(--space-8));
+  left: 50%;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-pill);
+  background: #000;
+  color: var(--lit, var(--muted));
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.hold-label:empty {
+  display: none;
 }
 
 @media (max-height: 520px) {
