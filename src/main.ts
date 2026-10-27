@@ -92,7 +92,7 @@ const settings = initSettingsPage(settingsPage, {
   erase: element<HTMLDialogElement>("erase-dialog"),
 }, {
   release: Number.isFinite(loadedRelease.getTime()) ? loadedRelease : undefined,
-  back: () => history.back(),
+  back: hideSettings,
   checkUpdates: openUpdates,
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
@@ -261,15 +261,6 @@ function showTitle() {
 }
 // Going home returns to the same place in the list, on the map just closed.
 let libraryScroll = 0;
-// Back leaves Settings. A map has no history entry: only its Back button
-// leaves it, so a stray edge swipe can't.
-window.addEventListener("popstate", (event) => {
-  const state = event.state as { settings?: boolean } | null;
-  if (!settingsPage.hidden && !state?.settings) {
-    if (document.querySelector("dialog:modal")) history.pushState({ settings: true }, "");
-    else hideSettings();
-  } else if (settingsPage.hidden && state?.settings && !currentMap) showSettings();
-});
 function closeViewer() {
   openVersion++;
   const closed = currentMap?.id;
@@ -646,6 +637,8 @@ function openUpdates() {
 }
 element("app-update-status").addEventListener("click", openUpdates);
 // Settings is a page of its own: it takes the library's place and Back returns.
+// Nothing adds history entries, so an edge swipe has nowhere to go: only the
+// Back buttons leave a map or Settings.
 function showSettings() {
   libraryScroll = window.scrollY;
   home.hidden = true;
@@ -660,10 +653,7 @@ function hideSettings() {
   void showBackupReminder();
   window.scrollTo(0, libraryScroll);
 }
-element("settings-open").addEventListener("click", () => {
-  history.pushState({ settings: true }, "");
-  showSettings();
-});
+element("settings-open").addEventListener("click", showSettings);
 // Adds the backup's missing maps, one after another, then shows them in the library.
 async function restore(backup: Backup) {
   if (importing || ocrJob || updates.busy)
@@ -896,8 +886,6 @@ async function start() {
     "label-size": preference("label-size"), "update-install": preference("update-install"),
   }));
   if (import.meta.env.DEV) await restoreDevData().catch((error) => console.warn("Dev data", error));
-  // Reloading on the Settings page stays there.
-  if (history.state?.settings) return showSettings();
   const resume = await lastMap();
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
