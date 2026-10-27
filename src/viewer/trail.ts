@@ -4,6 +4,8 @@ import type { Point } from "./camera";
  * starts with its first point and ends when the user ends it. */
 export interface TrailPoint extends Point {
   time: number;
+  /** What the map showed as it was marked, so the user can come back to it. */
+  view?: { center: Point; scale: number };
 }
 /** The last point pulses for a while, then slower, then rests: an old position is a guess. */
 const FRESH_MS = 15 * 60 * 1000;
@@ -20,9 +22,14 @@ export function trailAgeChange(time: number, now: number) {
 }
 
 /** Saved trails come from this app's own storage or a backup file; drop anything malformed. */
-export const isTrailPoint = (value: unknown): value is TrailPoint =>
+const finite = (value: unknown, keys: string[]) =>
   typeof value === "object" && value !== null &&
-  ["x", "y", "time"].every((key) => Number.isFinite((value as Record<string, unknown>)[key]));
+  keys.every((key) => Number.isFinite((value as Record<string, unknown>)[key]));
+export const isTrailPoint = (value: unknown): value is TrailPoint => {
+  if (!finite(value, ["x", "y", "time"])) return false;
+  const { view } = value as { view?: { center?: unknown } };
+  return view === undefined || (finite(view, ["scale"]) && finite(view.center, ["x", "y"]));
+};
 
 /** A finished trip, kept to look back on: every point marked, and when it ended. */
 export interface Trip {

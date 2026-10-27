@@ -1111,9 +1111,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("hold-wheel").hidden, true);
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
     assert.equal(state.trail.length, 0);
-    // Down, even far to one side, marks the trail at the pressed point, with an Undo.
+    // Down, even well to one side, marks the trail at the pressed point, with an Undo.
     press = hold();
-    press.end({ x: 290, y: 305 });
+    press.end({ x: 290, y: 360 });
     assert.equal(state.trail.length, 1);
     assert.deepEqual({ ...state.trail[0], time: 0 }, { x: 2000, y: 2100, time: 0 });
     assert.equal(el("toast").textContent, "Trip started", "the first point starts a trip");
@@ -1918,6 +1918,100 @@ test("Measure asks for the map's scale once, then measures lines and gives route
     await controls.flush();
     assert.equal((await loadNavigation(map.id))?.metresPerPixel, 0.25, "the scale is kept with the map");
   } finally {
+    await controls.dispose();
+  }
+});
+
+test("the last mark: back to it from the wheel or the Trail panel, and read, moved or deleted from its dot", async (t) => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog"))
+    Object.defineProperties(dialog, {
+      show: { value: () => dialog.setAttribute("open", "") },
+      showModal: { value: () => dialog.setAttribute("open", "") },
+      close: { value: () => dialog.removeAttribute("open") },
+    });
+  const root = document.querySelector<HTMLElement>("#viewer")!;
+  const map: MapRecord = {
+    id: "mark", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  const tools: string[] = [];
+  const views: { center: Point; scale: number }[] = [];
+  const controls = new ViewerControls(root, map, state);
+  controls.attach({
+    setTool(tool) { tools.push(tool); }, updateNavigation() {}, jumpTo() {}, fitPoints() {},
+    showView(view) { views.push(view); },
+  });
+  const el = (id: string) => document.getElementById(id)!;
+  const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
+  const hold = () => controls.options().onHold!({ x: 300, y: 300 }, { x: 200, y: 300 })!;
+  const upRight = { x: 260, y: 260 };
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: new Date(2026, 9, 20, 14, 5).getTime() });
+  try {
+    // Before a trip, up-right is named but stays dark, and lifting there does nothing.
+    let press = hold();
+    assert.equal(el("hold-wheel").dataset.back, "off");
+    press.move(upRight);
+    assert.equal(el("hold-wheel").dataset.choice, undefined);
+    assert.equal(el("hold-label").textContent, "No mark yet");
+    press.end(upRight);
+    assert.deepEqual(views, []);
+
+    // A mark keeps the view it was made in; up-right later brings that view back.
+    state.view = { center: { x: 400, y: 450 }, scale: 0.5, rotation: 0.3 };
+    hold().end({ x: 200, y: 380 });
+    state.view = { center: { x: 900, y: 900 }, scale: 2, rotation: 0.3 };
+    press = hold();
+    press.move(upRight);
+    assert.equal(el("hold-wheel").dataset.choice, "back");
+    assert.equal(el("hold-label").textContent, "Go to last mark");
+    press.end(upRight);
+    assert.deepEqual(views, [{ center: { x: 400, y: 450 }, scale: 0.5 }]);
+    // The Trail panel does the same, for whoever has not found the gesture.
+    click("open-trail");
+    assert.equal(el("trip-back").hidden, false);
+    click("trip-back");
+    assert.equal(el("sheet").hidden, true);
+    assert.equal(views.length, 2);
+
+    // Tapping the red dot reads it first; Edit offers Move and Delete.
+    t.mock.timers.tick(12 * 60_000);
+    controls.options().onTrailMark!();
+    assert.equal(el("mark-dialog").hasAttribute("open"), true);
+    assert.equal(el("mark-time").textContent, "Marked 12 minutes ago");
+    assert.equal(el("mark-actions").hidden, true);
+    click("mark-edit");
+    assert.equal(el("mark-actions").hidden, false);
+    // Move: the next tap puts it there, with the view it is made in, and Undo puts it back.
+    click("mark-move");
+    assert.equal(el("mark-dialog").hasAttribute("open"), false);
+    assert.equal(tools.at(-1), "trail");
+    assert.equal(el("tool-title").textContent, "Move mark");
+    controls.options().onTap({ x: 320, y: 340 });
+    assert.equal(tools.at(-1), "browse");
+    assert.equal(state.trail.length, 1);
+    assert.deepEqual({ ...state.trail[0], time: 0 }, { x: 320, y: 340, time: 0, view: { center: { x: 900, y: 900 }, scale: 2 } });
+    assert.equal(el("toast").textContent, "Mark moved");
+    click("toast-undo");
+    assert.deepEqual({ x: state.trail[0]!.x, y: state.trail[0]!.y }, { x: 300, y: 300 });
+    // Delete takes two taps, and can be undone.
+    controls.options().onTrailMark!();
+    click("mark-edit");
+    click("mark-delete");
+    assert.equal(state.trail.length, 1, "the first tap only arms Delete");
+    click("mark-delete");
+    assert.equal(state.trail.length, 0);
+    assert.equal(el("mark-dialog").hasAttribute("open"), false);
+    click("toast-undo");
+    assert.equal(state.trail.length, 1);
+  } finally {
+    t.mock.timers.reset();
     await controls.dispose();
   }
 });

@@ -29,7 +29,7 @@ import {
   type DangerLevel,
   type WaterLevel,
 } from "../viewer/navigation";
-import type { Trip } from "../viewer/trail";
+import type { TrailPoint, Trip } from "../viewer/trail";
 import { lastUpdated, placeChanges, recordEdit } from "../viewer/place-history";
 import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
 import { icons, markerCalloutIcon } from "./icons";
@@ -38,7 +38,7 @@ import { locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
-import { wheelChoice } from "./hold-wheel";
+import { wheelChoice, type WheelChoice } from "./hold-wheel";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
@@ -49,10 +49,19 @@ import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-searc
 import { track } from "../stats";
 import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
 const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
+/** The place card's Delete and the trail mark's, each armed by a first tap. */
+const cardDeletes = ["marker-delete", "mark-delete"] as const;
+type CardDelete = (typeof cardDeletes)[number];
 /** A day as a date input holds it, in local time. */
 const dayValue = (time: number) => {
   const date = new Date(time);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+/** What lifting on each part of the long-press wheel does; back says when there is no mark. */
+const wheelLabels: Record<WheelChoice, (marked: boolean) => string> = {
+  place: () => t("Add a place"),
+  back: (marked) => marked ? t("Go to last mark") : t("No mark yet"),
+  trail: () => t("Mark where you are"),
 };
 /** "2:05 PM": when a trip started or ended. */
 const clock = (time: number) => new Date(time).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
@@ -111,7 +120,7 @@ export class ViewerControls {
     Viewer,
     "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"
   > &
-    Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip">>;
+    Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
   private ocr?: OcrIndex;
   private ocrMessage = t("Preparing text detection…");
   private searchMatches: MapSearchMatch[] = [];
@@ -137,6 +146,8 @@ export class ViewerControls {
   private measureHistory: Point[][] = [];
   /** The past trip whose summary is open. */
   private viewingTrip?: string;
+  /** The Trail tool is moving the last mark rather than adding one. */
+  private movingMark = false;
   /** The place being moved, and where it was. */
   private movingMarker?: string;
   private moveFrom?: Point;
@@ -159,7 +170,8 @@ export class ViewerControls {
   private spotlightTimer?: ReturnType<typeof setTimeout>;
   /** Move (a place) or Edit points (a route) saves the form first. */
   private moveAfterSave = false;
-  private cardDeleteArmed = false;
+  /** The card's Delete waiting for its second tap. */
+  private cardDeleteArmed?: CardDelete;
   /** The X armed to discard a form's typing on its second tap. */
   private discarding?: string;
   private discardTimer?: ReturnType<typeof setTimeout>;
@@ -273,29 +285,41 @@ export class ViewerControls {
       onDoubleTap: () => this.orientOnTap(),
       // A result's label flies to that result, like stepping to it.
       onSearchResult: (index) => this.showMatch(index),
-      // Long-press opens a wheel under the finger: drag up and lift to add a
-      // place there, down to mark the trail; lifting in the middle does nothing.
+      // Long-press opens a wheel under the finger: drag up-left and lift to add
+      // a place there, up-right to go back to the last mark, down to mark the
+      // trail; lifting in the middle does nothing.
       onHold: (point, screen) => {
         if (this.tool !== "browse") return;
-        const wheel = this.el("hold-wheel");
+        const wheel = this.el("hold-wheel"), label = this.el("hold-label");
+        const marked = this.state.trail.length > 0;
         wheel.style.left = `${screen.x}px`;
         wheel.style.top = `${screen.y}px`;
+        wheel.dataset.back = marked ? "on" : "off";
         delete wheel.dataset.choice;
+        label.textContent = "";
         wheel.hidden = false;
+        // Without a mark, back is named but never lit, so lifting there does nothing.
+        const choiceAt = (at: Point) => {
+          const choice = wheelChoice(screen, at);
+          return choice === "back" && !marked ? undefined : choice;
+        };
         return {
           move: (at) => {
-            const choice = wheelChoice(screen, at);
+            const choice = choiceAt(at), aimed = wheelChoice(screen, at);
             if (choice) wheel.dataset.choice = choice;
             else delete wheel.dataset.choice;
+            label.textContent = aimed ? wheelLabels[aimed](marked) : "";
           },
           end: (at) => {
             wheel.hidden = true;
-            const choice = at && wheelChoice(screen, at);
+            const choice = at && choiceAt(at);
             if (choice === "place") this.openMarker(t("New place"), point);
+            else if (choice === "back") this.backToMark();
             else if (choice === "trail") this.markTrail(point);
           },
         };
       },
+      onTrailMark: () => this.showMark(),
       onDragStart: () => {
         const line = this.measuring() ? this.tape() : this.tool === "route" ? this.route()?.points : undefined;
         this.dragBefore = line && copyPoints(line);
@@ -346,7 +370,10 @@ export class ViewerControls {
   /** The trail grows by one point, and the first starts a trip; a mistaken one
    * can be taken back from the toast. */
   private markTrail(point: Point) {
-    const mark = { ...point, time: Date.now() };
+    const view = this.markedView();
+    const mark: TrailPoint = { ...point, time: Date.now(), ...(view && { view }) };
+    // A card about the old last mark would now be about the wrong one.
+    this.dialog("mark-dialog").close();
     this.state.trail.push(mark);
     this.changed();
     this.toast(this.state.trail.length > 1 ? t("Trail point added") : t("Trip started"), "done", () => {
@@ -355,12 +382,69 @@ export class ViewerControls {
       this.toast(t("Trail point removed"), "quiet");
     });
   }
+  /** Where the map is and how far in, for coming back to it later. */
+  private markedView() {
+    const view = this.state.view;
+    return view && { center: { ...view.center }, scale: view.scale };
+  }
+  /** The map as it was when the last point was marked; older marks only center. */
+  private backToMark() {
+    const last = this.state.trail.at(-1);
+    if (!last) return;
+    if (last.view && this.viewer?.showView) this.viewer.showView(last.view);
+    else this.viewer?.jumpTo(last);
+  }
+  /** The red dot, read first: when it was marked. Edit offers Move and Delete. */
+  private showMark() {
+    const last = this.state.trail.at(-1);
+    if (!last) return;
+    this.closePlaceDetails();
+    this.sheet(undefined);
+    const card = this.dialog("mark-dialog");
+    this.el("mark-time").textContent = t("Marked {when}", { when: timeAgo(last.time, Date.now()) });
+    this.el("mark-actions").hidden = true;
+    this.armCardDelete();
+    showDialog(card, false);
+    this.viewer?.reveal?.(last, card.offsetTop);
+  }
+  /** The next tap on the map puts the last mark there instead. */
+  private moveMark() {
+    this.dialog("mark-dialog").close();
+    this.movingMark = true;
+    this.mode("trail");
+  }
+  private placeMark(point: Point) {
+    const trail = this.state.trail, before = trail.at(-1);
+    if (!before) return;
+    const view = this.markedView();
+    const moved: TrailPoint = { ...before, ...point, ...(view && { view }) };
+    trail[trail.length - 1] = moved;
+    this.changed();
+    this.toast(t("Mark moved"), "done", () => {
+      this.state.trail = this.state.trail.map((other) => other === moved ? before : other);
+      this.changed();
+      this.toast(t("Mark not moved"), "quiet");
+    });
+  }
+  private deleteMark() {
+    const last = this.state.trail.at(-1);
+    if (!last) return;
+    this.dialog("mark-dialog").close();
+    this.state.trail = this.state.trail.slice(0, -1);
+    this.changed();
+    this.toast(t("Trail point removed"), "removed", () => {
+      this.state.trail = [...this.state.trail, last].sort((a, b) => a.time - b.time);
+      this.changed();
+      this.toast(t("Trail point restored"), "done");
+    });
+  }
   /** Ending a trip keeps it in Past trips and shows how it went. A single point
    * never went anywhere, so it just ends. Either way it can be taken back. */
   private endTrip() {
     const points = this.state.trail;
     if (!points.length) return;
     const trip = points.length > 1 ? { id: crypto.randomUUID(), points, ended: Date.now() } : undefined;
+    this.dialog("mark-dialog").close();
     this.state.trail = [];
     if (trip) {
       this.state.trips.push(trip);
@@ -461,6 +545,7 @@ export class ViewerControls {
     if (this.openSheet === "search") this.focusSearch(this.searchPosition < 0 ? 0 : 1);
   }
   private mode(tool: Tool) {
+    if (tool !== "trail") this.movingMark = false;
     this.tool = tool;
     this.viewer?.setTool(
       tool,
@@ -534,7 +619,7 @@ export class ViewerControls {
     this.el("route-points").hidden = !route;
     this.input("marker-label").value = fields.name;
     this.el<HTMLTextAreaElement>("marker-description").value = fields.description ?? "";
-    this.armCardDelete(false);
+    this.armCardDelete();
     this.formVersion++;
     this.formPhotos = [...(fields.photos ?? [])];
     this.renderFormPhotos();
@@ -798,8 +883,10 @@ export class ViewerControls {
     if (!insideImage(point, this.map)) return;
     if (this.tool === "marker") this.openMarker(t("New place"), point);
     if (this.tool === "trail") {
+      const moving = this.movingMark;
       this.mode("browse");
-      this.markTrail(point);
+      if (moving) this.placeMark(point);
+      else this.markTrail(point);
     }
     // Moving a place: a tap puts it there, as an alternative to dragging.
     const moving = this.movingPlace();
@@ -1036,6 +1123,7 @@ export class ViewerControls {
   private showDetails(item: MapMarker | PlannedRoute) {
     this.sheet(undefined);
     this.dialog("trip-dialog").close();
+    this.dialog("mark-dialog").close();
     const card = this.dialog("marker-dialog");
     const place = "label" in item ? item : undefined;
     this.viewingMarker = place?.id;
@@ -1116,10 +1204,12 @@ export class ViewerControls {
     this.cardModal = modal;
     showDialog(card, modal);
   }
-  /** Closes the place, route or trip being read; true if there was one. */
+  /** Closes the place, route, trip or mark being read; true if there was one. */
   private closePlaceDetails() {
-    const trip = this.dialog("trip-dialog"), wasTrip = trip.hasAttribute("open");
+    const trip = this.dialog("trip-dialog"), mark = this.dialog("mark-dialog");
+    const wasTrip = trip.hasAttribute("open") || mark.hasAttribute("open");
     trip.close();
+    mark.close();
     const card = this.dialog("marker-dialog");
     if (!card.hasAttribute("open") || this.cardModal) return wasTrip;
     card.close();
@@ -1343,6 +1433,22 @@ export class ViewerControls {
     this.click("add-marker", () => this.mode("marker"));
     this.click("trip-start", () => this.mode("trail"));
     this.click("trip-end", () => this.endTrip());
+    this.click("trip-back", () => {
+      this.sheet(undefined);
+      this.backToMark();
+    });
+    this.click("mark-close", () => this.dialog("mark-dialog").close());
+    this.click("mark-edit", () => {
+      const actions = this.el("mark-actions");
+      actions.hidden = !actions.hidden;
+      this.armCardDelete();
+    });
+    this.click("mark-move", () => this.moveMark());
+    this.click("mark-delete", () => {
+      if (this.cardDeleteArmed !== "mark-delete") return this.armCardDelete("mark-delete");
+      this.armCardDelete();
+      this.deleteMark();
+    });
     this.click("trip-close", () => this.dialog("trip-dialog").close());
     // The trip leaves the map with its card. Closing to show another trip
     // reopens the card before this runs, so it is left alone.
@@ -1451,11 +1557,11 @@ export class ViewerControls {
     });
     // Two taps here too, as in the Saved menu: the first arms Delete briefly.
     this.click("marker-delete", () => {
-      if (!this.cardDeleteArmed) {
-        this.armCardDelete(true);
+      if (this.cardDeleteArmed !== "marker-delete") {
+        this.armCardDelete("marker-delete");
         return;
       }
-      this.armCardDelete(false);
+      this.armCardDelete();
       const route = this.state.routes.find((r) => r.id === this.editingRoute);
       if (route) {
         this.dialog("marker-dialog").close();
@@ -1758,7 +1864,9 @@ export class ViewerControls {
         t("Drag the pin, or tap where it goes"),
       ],
       marker: [icons.pin, t("New place"), t("Tap the map where it goes")],
-      trail: [icons.here, t("Mark where you are"), t("Tap the map where you are")],
+      trail: this.movingMark
+        ? [icons.move, t("Move mark"), t("Tap the map where you were")]
+        : [icons.here, t("Mark where you are"), t("Tap the map where you are")],
       route: [
         icons.route,
         route?.name ?? t("Route"),
@@ -2050,15 +2158,17 @@ export class ViewerControls {
       updateLabel();
     };
   }
-  private armCardDelete(armed: boolean) {
+  private armCardDelete(armed?: CardDelete) {
     this.cardDeleteArmed = armed;
     clearTimeout(this.cardDeleteTimer);
-    if (armed) this.cardDeleteTimer = setTimeout(() => this.armCardDelete(false), 3000);
+    if (armed) this.cardDeleteTimer = setTimeout(() => this.armCardDelete(), 3000);
     // The card's buttons share a row, so the armed label stays short and the
     // button fills red instead.
-    const button = this.el("marker-delete");
-    button.classList.toggle("armed", armed);
-    button.querySelector("span")!.textContent = armed ? t("Tap again") : t("Delete");
+    for (const id of cardDeletes) {
+      const button = this.el(id);
+      button.classList.toggle("armed", id === armed);
+      button.querySelector("span")!.textContent = id === armed ? t("Tap again") : t("Delete");
+    }
   }
   private deleteLabel(key: string) {
     return this.confirming === key ? t("Tap again to delete") : t("Delete");
@@ -2069,9 +2179,9 @@ export class ViewerControls {
     // The chip carries a red dot, like the one on the map, while a trip is under way.
     this.el("open-trail").classList.toggle("on-trip", !!start);
     this.el("trip-help").hidden = this.el("trip-start").hidden = !!start;
-    this.el("trip-card").hidden = this.el("trip-end").hidden = !start;
+    this.el("trip-card").hidden = this.el("trip-back").hidden = this.el("trip-end").hidden = !start;
     this.el("trip-hint").textContent = start
-      ? t("To mark where you are, long-press the map and drag down.")
+      ? t("Long-press the map, then drag down to mark where you are, or up-right to go back to your last mark.")
       : t("You can also long-press the map and drag down.");
     if (!start || !last) return;
     const now = Date.now();

@@ -56,6 +56,8 @@ export interface ViewerOptions {
   onEmptyTap?(): void;
   /** A search result's label was tapped, by its place among the matches. */
   onSearchResult?(index: number): void;
+  /** A browsing tap on the trail's last point, the red dot. */
+  onTrailMark?(): void;
   /** A browsing double tap; the map itself never zooms on one. */
   onDoubleTap?(): void;
   /** Long press on the map while browsing: `point` in image coordinates, `screen` on the map.
@@ -434,6 +436,12 @@ export class Viewer {
       this.setCamera(camera);
     }
   }
+  /** Glides back to a center and zoom the map once showed, keeping its turn. */
+  showView(view: { center: Point; scale: number }) {
+    if (this.navigation.touchLocked) return;
+    this.interactions.reset();
+    this.animate(cameraAt(view.center, this.viewport(), view.scale, this.camera.rotation ?? 0));
+  }
   /** Slides the map up just enough that a pin stays in sight above a card
    * whose top edge is at `edge` (in page coordinates). */
   /** Returns where the point settles on screen, in page coordinates. */
@@ -530,6 +538,12 @@ export class Viewer {
       this.options?.onMarker(labelled);
       return true;
     }
+    // Places and labels answer before the red dot, and the dot before a route's line.
+    const here = this.navigation.trail.at(-1);
+    if (!label && here && this.options?.onTrailMark && this.near(here, screen) < 24) {
+      this.options.onTrailMark();
+      return true;
+    }
     const route = this.navigation.routes.find((r) => r.id === label?.routeId) ??
       this.nearestRoute(screen);
     if (route && this.options?.onRoute) {
@@ -542,9 +556,10 @@ export class Viewer {
   }
   private cursorAt(screen: Point) {
     if (this.navigation.touchLocked || !insideImage(screenToWorld(this.camera, screen), this.map)) return "";
+    const here = this.navigation.trail.at(-1);
     if (this.tool === "browse")
       return this.searchOverlay?.labelAt(screen) !== undefined || this.nearestPlace(screen) ||
-        this.overlay?.labelAt(screen) || this.nearestRoute(screen)
+        this.overlay?.labelAt(screen) || (here && this.near(here, screen) < 24) || this.nearestRoute(screen)
         ? "pointer" : "";
     return this.grabbable(screen) ? "grab" : "crosshair";
   }
