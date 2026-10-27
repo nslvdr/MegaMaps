@@ -2122,3 +2122,47 @@ test("the Trail panel starts a trip, ends it with a summary, and keeps it in Pas
     await controls.dispose();
   }
 });
+
+test("a map reopened in Compass mode asks for the compass again on the first tap", async (t) => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog"))
+    Object.defineProperty(dialog, "close", { value: () => dialog.removeAttribute("open") });
+  // iOS forgot the answer when the app closed; it only asks again from a tap.
+  let asked = 0;
+  Object.defineProperty(globalThis, "DeviceOrientationEvent", {
+    value: { requestPermission: async () => (asked++, "granted") },
+    configurable: true,
+  });
+  t.after(() => delete (globalThis as { DeviceOrientationEvent?: unknown }).DeviceOrientationEvent);
+  const map: MapRecord = {
+    id: "compass-reopen", name: "cave.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  state.rotationMode = "compass";
+  const orientations: (number | undefined)[] = [];
+  const controls = new ViewerControls(document.querySelector<HTMLElement>("#viewer")!, map, state);
+  controls.attach({
+    setTool() {}, updateNavigation() {}, fitPoints() {}, jumpTo() {},
+    orient(rotation) { orientations.push(rotation); },
+  });
+  const tap = () => document.getElementById("map-canvas")!.dispatchEvent(new window.Event("touchend", { bubbles: true }));
+  try {
+    assert.equal(asked, 0, "asking needs a tap");
+    tap();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(asked, 1);
+    const event = new window.Event("deviceorientation");
+    Object.assign(event, { webkitCompassHeading: 90 });
+    window.dispatchEvent(event);
+    assert.equal(orientations.at(-1), -Math.PI / 2, "the map follows the phone again");
+    tap();
+    assert.equal(asked, 1, "only the first tap asks");
+  } finally {
+    await controls.dispose();
+  }
+});
