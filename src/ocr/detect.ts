@@ -14,7 +14,8 @@ export type OcrReply =
   | { type: "error"; message: string };
 
 // Each worker peaks around 330 MB with its own models, so the pool stays small,
-// and smaller still on phones that report little memory.
+// and smaller still on phones that report little memory. Safari reports none:
+// assume 4 GB, as on many iPhones, since running out reloads the whole page.
 const MAX_WORKERS = 3;
 const WORKER_MEMORY_GB = 2;
 
@@ -28,7 +29,7 @@ function ocrWorkerCount(sections: number) {
       MAX_WORKERS,
       sections,
       (hardwareConcurrency || 2) - 1,
-      Math.floor((deviceMemory ?? 8) / WORKER_MEMORY_GB),
+      Math.floor((deviceMemory ?? 4) / WORKER_MEMORY_GB),
     ),
   );
 }

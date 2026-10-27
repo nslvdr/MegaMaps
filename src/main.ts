@@ -814,15 +814,20 @@ async function runOcr(
   }
 }
 
+const OCR_START_DELAY_MS = 3000;
 // Old libraries need no reimport. Opening a map without an index starts a scan.
 async function prepareMapSearch(map: MapRecord, version: number) {
   try {
     const index = await loadOcr(map.id);
     if (version !== openVersion) return;
     const job = ocrJob?.mapId === map.id ? ocrJob : undefined;
-    controls?.updateOcr(index, job?.message, job?.fraction);
+    const waiting = !ocrJob && needsOcr(index);
+    controls?.updateOcr(index, job?.message ?? (waiting ? t("Preparing text detection…") : undefined), job?.fraction);
     // Another map's scan restarts this one when it ends.
-    if (!needsOcr(index) || ocrJob) return;
+    if (!waiting) return;
+    // The map's first tiles decode before the models load and compete with them.
+    await new Promise((resolve) => setTimeout(resolve, OCR_START_DELAY_MS));
+    if (version !== openVersion || ocrJob) return;
     await runOcr(map, new AbortController());
   } catch (error) {
     if (version === openVersion && !ocrErrors.has(map.id))
