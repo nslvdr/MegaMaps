@@ -134,8 +134,10 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       .filter(([url]) => url !== "/app-status.json")
       .reduce((sum, [, body]) => sum + Buffer.byteLength(body), 0);
     assert.ok(progress.length >= 2);
-    assert.ok(progress.every((message) => message.type === "install-progress" && message.total === shellBytes));
-    assert.equal(progress[0]!.loaded, 0);
+    assert.ok(progress.every((message) => message.type === "install-progress"));
+    // Checking for files to keep reports nothing loaded, and no size yet.
+    assert.deepEqual([progress[0]!.loaded, progress[0]!.total], [0, 0]);
+    assert.ok(progress.every((message) => message.total === shellBytes || (!message.total && !message.loaded)));
     assert.equal(progress.at(-1)!.loaded, shellBytes);
     // The version probe describes the update before anything downloads.
     const version = JSON.parse(await readFile(path.join(root, "dist/app-version.json"), "utf8"));
@@ -259,6 +261,78 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       ["/codecs/jpeg.wasm"],
     );
     assert.equal((await checkShell()).ready, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an update copies files an earlier version holds intact and downloads changed or damaged ones", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-sw-"));
+  try {
+    await mkdir(path.join(root, "dist/assets"), { recursive: true });
+    await mkdir(path.join(root, "dist/ocr"));
+    const assets: Record<string, string> = {
+      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__"></html>',
+      "/assets/index.js": "new app",
+      "/ocr/model.onnx": "unchanged model",
+      "/ocr/runtime.wasm": "unchanged runtime",
+    };
+    for (const [name, contents] of Object.entries(assets))
+      await writeFile(path.join(root, "dist", name), contents);
+    execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/build-sw.mjs", import.meta.url))], { cwd: root });
+    const script = await readFile(path.join(root, "dist/sw.js"), "utf8");
+    assets["/index.html"] = await readFile(path.join(root, "dist/index.html"), "utf8");
+    const stores = new Map<string, Map<string, Response>>([
+      ["map-viewer-shell-old", new Map([
+        ["/index.html", new Response("old page")],
+        ["/assets/index.js", new Response("old app")],
+        ["/ocr/model.onnx", new Response("unchanged model")],
+        // Same size, different bytes: a damaged copy must not be trusted.
+        ["/ocr/runtime.wasm", new Response("unchanged runtimX")],
+      ])],
+    ]);
+    const caches = {
+      async open(name: string) {
+        const data = stores.get(name) ?? new Map<string, Response>();
+        stores.set(name, data);
+        return {
+          put: async (url: string, response: Response) => void data.set(url, response),
+          match: async (url: string) => data.get(url)?.clone(),
+        };
+      },
+      keys: async () => [...stores.keys()],
+    };
+    const fetched: string[] = [];
+    const progress: { loaded: number; total: number }[] = [];
+    const listeners = new Map<string, (event: unknown) => void>();
+    runInNewContext(script, {
+      caches, crypto, URL, Response, Headers, Blob,
+      fetch: async (url: string) => {
+        fetched.push(url);
+        return new Response(assets[url === "/" ? "/index.html" : url]);
+      },
+      self: {
+        location: { origin: "https://map.local" },
+        skipWaiting: async () => {},
+        clients: { matchAll: async () => [{ postMessage: (message: { loaded: number; total: number }) => progress.push(message) }] },
+        addEventListener: (name: string, listener: (event: unknown) => void) => listeners.set(name, listener),
+      },
+    });
+    let done: Promise<unknown> | undefined;
+    listeners.get("install")!({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await done;
+    assert.deepEqual(fetched.sort(), ["/", "/assets/index.js", "/ocr/runtime.wasm"]);
+    const installed = [...stores.entries()].find(([name]) => name !== "map-viewer-shell-old")![1];
+    for (const [url, body] of Object.entries(assets))
+      assert.equal(await installed.get(url)!.text(), body, url);
+    // Progress counts only what downloads.
+    const downloaded = ["/index.html", "/assets/index.js", "/ocr/runtime.wasm"]
+      .reduce((sum, url) => sum + Buffer.byteLength(assets[url]!), 0);
+    assert.ok(progress.every((message) => message.total === downloaded || (!message.total && !message.loaded)));
+    assert.equal(progress.at(-1)!.loaded, downloaded);
+    // Each copy records its hash, for the app's update size estimate.
+    const version = JSON.parse(await readFile(path.join(root, "dist/app-version.json"), "utf8"));
+    assert.equal(installed.get("/ocr/model.onnx")!.headers.get("x-shell-hash"), version.files["/ocr/model.onnx"].hash);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

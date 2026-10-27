@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -34,12 +34,13 @@ async function clean(response) {
     headers: response.headers,
   });
 }
-// Open windows show download progress while a new version installs.
-let loaded = 0, reported = 0;
+// Open windows show download progress while a new version installs; only
+// bytes that actually download count.
+let loaded = 0, total = 0, reported = 0;
 async function report(force) {
   if (!force && Date.now() - reported < 150) return;
   reported = Date.now();
-  const message = { type: 'install-progress', version: CACHE, loaded: Math.min(loaded, SIZE), total: SIZE };
+  const message = { type: 'install-progress', version: CACHE, loaded: Math.min(loaded, total), total };
   for (const client of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) client.postMessage(message);
 }
 // Read bodies chunk by chunk to count bytes; the stored copy is decoded and redirect-free.
@@ -53,17 +54,51 @@ async function download(url) {
     loaded += part.value.byteLength;
     void report(false);
   }
+  return stored(response, new Blob(chunks), url);
+}
+function stored(response, blob, url) {
   const headers = new Headers(response.headers);
   headers.delete('content-encoding');
   headers.delete('content-length');
-  return [url, new Response(new Blob(chunks), { status: response.status, statusText: response.statusText, headers })];
+  headers.set('x-shell-hash', FILES[url].hash);
+  return new Response(blob, { status: response.status, statusText: response.statusText, headers });
+}
+async function sha256(blob) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+// Most updates change a few small files, while the OCR models and runtime
+// stay the same. A file an earlier version already holds is copied only when
+// its bytes hash to this build's; anything else, or any error, downloads.
+async function kept(url, earlier) {
+  const { hash, size } = FILES[url];
+  for (const name of earlier) {
+    try {
+      const response = await (await caches.open(name)).match(url);
+      if (!response?.ok) continue;
+      const blob = await response.blob();
+      if (blob.size === size && (await sha256(blob)) === hash) return stored(response, blob, url);
+    } catch {}
+  }
 }
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     // Fetch everything before writing anything, so installation stays atomic.
-    loaded = 0;
+    // Until the files to download are known, nothing counts as loaded, which
+    // windows read as starting; it still shows the update is alive.
+    loaded = total = 0;
     await report(true);
-    const responses = await Promise.all(ASSETS.map(download));
+    const earlier = (await caches.keys().catch(() => []))
+      .filter(name => name.startsWith('map-viewer-shell-') && name !== CACHE);
+    const reused = new Map();
+    for (const url of ASSETS) {
+      const response = await kept(url, earlier);
+      if (response) reused.set(url, response);
+      void report(false);
+    }
+    total = ASSETS.reduce((sum, url) => sum + (reused.has(url) ? 0 : FILES[url].size), 0);
+    await report(true);
+    const responses = await Promise.all(ASSETS.map(async url => [url, reused.get(url) ?? await download(url)]));
     await report(true);
     const cache = await caches.open(CACHE);
     await Promise.all(responses.map(([url, response]) => cache.put(url, response)));
@@ -112,16 +147,22 @@ const cacheName = `map-viewer-shell-${hash.digest("hex").slice(0, 16)}`;
 // Stamp the loaded HTML too: an open page can be older than its active worker.
 const stampedHtml = await readFile("dist/index.html", "utf8");
 await writeFile("dist/index.html", stampedHtml.replace("__APP_BUILD__", cacheName));
-// Sizes are taken after stamping so progress matches the bytes actually served.
-let size = 0;
-for (const path of shellPaths) size += (await stat(path)).size;
+// Sizes and hashes are taken after stamping so they match the bytes actually served.
+const shellFiles = {};
+for (const path of shellPaths) {
+  const bytes = await readFile(path);
+  shellFiles[`/${path.slice(5)}`] = { hash: createHash("sha256").update(bytes).digest("hex"), size: bytes.byteLength };
+}
+const size = Object.values(shellFiles).reduce((sum, file) => sum + file.size, 0);
 await writeFile(
   "dist/sw.js",
   `
 const CACHE = ${JSON.stringify(cacheName)};
 const SIZE = ${size};
-const ASSETS = ${JSON.stringify(urls)};${worker}`,
+const ASSETS = ${JSON.stringify(urls)};
+const FILES = ${JSON.stringify(shellFiles)};${worker}`,
 );
 // Lets the app describe an available update before downloading it.
-await writeFile("dist/app-version.json", JSON.stringify({ version: cacheName, size, builtAt }));
+// Files list each hash, so the app can tell how much an update really downloads.
+await writeFile("dist/app-version.json", JSON.stringify({ version: cacheName, size, builtAt, files: shellFiles }));
 console.log(`Offline shell: ${urls.length} assets, ${(size / 1048576).toFixed(1)} MB, ${cacheName}`);

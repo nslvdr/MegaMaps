@@ -133,3 +133,32 @@ test("installing forwards download progress from the new worker", async () => {
   assert.equal(await pending, true);
   assert.deepEqual(seen, [{ loaded: 5, total: 10 }, { loaded: 10, total: 10 }]);
 });
+
+test("an update's size counts only files no installed version holds", async () => {
+  const app = environment(new Worker("build-one"));
+  const shell = new Map([
+    ["/ocr/model.onnx", new Response("model", { headers: { "x-shell-hash": "model-hash" } })],
+    ["/assets/index.js", new Response("old app", { headers: { "x-shell-hash": "old-app-hash" } })],
+  ]);
+  const storage = {
+    keys: async () => ["unrelated", "map-viewer-shell-one"],
+    open: async (name: string) => ({
+      match: async (url: string) => (name === "map-viewer-shell-one" ? shell.get(url) : undefined),
+    }),
+  } as unknown as CacheStorage;
+  const latest = {
+    version: "build-two",
+    size: 9000,
+    files: {
+      "/ocr/model.onnx": { hash: "model-hash", size: 8000 },
+      "/assets/index.js": { hash: "new-app-hash", size: 900 },
+      "/index.html": { hash: "page-hash", size: 100 },
+    },
+  };
+  const find = (storage?: CacheStorage) => findAppUpdate("build-one", app.container as unknown as ServiceWorkerContainer,
+    async () => new Response(JSON.stringify(latest)), storage);
+  assert.equal((await find(storage))?.size, 1000);
+  // Without readable caches, the whole shell is the honest estimate.
+  assert.equal((await find(undefined))?.size, 9000);
+  assert.equal((await find({ keys: async () => { throw new Error("blocked"); } } as unknown as CacheStorage))?.size, 9000);
+});

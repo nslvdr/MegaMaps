@@ -86,11 +86,38 @@ async function shellVersion(worker: ServiceWorker) {
   }
 }
 
+// Files an installed version already holds are copied, not downloaded (see
+// build-sw.mjs). This only reads the hash each cached copy was stored with, so
+// it is an estimate; installing checks the bytes themselves.
+async function downloadSize(files: unknown, size: number, storage?: CacheStorage) {
+  if (!storage || typeof files !== "object" || files === null) return size;
+  try {
+    const names = (await storage.keys()).filter((name) => name.startsWith("map-viewer-shell-"));
+    const shells = await Promise.all(names.map((name) => storage.open(name)));
+    let needed = 0;
+    for (const [url, file] of Object.entries(files)) {
+      const { hash, size: bytes } = (file ?? {}) as { hash?: unknown; size?: unknown };
+      if (typeof hash !== "string" || typeof bytes !== "number") return size;
+      let held = false;
+      for (const shell of shells)
+        if ((await shell.match(url))?.headers.get("x-shell-hash") === hash) {
+          held = true;
+          break;
+        }
+      if (!held) needed += bytes;
+    }
+    return needed || size;
+  } catch {
+    return size;
+  }
+}
+
 // Ask the host which version is live without starting a download.
 export async function findAppUpdate(
   loadedVersion: string,
   container: ServiceWorkerContainer = navigator.serviceWorker,
   request: typeof fetch = fetch,
+  storage: CacheStorage | undefined = globalThis.caches,
 ): Promise<AppUpdate | undefined> {
   let response: Response;
   try {
@@ -98,7 +125,7 @@ export async function findAppUpdate(
   } catch {
     throw new Error(t("Couldn’t reach Mega Maps. Check your connection and try again."));
   }
-  const latest: { version?: unknown; size?: unknown; builtAt?: unknown } | undefined =
+  const latest: { version?: unknown; size?: unknown; builtAt?: unknown; files?: unknown } | undefined =
     response.ok ? await response.json().catch(() => undefined) : undefined;
   if (typeof latest?.version !== "string")
     throw new Error(t("Couldn’t read the latest version information. Try again later."));
@@ -109,9 +136,10 @@ export async function findAppUpdate(
   const downloaded = worker
     ? await shellVersion(worker).then((version) => version === latest.version, () => false)
     : false;
+  const size = typeof latest.size === "number" && latest.size > 0 ? latest.size : 0;
   return {
     version: latest.version,
-    size: typeof latest.size === "number" && latest.size > 0 ? latest.size : 0,
+    size: size && !downloaded ? await downloadSize(latest.files, size, storage) : size,
     releasedAt: Number.isFinite(releasedAt.getTime()) ? releasedAt : undefined,
     downloaded,
   };
