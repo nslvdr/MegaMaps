@@ -5,7 +5,9 @@ import { payloadStore, deleteStoredMap } from "../storage/payloads";
 import { defaultNavigation, normalizeNavigation, type MapMarker, type NavigationState, type PlannedRoute } from "../viewer/navigation";
 import { importMap } from "../processing/import";
 import { readHeader } from "../processing/headers";
+import { loadOcr } from "../storage/ocr";
 import { loadPhotos, putPhotos } from "../storage/photos";
+import { needsOcr, type OcrIndex } from "../ocr/index";
 import { loadSetting } from "../storage/settings";
 import { mergeAnnotations, replaceAnnotations } from "./annotations";
 import { fingerprint, encodeShare, shareFilename, verifyImage, type SharedMap, type ShareManifest } from "./format";
@@ -59,6 +61,11 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
   const routes = state.routes.filter((route) => !route.draft && route.points.length >= 2);
   const photos = await loadPhotos(map.id, [...state.markers, ...routes].flatMap((item) => item.photos ?? []));
   const from = (await loadSetting("share-name"))?.trim();
+  // Text detection is slow, so a finished scan travels with the image instead of running again.
+  const scan = await loadOcr(map.id);
+  const ocr = scan && !needsOcr(scan)
+    ? new Blob([JSON.stringify({ version: scan.version, completedAt: scan.completedAt, lines: scan.lines })])
+    : undefined;
   // A photo missing from storage is dropped instead of breaking the share.
   const stored = <T extends MapMarker | PlannedRoute>(item: T) => {
     const copy = structuredClone(item);
@@ -74,7 +81,7 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
     routes: routes.map(stored),
     northOffset: state.northOffset,
     from,
-    image, original,
+    image, original, ocr,
   };
 }
 export type PreparedExport = Awaited<ReturnType<typeof prepareExport>>;
@@ -87,33 +94,37 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     const blob = prepared.photos.get(id)!;
     return { id, type: blob.type || "image/jpeg", bytes: blob.size };
   });
-  const manifest: ShareManifest = { format: "megamap", version: 5, map: prepared.map,
+  const ocr = selection.includeImage ? prepared.ocr : undefined;
+  const manifest: ShareManifest = { format: "megamap", version: 6, map: prepared.map,
     markers: chosen,
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
     ...(prepared.northOffset ? { northOffset: prepared.northOffset } : {}),
     ...(prepared.from ? { from: prepared.from } : {}),
+    ...(ocr ? { ocr: { bytes: ocr.size } } : {}),
     ...(selection.includeImage ? { image: prepared.image } : {}) };
-  return new File([encodeShare(manifest, selection.includeImage ? prepared.original : undefined, prepared.photos)],
+  return new File([encodeShare(manifest, selection.includeImage ? prepared.original : undefined, prepared.photos, ocr)],
     shareFilename(prepared.map.name), { type: "application/octet-stream" });
 }
 
 export type ImportMode = "merge" | "replace";
-/** Read and write in a single transaction; concurrent imports cannot lose each other. */
+/** Read and write in a single transaction; concurrent imports cannot lose each other.
+ * Shared text detection fills in a map without a current scan. */
 export async function importAnnotations(
   mapId: string, manifest: ShareManifest, mode: ImportMode = "merge", signal?: AbortSignal,
-  photos = new Map<string, Blob>(),
+  photos = new Map<string, Blob>(), ocr?: Omit<OcrIndex, "mapId">,
 ) {
   signal?.throwIfAborted();
   const db = await database();
   signal?.throwIfAborted();
   return new Promise<{ added: number; updated: number; skipped: number; removed: number }>((resolve, reject) => {
-    const tx = db.transaction(["maps", "navigation", "photos"], "readwrite");
+    const tx = db.transaction(["maps", "navigation", "ocr", "photos"], "readwrite");
     const abort = () => tx.abort();
     signal?.addEventListener("abort", abort, { once: true });
     const finish = () => signal?.removeEventListener("abort", abort);
     const maps = tx.objectStore("maps"), navigation = tx.objectStore("navigation");
     const mapRequest: IDBRequest<MapRecord | undefined> = maps.get(mapId);
+    const ocrRequest: IDBRequest<OcrIndex | undefined> = tx.objectStore("ocr").get(mapId);
     const stateRequest: IDBRequest<NavigationState | undefined> = navigation.get(mapId);
     let result = { added: 0, updated: 0, skipped: 0, removed: 0 };
     let failure: Error | undefined;
@@ -133,6 +144,7 @@ export async function importAnnotations(
       // Only places and routes that were added bring their photos along.
       const used = new Set([...next.state.markers, ...next.state.routes].flatMap((item) => item.photos ?? []));
       putPhotos(tx, mapId, new Map([...photos].filter(([id]) => used.has(id))));
+      if (ocr && !needsOcr(ocr) && needsOcr(ocrRequest.result)) tx.objectStore("ocr").put({ ...ocr, mapId });
     };
     tx.oncomplete = () => { finish(); resolve(result); };
     tx.onabort = () => {
@@ -157,7 +169,7 @@ export async function importNewCopy(
     signal.throwIfAborted();
     await cacheFingerprint(map.id, share.manifest.map.fingerprint);
     signal.throwIfAborted();
-    const result = await importAnnotations(map.id, share.manifest, "merge", signal, share.photos);
+    const result = await importAnnotations(map.id, share.manifest, "merge", signal, share.photos, share.ocr);
     return { map, ...result };
   } catch (error) {
     if (map) await deleteStoredMap(map).catch(() => {});

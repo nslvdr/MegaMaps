@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
 import { readHeader } from "../processing/headers";
+import { readOcrIndex, type OcrIndex } from "../ocr/index";
 import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, visitFromLastSeen, type MapMarker, type PlaceChange, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
@@ -15,17 +16,20 @@ const MAX_PHOTOS = 2_000;
 const MAX_PHOTO_BYTES = 16 * 1024 * 1024;
 const MAX_PHOTOS_PER_ITEM = 50;
 const MAX_LOG_PER_PLACE = 500;
+const MAX_OCR_BYTES = 64 * 1024 * 1024;
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export interface SharePhoto { id: string; type: string; bytes: number }
 export interface ShareManifest {
   format: "megamap";
-  version: 5;
+  version: 6;
   map: { name: string; width: number; height: number; fingerprint: string };
   image?: { name: string; type: string; bytes: number };
   markers: MapMarker[];
   routes: PlannedRoute[];
   /** Place and route photos, stored in this order after the manifest and before the map image. */
   photos?: SharePhoto[];
+  /** The sender's text detection as JSON, stored after the photos, so the receiver needn't scan again. */
+  ocr?: { bytes: number };
   /** Where north is on the map, in degrees clockwise from its top; absent means unknown. */
   northOffset?: number;
   /** The sender's name from their settings, when they gave one. */
@@ -35,6 +39,7 @@ export interface SharedMap {
   manifest: ShareManifest;
   image?: File;
   photos?: Map<string, Blob>;
+  ocr?: Omit<OcrIndex, "mapId">;
 }
 
 /** Shared files are recognised by their header, whatever their name or picker. */
@@ -74,8 +79,9 @@ function invalid(): never {
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
   // Version 1 predates photos and named descriptions `note`; version 2 routes have neither;
-  // version 3 places have no log; up to version 4 a last seen date sat beside a log of notes.
-  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
+  // version 3 places have no log; up to version 4 a last seen date sat beside a log of notes;
+  // version 5 has no text detection.
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5 && value.version !== 6) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
       !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
@@ -119,6 +125,7 @@ export function validateManifest(value: unknown): ShareManifest {
     return own.length ? { photos: own } : {};
   };
   const version = value.version;
+  const current = version >= 5;
   const time = (value: unknown) => integer(value, 0, Number.MAX_SAFE_INTEGER);
   const kind = (value: unknown) => typeof value === "string" &&
     ((legacyMarkerKinds as readonly string[]).includes(value) || Object.hasOwn(markerKinds, value));
@@ -156,7 +163,7 @@ export function validateManifest(value: unknown): ShareManifest {
         invalid();
     }
   };
-  // Version 5 entries are notes, edits, or neither: visits.
+  // Since version 5 entries are notes, edits, or neither: visits.
   const log = (value: unknown) => {
     if (value === undefined) return undefined;
     if (!Array.isArray(value) || value.length > MAX_LOG_PER_PLACE) invalid();
@@ -164,8 +171,8 @@ export function validateManifest(value: unknown): ShareManifest {
     return value.map((entry: unknown): PlaceLogEntry => {
       if (!object(entry) || !name(entry.id, 200) || entryIds.has(entry.id) || !time(entry.date) ||
           (entry.text !== undefined && (!text(entry.text, 2000) || !entry.text.trim())) ||
-          (version !== 5 && entry.text === undefined) ||
-          (entry.changes !== undefined && (version !== 5 || !Array.isArray(entry.changes) ||
+          (!current && entry.text === undefined) ||
+          (entry.changes !== undefined && (!current || !Array.isArray(entry.changes) ||
             !entry.changes.length || entry.changes.length > 10))) invalid();
       entryIds.add(entry.id);
       return { id: entry.id, date: entry.date, ...(typeof entry.text === "string" ? { text: entry.text } : {}),
@@ -179,8 +186,8 @@ export function validateManifest(value: unknown): ShareManifest {
         !kind(value.kind) ||
         (value.water !== undefined && (value.kind !== "flooded" || !isWaterLevel(value.water))) ||
         (value.danger !== undefined && (value.kind !== "unstable" || !isDangerLevel(value.danger))) ||
-        (value.lastSeen !== undefined && (version === 5 || !time(value.lastSeen))) ||
-        (value.seenAt !== undefined && (version === 5 || !time(value.seenAt)))) invalid();
+        (value.lastSeen !== undefined && (current || !time(value.lastSeen))) ||
+        (value.seenAt !== undefined && (current || !time(value.seenAt)))) invalid();
     const place = identity(value, "marker");
     const entries = visitFromLastSeen(log(value.log), place.created, time(value.lastSeen) ? value.lastSeen : undefined);
     return { ...place, label: value.label, description,
@@ -209,24 +216,28 @@ export function validateManifest(value: unknown): ShareManifest {
         !integer(input.bytes, 1, MAX_FILE_BYTES)) invalid();
     image = { name: input.name, type: String(input.type), bytes: input.bytes };
   }
+  const ocr = value.ocr;
+  if (ocr !== undefined && (version !== 6 || !object(ocr) || !integer(ocr.bytes, 1, MAX_OCR_BYTES))) invalid();
   const north = value.northOffset;
   if (north !== undefined && !integer(north, NORTH_MIN, NORTH_MAX)) invalid();
   if (value.from !== undefined && !name(value.from, 100)) invalid();
   if (!image && markers.length + routes.length === 0)
     throw new Error(t("Select at least one place or route, or include the map image."));
-  return { format: "megamap", version: 5,
+  return { format: "megamap", version: 6,
     map: { name: map.name, width: map.width, height: map.height, fingerprint: map.fingerprint },
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
+    ...(ocr ? { ocr: { bytes: ocr.bytes as number } } : {}),
     ...(north !== undefined ? { northOffset: north } : {}),
     ...(typeof value.from === "string" ? { from: value.from.trim() } : {}) };
 }
 const photoBytes = (manifest: ShareManifest) =>
   (manifest.photos ?? []).reduce((total, photo) => total + photo.bytes, 0);
 
-/** A small length-prefixed JSON manifest followed by place and route photos and the optional original bytes. */
-export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new Map<string, Blob>()) {
+/** A small length-prefixed JSON manifest followed by place and route photos, the optional
+ * text detection and the optional original bytes. */
+export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new Map<string, Blob>(), ocr?: Blob) {
   const valid = validateManifest(manifest);
-  if ((valid.image?.bytes ?? 0) !== (image?.size ?? 0)) invalid();
+  if ((valid.image?.bytes ?? 0) !== (image?.size ?? 0) || (valid.ocr?.bytes ?? 0) !== (ocr?.size ?? 0)) invalid();
   const photoParts = (valid.photos ?? []).map((photo) => {
     const blob = photos.get(photo.id);
     if (blob?.size !== photo.bytes) invalid();
@@ -238,12 +249,12 @@ export function encodeShare(manifest: ShareManifest, image?: Blob, photos = new 
   const header = new Uint8Array(HEADER_BYTES);
   header.set(new TextEncoder().encode(MAGIC));
   new DataView(header.buffer).setUint32(8, json.byteLength, true);
-  return new Blob([header, json, ...photoParts, ...(image ? [image] : [])], { type: SHARE_MIME });
+  return new Blob([header, json, ...photoParts, ...(ocr ? [ocr] : []), ...(image ? [image] : [])], { type: SHARE_MIME });
 }
 
 /** Parse metadata without loading or decoding a potentially large embedded map. */
 export async function readShare(file: Blob): Promise<SharedMap> {
-  if (file.size < HEADER_BYTES || file.size > HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_PHOTOS * MAX_PHOTO_BYTES + MAX_FILE_BYTES)
+  if (file.size < HEADER_BYTES || file.size > HEADER_BYTES + MAX_MANIFEST_BYTES + MAX_PHOTOS * MAX_PHOTO_BYTES + MAX_OCR_BYTES + MAX_FILE_BYTES)
     throw new Error(t("This MegaMaps file is truncated or too large."));
   const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer());
   if (new TextDecoder().decode(header.subarray(0, 8)) !== MAGIC)
@@ -257,15 +268,22 @@ export async function readShare(file: Blob): Promise<SharedMap> {
     throw new Error(t("The annotations in this MegaMaps file could not be read."));
   }
   const manifest = validateManifest(value);
-  if (file.size !== HEADER_BYTES + size + photoBytes(manifest) + (manifest.image?.bytes ?? 0))
+  if (file.size !== HEADER_BYTES + size + photoBytes(manifest) + (manifest.ocr?.bytes ?? 0) + (manifest.image?.bytes ?? 0))
     throw new Error(t("This MegaMaps file is incomplete or contains unexpected data."));
   let offset = HEADER_BYTES + size;
   const photos = new Map<string, Blob>();
   for (const photo of manifest.photos ?? [])
     photos.set(photo.id, file.slice(offset, offset += photo.bytes, photo.type));
+  let ocr: SharedMap["ocr"];
+  if (manifest.ocr) {
+    try {
+      ocr = readOcrIndex(JSON.parse(await file.slice(offset, offset += manifest.ocr.bytes).text()));
+    } catch { /* Malformed JSON is handled below like a malformed index. */ }
+    if (!ocr) invalid();
+  }
   const image = manifest.image && new File([file.slice(offset)],
     manifest.image.name, { type: manifest.image.type });
-  return { manifest, ...(image ? { image } : {}), photos };
+  return { manifest, ...(image ? { image } : {}), photos, ...(ocr ? { ocr } : {}) };
 }
 
 /** Verify the source image before placing annotations or creating a new map. */
