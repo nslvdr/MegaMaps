@@ -163,6 +163,20 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       /translate\(195(\.0)?,422(\.0)?\)/,
     );
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
+    // Moving labels alone leaves the map's pixels as they are.
+    const context = backing.getContext("2d"), drawImage = context.drawImage;
+    let painted = 0;
+    context.drawImage = function (this: typeof context, ...args: Parameters<typeof drawImage>) {
+      painted++;
+      return drawImage.apply(this, args);
+    } as typeof drawImage;
+    viewer.refreshLabels();
+    step();
+    assert.equal(painted, 0, "a label frame draws no tiles");
+    viewer.panBy(1, 0);
+    step();
+    assert.ok(painted > 0, "a moved map repaints");
+    context.drawImage = drawImage;
     viewer.fit();
     step(performance.now() + 100);
     assert.equal(viewer.diagnostics().rotation, Math.PI / 2);
