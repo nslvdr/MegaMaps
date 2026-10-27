@@ -187,6 +187,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       ["open-saved", "open-search", "open-add"],
     );
     assert.equal(el("map-search").parentElement, el("open-search"));
+    // Rows are built only once their panel opens.
+    assert.equal(el("marker-list").childElementCount + el("route-list").childElementCount, 0);
+    const refreshesBeforeOpening = labelRefreshes;
+    focus.mock.resetCalls();
+    click("open-saved");
     // Empty Saved lists show their status without offering their own button.
     for (const [id, message] of [
       ["marker-list", "No places yet."],
@@ -195,9 +200,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       assert.equal(el(id).querySelector(".empty-list")!.textContent, message);
       assert.equal(el(id).querySelector("button"), null);
     }
-    const refreshesBeforeOpening = labelRefreshes;
-    focus.mock.resetCalls();
-    click("open-saved");
     assert.equal(focus.mock.callCount(), 0, "opening a panel does not preselect its close button");
     assert.ok(labelRefreshes > refreshesBeforeOpening, "opening a panel refreshes labels on an idle map");
     assert.equal(sheet.hidden, false);
@@ -597,6 +599,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("marker-detail-updated").textContent, "Updated today", "the header still says how fresh it is");
     click("marker-cancel");
     assert.equal(el("marker-dialog").hasAttribute("open"), false);
+    if (el("sheet-saved").hidden) click("open-saved");
     // Saved list renders names as text, never markup.
     assert.match(el("marker-list").textContent!, /<Entrance>/);
     assert.equal(el("saved-places-count").textContent, "1");
@@ -613,7 +616,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const actions = () => [...popover()!.querySelectorAll<HTMLButtonElement>(".action-sheet-item, .danger")];
     const placeMore = () =>
       el("marker-list").querySelector<HTMLButtonElement>(".row-more")!;
-    click("open-saved");
     assert.equal(popover(), null);
     assert.match(
       placeMore().getAttribute("aria-label")!,
@@ -751,11 +753,12 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(state.routes[0]?.draft, false);
     assert.equal(toolBar.hidden, true);
     assert.equal(tools.at(-1), "browse");
+    if (el("sheet-saved").hidden) click("open-saved");
     assert.equal(el("route-list").querySelector(".navigation-row")?.tagName, "LI");
 
     // Editing a finished route down to one point restores it.
     const editPoints = () => {
-      click("open-saved");
+      if (el("sheet-saved").hidden) click("open-saved");
       el("route-list")
         .querySelector(".row-more")!
         .dispatchEvent(new window.Event("click"));
@@ -800,6 +803,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.match(el("toast").textContent!, /unchanged/);
 
     // Saved route rows open the route's details, like a place's, and frame it.
+    click("open-saved");
     el("route-list")
       .querySelector<HTMLButtonElement>(".navigation-jump")!
       .dispatchEvent(new window.Event("click"));
@@ -812,6 +816,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
 
     // Edit uses the place form, delete needs two taps; all behind ⋯.
     const openMenu = () => {
+      if (el("sheet-saved").hidden) click("open-saved");
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
       if (!popover()) more.dispatchEvent(new window.Event("click"));
     };
@@ -1472,7 +1477,11 @@ test("a flooded place's water level and a danger place's level show on its pin a
     const at = steps.findIndex((step) => step.hasAttribute("aria-current"));
     return `${line.firstChild!.textContent}: ${steps[at]!.textContent} (${at + 1}/${steps.length})`;
   };
+  const openSaved = () => {
+    if (el("sheet-saved").hidden) el("open-saved").dispatchEvent(new window.Event("click"));
+  };
   try {
+    openSaved();
     assert.ok(el("marker-list").querySelector(".water-gauge"), "Saved shows the level beside the pin");
     controls.options().onMarker(state.markers[0]!);
     assert.equal(el("marker-details").hidden, false, "the level alone is worth reading");
@@ -1494,6 +1503,7 @@ test("a flooded place's water level and a danger place's level show on its pin a
     save();
     assert.equal(state.markers[0]!.water, undefined, "a place that is no longer flooded drops its level");
     assert.equal(el("marker-detail-level").hidden, true);
+    openSaved();
     assert.equal(el("marker-list").querySelector(".water-gauge"), null);
 
     const danger = (level: number) => document.querySelector<HTMLElement>(`.level-step[data-danger="${level}"]`)!;
@@ -1713,12 +1723,14 @@ test("a route reads and edits like a place: name, description and photos", async
     assert.deepEqual((await loadNavigation(map.id)).routes[0], route,
       "route details survive saving and reopening the map");
     // Saved shows one line under the name: points, the photo count, then the description.
+    if (el("sheet-saved").hidden) el("open-saved").dispatchEvent(new window.Event("click"));
     const savedRow = el("route-list").querySelector(".navigation-row")!;
     const photos = savedRow.querySelector(".row-detail .row-photos")!;
     assert.equal(photos.getAttribute("aria-label"), "1 photo");
     assert.equal(photos.textContent, "1");
     assert.equal(photos.previousSibling?.textContent, "2 points · ");
     assert.equal(photos.parentElement?.textContent, "2 points · 1 · Low ceiling past the pillar");
+    controls.options().onRoute!(route);
 
     click("marker-edit");
     (el("marker-label") as HTMLInputElement).value = "Discarded name";
@@ -1780,6 +1792,7 @@ test("Saved orders its lists and filters them by type", async () => {
   const items = () => [...document.querySelectorAll("#saved-section-menu .popover-item")];
   const pick = (label: string) => click(items().find((item) => item.textContent === label)!);
   try {
+    click(el("open-saved"));
     assert.equal(el("places-order").parentElement, el("saved-places-title"), "the icon sits on the section's title line");
     assert.equal(el("routes-order").hidden, true, "a single route has nothing to order");
     assert.deepEqual(places(), ["Gate", "Arch", "Well"], "newest first by default");
@@ -1848,7 +1861,10 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   const el = (id: string) => document.getElementById(id)!;
   const click = (id: string) => el(id).dispatchEvent(new window.Event("click"));
   const tap = (x: number, y: number) => controls.options().onTap({ x, y });
-  const routeDetail = () => document.querySelector('[data-row="gallery"] .row-detail')!.textContent;
+  const routeDetail = () => {
+    if (el("sheet-saved").hidden) click("open-saved");
+    return document.querySelector('[data-row="gallery"] .row-detail')!.textContent;
+  };
   try {
     assert.equal(routeDetail(), "2 points", "without a scale, a route has no length");
     click("open-measure");
