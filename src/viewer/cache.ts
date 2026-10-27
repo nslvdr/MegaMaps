@@ -46,6 +46,9 @@ export class TileCache {
   get queued() {
     return this.queue.length;
   }
+  get loading() {
+    return this.pending.size;
+  }
   get tiles() {
     return [...this.entries.values()];
   }

@@ -18,6 +18,8 @@ const choices = {
   "update-install": ["auto", "ask"],
   /** How map tiles are stored: compact JPEG, or sharp PNG at about twice the space. */
   tiling: ["compact", "sharp"],
+  /** The hidden map overlay: tile borders and live stats. */
+  debug: ["off", "on"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };

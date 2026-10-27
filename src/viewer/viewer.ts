@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { preference } from "../preferences";
 import { TILE_SIZE, tileKey, type MapRecord } from "../types";
 import { payloadStore } from "../storage/payloads";
 import {
@@ -17,7 +18,7 @@ import {
   worldToScreen,
   transformAt,
 } from "./camera";
-import { TileCache } from "./cache";
+import { TILE_CACHE_BUDGET, TileCache, type TileRequest } from "./cache";
 import { attachInteractions, type Hold } from "./interactions";
 import {
   defaultNavigation,
@@ -121,6 +122,10 @@ export class Viewer {
   private lastFrame = 0;
   private frames = 0;
   private controller = new AbortController();
+  /** The hidden debug overlay's stats panel, turned on from Settings. */
+  private debug?: HTMLElement;
+  /** The last paint's tiles, for the stats panel. */
+  private painted = { level: 0, drawn: 0, missing: 0 };
   constructor(
     private canvas: HTMLCanvasElement,
     private map: MapRecord,
@@ -185,6 +190,10 @@ export class Viewer {
     // A restored context comes back blank, and label frames don't repaint.
     canvas.addEventListener("contextrestored", () => this.invalidate(), { signal: this.controller.signal });
     this.observer.observe(canvas);
+    if (preference("debug") === "on") {
+      this.debug = Object.assign(document.createElement("pre"), { className: "map-debug" });
+      canvas.after(this.debug);
+    }
     const saved = this.navigation.view;
     this.resize();
     if (saved) this.setCamera(restoreView(saved, this.viewport()));
@@ -793,6 +802,7 @@ export class Viewer {
     }
     this.lastFrame = now;
     this.frames++;
+    if (this.debug) this.debug.textContent = this.stats();
   }
   private paint(viewport: Size) {
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
@@ -836,6 +846,7 @@ export class Viewer {
       .sort((a, b) => b.level - a.level);
     // Cached tiles from earlier views stay decoded but are not drawn off screen.
     const bounds = viewBounds(this.camera, viewport);
+    const drawn: TileRequest[] = [];
     for (const tile of entries) {
       const scale = this.map.levels[tile.level]!.scale;
       const x = tile.x * TILE_SIZE * scale,
@@ -858,9 +869,11 @@ export class Viewer {
         width,
         height,
       );
+      drawn.push(tile);
     }
     // A faint 1px edge, just outside the map, shows where it ends on black.
     const edge = 1 / this.camera.scale;
+    const world = ctx.getTransform();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
     ctx.lineWidth = edge;
     ctx.strokeRect(-edge / 2, -edge / 2, this.map.width + edge, this.map.height + edge);
@@ -872,6 +885,68 @@ export class Viewer {
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
     }
+    if (this.debug) this.paintDebug(ctx, world, level, tiles, drawn);
+  }
+  /** Each drawn tile's border and name: green at the wanted level, orange
+   * for a coarser one filling in, red dashed where a wanted tile is missing. */
+  private paintDebug(ctx: CanvasRenderingContext2D, world: DOMMatrix, level: number,
+    wanted: { x: number; y: number }[], drawn: TileRequest[]) {
+    const loaded = new Set(this.cache.tiles.map((tile) => tileKey(tile.level, tile.x, tile.y)));
+    const missing = wanted.filter((tile) => !loaded.has(tileKey(level, tile.x, tile.y))).map((tile) => ({ ...tile, level }));
+    this.painted = { level, drawn: drawn.length, missing: missing.length };
+    const box = (tile: TileRequest) => {
+      const size = TILE_SIZE * this.map.levels[tile.level]!.scale,
+        x = tile.x * size,
+        y = tile.y * size;
+      return { x, y, width: Math.min(size, this.map.width - x), height: Math.min(size, this.map.height - y) };
+    };
+    const outlines = [
+      ...drawn.map((tile) => ({ tile, color: tile.level === level ? "#b6ff3b" : "#ff9a3c", dash: [] as number[] })),
+      ...missing.map((tile) => ({ tile, color: "#ff2a2a", dash: [6, 6] })),
+    ];
+    ctx.setTransform(world);
+    ctx.lineWidth = 2 / this.camera.scale;
+    for (const { tile, color, dash } of outlines) {
+      const { x, y, width, height } = box(tile);
+      ctx.strokeStyle = color;
+      ctx.setLineDash(dash.map((length) => length / this.camera.scale));
+      ctx.strokeRect(x, y, width, height);
+    }
+    ctx.setLineDash([]);
+    // Names stay upright and readable at any zoom, on tiles big enough to hold one.
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.font = "14px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const { tile, color } of outlines) {
+      const { x, y, width, height } = box(tile);
+      if (Math.min(width, height) * this.camera.scale < 72) continue;
+      const center = worldToScreen(this.camera, { x: x + width / 2, y: y + height / 2 });
+      ctx.fillStyle = "#000c";
+      ctx.fillRect(center.x - 40, center.y - 11, 80, 22);
+      ctx.fillStyle = color;
+      ctx.fillText(`L${tile.level} ${tile.x},${tile.y}`, center.x, center.y);
+    }
+  }
+  private stats() {
+    const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
+    const { level, drawn, missing } = this.painted,
+      scale = this.map.levels[level]!.scale,
+      fps = this.diagnostics().activeFrameFps;
+    const heap = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
+    return [
+      `zoom ${Math.round(this.camera.scale * 100)}% · ${Math.round(((this.camera.rotation ?? 0) * 180) / Math.PI)}°`,
+      `level ${level} of ${this.map.levels.length - 1} (1/${scale})`,
+      `${(this.camera.scale * scale * this.dpr).toFixed(2)} screen px per tile px`,
+      `tiles ${drawn} drawn · ${missing} missing`,
+      `loading ${this.cache.loading} · queued ${this.cache.queued}`,
+      `cache ${this.cache.tiles.length} tiles · ${mb(this.cache.decodedBytes)} of ${mb(TILE_CACHE_BUDGET)}`,
+      `fps ${fps ? Math.round(fps) : "–"} · ${this.frames} frames`,
+      `canvas ${this.canvas.width}×${this.canvas.height} @${this.dpr.toFixed(2)}x`,
+      `map ${this.map.width}×${this.map.height} · ${mb(this.map.bytes)}`,
+      `look ${this.dark.kind}${this.navigation.inverted ? " · inverted" : ""}`,
+      ...(heap ? [`heap ${mb(heap)}`] : []),
+    ].join("\n");
   }
   // Useful for device profiling; byte counts exclude browser/GPU/encoder overhead.
   diagnostics() {
@@ -904,6 +979,7 @@ export class Viewer {
     this.base?.close();
     this.overlay?.dispose();
     this.searchOverlay?.dispose();
+    this.debug?.remove();
     this.canvas.width = this.canvas.height = 1;
   }
 }

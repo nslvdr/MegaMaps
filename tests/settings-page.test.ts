@@ -2,9 +2,10 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { ERASE_STEP_PAUSE, eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "../src/ui/settings-page";
+import { DEBUG_HOLD, ERASE_STEP_PAUSE, eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "../src/ui/settings-page";
 import { saveMap } from "../src/storage/database";
 import type { MapRecord } from "../src/types";
+import { preference } from "../src/preferences";
 
 test("deleting everything takes three separate confirmations, each after a pause", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -63,5 +64,35 @@ test("Settings warns and says so beside the storage size when the browser may cl
   } finally {
     if (storage) Object.defineProperty(navigator, "storage", storage);
     else delete (navigator as { storage?: unknown }).storage;
+  }
+});
+
+test("holding Check for updates turns the debug overlay on and off instead of checking", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { window, document } = parseHTML(`<html><body>${settingsMarkup}${restoreDialogMarkup}${eraseDialogMarkup}</body></html>`);
+  Object.defineProperty(globalThis, "window", { value: globalThis, configurable: true });
+  let checks = 0;
+  initSettingsPage(document.querySelector("#settings")!, {
+    restore: document.querySelector("#restore-dialog")!, erase: document.querySelector("#erase-dialog")!,
+  }, { back() {}, checkUpdates: () => { checks++; }, restore() {}, setLabelSize() {}, setTiling() {}, erase() {} });
+  const row = document.querySelector<HTMLButtonElement>("#settings-update")!;
+  const press = (duration: number) => {
+    row.dispatchEvent(new window.Event("pointerdown"));
+    t.mock.timers.tick(duration);
+    row.dispatchEvent(new window.Event("pointerup"));
+    row.click();
+  };
+  try {
+    press(DEBUG_HOLD - 100);
+    assert.equal(checks, 1, "a tap checks for updates");
+    assert.equal(preference("debug"), "off");
+    press(DEBUG_HOLD);
+    assert.equal(preference("debug"), "on");
+    assert.equal(document.querySelector("#settings-update-status")!.textContent, "Debug overlay on");
+    assert.equal(checks, 1, "a hold doesn't check");
+    press(DEBUG_HOLD);
+    assert.equal(preference("debug"), "off");
+  } finally {
+    localStorage.removeItem("megamaps:debug");
   }
 });
