@@ -16,7 +16,7 @@ const choices = {
   "walking-speed": ["4", "2", "3", "5"],
   /** Whether a found update installs by itself or waits for the user to agree. */
   "update-install": ["auto", "ask"],
-  /** Whether anonymous usage counts are sent. */
+  /** Whether usage counts are sent. */
   "usage-stats": ["on", "off"],
 } as const;
 
