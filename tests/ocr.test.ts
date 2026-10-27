@@ -366,6 +366,13 @@ test("OCR workers share a map's sections, merge them in map order and stop toget
   await assert.rejects(lowMemory, { name: "AbortError" });
   assert.equal(workers.length, 1, "a phone with little memory scans with one worker");
   Reflect.deleteProperty(navigator, "deviceMemory");
+  workers.length = 0;
+  Object.defineProperty(navigator, "hardwareConcurrency", { value: 8, configurable: true });
+  const unknown = new AbortController();
+  const unknownMemory = detectMapText(wide, () => {}, unknown.signal);
+  unknown.abort();
+  await assert.rejects(unknownMemory, { name: "AbortError" });
+  assert.equal(workers.length, 2, "a phone that hides its memory, like an iPhone, scans with two workers");
   await deleteStoredMap(wide);
 });
 
