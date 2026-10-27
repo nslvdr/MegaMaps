@@ -30,7 +30,7 @@ Benchmark baselines are in `docs/*-results.json`. Node RSS includes the test har
 
 ## OCR
 
-- PaddleOCR models run with ONNX Runtime Web's single-threaded WASM backend, with no WebGPU and no SharedArrayBuffer. Parallel work comes from up to three workers, fewer on low-memory devices and two when the device hides its memory (Safari); each peaks around 330 MB. A scan that opening a map starts waits a few seconds so the first tiles load first.
+- PaddleOCR models run with ONNX Runtime Web's single-threaded WASM backend, with no WebGPU and no SharedArrayBuffer. Parallel work comes from up to three workers, fewer on low-memory devices and two when the device hides its memory (Safari); each peaks around 330 MB. A scan that opening a map starts waits a few seconds so the first tiles load first. Only the workers load ONNX Runtime; the page itself never does.
 - Detection runs at the map's own resolution in overlapping sections, because shrinking the map first loses small print. Each label belongs to the one section whose middle holds its centre, so it is read once.
 - The recognizer reads one line at a time. Batching costs the same per pixel and pads every line to the widest.
 - Box fitting is implemented by hand to avoid an OpenCV dependency.
