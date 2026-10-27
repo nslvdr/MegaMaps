@@ -816,8 +816,15 @@ export class Viewer {
     if (this.level?.view !== view)
       this.level = { view, level: tileLevel(this.map.levels, this.camera, this.viewport(), this.dpr) };
     const { level } = this.level;
-    const tiles = visibleTiles(this.map.levels[level]!, this.camera, this.viewport());
-    if (this.measured) this.cache.plan(tiles.map((t) => ({ ...t, level })));
+    const tiles = visibleTiles(this.map.levels[level]!, this.camera, viewport);
+    // The ring one tile beyond each edge loads next, so a short pan finds it ready.
+    const around = () => {
+      const margin = TILE_SIZE * this.map.levels[level]!.scale * scale;
+      const camera = { ...this.camera, x: this.camera.x + margin, y: this.camera.y + margin };
+      return visibleTiles(this.map.levels[level]!, camera, { width: viewport.width + 2 * margin, height: viewport.height + 2 * margin })
+        .map((t) => ({ ...t, level }));
+    };
+    if (this.measured) this.cache.plan(tiles.map((t) => ({ ...t, level })), around);
     // The overview stays beneath everything: it hides hairline seams where
     // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
     // ones load.
