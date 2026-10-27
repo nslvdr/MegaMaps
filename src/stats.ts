@@ -1,4 +1,3 @@
-import { preference } from "./preferences";
 import { loadSetting } from "./storage/settings";
 
 // Usage counts for PostHog: which features are used, on what device and by which
@@ -86,7 +85,7 @@ export function startStats(appVersion: string) {
 }
 
 export function track(event: string, properties: Properties = {}) {
-  if (version === undefined || preference("usage-stats") === "off") return;
+  if (version === undefined) return;
   try {
     const entry = { event, uuid: crypto.randomUUID(), timestamp: new Date().toISOString(),
       properties: { ...properties, distinct_id: deviceId(), app_version: version } };
@@ -96,14 +95,6 @@ export function track(event: string, properties: Properties = {}) {
   }
   clearTimeout(timer);
   timer = setTimeout(() => void sendStats(), 5000);
-}
-
-/** Turning stats off forgets what's waiting and the device id. */
-export function clearStats() {
-  try {
-    localStorage.removeItem(QUEUE);
-    localStorage.removeItem(ID);
-  } catch {}
 }
 
 export async function sendStats() {
