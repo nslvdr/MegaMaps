@@ -62,6 +62,8 @@ const day = (date: Date | number) => new Intl.DateTimeFormat(locale, { dateStyle
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 // Each step's button wakes up after a pause, so a hurried triple tap can't pass all three.
 export const ERASE_STEP_PAUSE = 800;
+/** How long Check for updates is held to turn the hidden map debug overlay on or off. */
+export const DEBUG_HOLD = 1500;
 
 export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDialogElement; erase: HTMLDialogElement }, options: SettingsOptions) {
   const part = <T extends HTMLElement = HTMLElement>(root: HTMLElement, id: string) => root.querySelector<T>(`#${id}`)!;
@@ -271,11 +273,33 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     clearTimeout(eraseTimer);
   });
 
-  part(page, "settings-update").addEventListener("click", options.checkUpdates);
+  // A long press toggles the debug overlay instead of checking; its hint says which for a moment.
+  const updateRow = part<HTMLButtonElement>(page, "settings-update");
+  let holdTimer = 0, hintTimer = 0, held = false, updateReady = false;
+  updateRow.addEventListener("pointerdown", () => {
+    held = false;
+    clearTimeout(holdTimer);
+    holdTimer = window.setTimeout(() => {
+      held = true;
+      const on = preference("debug") === "off";
+      setPreference("debug", on ? "on" : "off");
+      status("settings-update", on ? "Debug overlay on" : "Debug overlay off");
+      clearTimeout(hintTimer);
+      hintTimer = window.setTimeout(() => setUpdateReady(updateReady), 2000);
+    }, DEBUG_HOLD);
+  });
+  for (const type of ["pointerup", "pointercancel", "pointerleave"])
+    updateRow.addEventListener(type, () => clearTimeout(holdTimer));
+  updateRow.addEventListener("contextmenu", (event) => event.preventDefault());
+  updateRow.addEventListener("click", () => {
+    if (held) held = false;
+    else options.checkUpdates();
+  });
   part(page, "settings-back").addEventListener("click", options.back);
 
   const setUpdateReady = (ready: boolean) => {
-    part(page, "settings-update").dataset.state = ready ? "ready" : "";
+    updateReady = ready;
+    updateRow.dataset.state = ready ? "ready" : "";
     status("settings-update", ready
       ? t("Update ready to install")
       : options.release ? t("Version from {date}", { date: day(options.release) }) : t("See if a newer version is out"));

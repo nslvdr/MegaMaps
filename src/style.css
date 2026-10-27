@@ -638,6 +638,12 @@ small {
 [data-state="ready"] > .settings-icon {
   --k: var(--neon-add);
 }
+/* Held for the debug overlay, so no system callout or selection. */
+#settings-update {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
 #settings-update[data-state="ready"] small {
   color: var(--neon-add);
 }
@@ -1628,6 +1634,22 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   pointer-events: none;
   overflow: hidden;
   transition: filter 0.4s;
+}
+/* The hidden debug overlay's stats, turned on by holding Check for updates. */
+.map-debug {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--hud-top) + var(--icon-button-size) + var(--space-12));
+  left: var(--edge-l);
+  margin: 0;
+  padding: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: #000b;
+  color: var(--neon-add);
+  font: var(--font-size-small) / 1.4 ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  pointer-events: none;
 }
 .search-overlay {
   position: absolute;
