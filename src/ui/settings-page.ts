@@ -13,31 +13,30 @@ import { track } from "../stats";
 
 const heading = (text: string) => `<h2 class="settings-heading">${text}</h2>`;
 
-// Explanations sit under their group at full width, so rows stay one line beside their controls.
 const note = (text: string, id = "") => `<p class="settings-note"${id && ` id="${id}"`}>${text}</p>`;
 
-const row = (id: string, icon: string, label: string, description = "", tag = "button") =>
-  `<${tag} class="share-row" id="${id}"><span class="share-row-icon settings-icon">${icon}<span class="update-dot" aria-hidden="true"></span></span><span class="share-row-label">${label}<small id="${id}-status">${description}</small></span>${tag === "button" ? icons.arrow : ""}</${tag}>`;
+// A one-line hint under a row's label replaces paragraphs between groups.
+const label = (text: string, hint = "", id = "") =>
+  `<span class="share-row-label">${text}<small${id && ` id="${id}"`}>${hint}</small></span>`;
 
-const choice = <K extends keyof Preferences>(key: K, icon: string, label: string, options: [Preferences[K], string][]) =>
-  `<label class="share-row"><span class="share-row-icon settings-icon">${icon}</span><span class="share-row-label">${label}</span><span class="settings-select"><select name="${key}">${options.map(([value, text]) =>
-    `<option value="${value}"${value === preference(key) ? " selected" : ""}>${text}</option>`).join("")}</select>${icons.chevronDown}</span></label>`;
+const row = (id: string, icon: string, text: string, hint = "") =>
+  `<button class="share-row" id="${id}"><span class="share-row-icon settings-icon">${icon}<span class="update-dot" aria-hidden="true"></span></span>${label(text, hint, `${id}-status`)}${icons.arrow}</button>`;
+
+const choice = <K extends keyof Preferences>(key: K, icon: string, text: string, options: [Preferences[K], string][], hint = "") =>
+  `<label class="share-row"><span class="share-row-icon settings-icon">${icon}</span>${label(text, hint)}<span class="settings-select"><select name="${key}">${options.map(([value, option]) =>
+    `<option value="${value}"${value === preference(key) ? " selected" : ""}>${option}</option>`).join("")}</select>${icons.chevronDown}</span></label>`;
 
 // Language names stay in their own language, so either can be found.
 export const settingsMarkup = `<section id="settings" class="settings-page" aria-labelledby="settings-title" hidden><div class="top-edge" aria-hidden="true"></div>
 <header class="page-header"><button type="button" class="page-back" id="settings-back" aria-label="${t("Back")}" title="${t("Back")}">${icons.arrow}</button><h1 id="settings-title">${t("Settings")}</h1></header>
-${heading(t("Display"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}${choice("label-size", icons.labelSize, t("Map label size"), [["standard", t("Standard")], ["large", t("Large")]])}${choice("label-distance", icons.labelDistance, t("Show labels within"), [
+${heading(t("Map"))}<div class="share-summary">${choice("label-size", icons.labelSize, t("Label size"), [["standard", t("Standard")], ["large", t("Large")]])}${choice("label-distance", icons.labelDistance, t("Show labels within"), [
   ...(["100", "200", "500", "1000"] as const).map((metres): [Preferences["label-distance"], string] => [metres, formatDistance(Number(metres))]),
-  ["always", t("Always")]])}</div>
-${note(`${t("Language changes menus and messages, not the names you typed. Large labels read better in the dark but cover more of the map.")} ${t("Place and route names appear once the screen spans less than this distance, so pins stay clear from afar. Maps without a scale show them a few zooms in.")}`)}
-${heading(t("Distances"))}<div class="share-summary">${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]))}</div>
-${note(t("Sets the travel times shown for routes and measured lines on maps with a scale."))}
-${heading(t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}</span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
-${note(t("Appears as “Shared by …” on maps you send."))}
-${heading(t("Backup"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps from a .megabackup file and keeps the ones already here"))}</div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
-${heading(t("About"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.rotateRight, t("Check for updates"))}<div class="share-row"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>
-${note(`${t("Automatic updates install from the main menu while online, then Mega Maps restarts where you left off.")} ${t("No accounts: your maps, places and photos stay on this device.")}`)}
-<div class="share-summary settings-erase">${row("settings-erase", icons.trash, t("Delete everything"))}</div>
+  ["always", t("Always")]], t("Keeps pins clear from afar"))}${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]), t("For route travel times"))}</div>
+${heading(t("You"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}<label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span>${label(t("Nickname"), t("On maps you send"))}<input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
+${heading(t("Your data"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps, keeps the ones here"))}<div class="share-row" id="settings-storage"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
+${heading(t("Updates"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.rotateRight, t("Check for updates"))}</div>
+<button type="button" class="settings-erase" id="settings-erase">${icons.trash}<span>${t("Delete everything")}</span></button>
+<p class="settings-foot">${t("No accounts: your maps, places and photos stay on this device.")}</p>
 </section>`;
 
 export const restoreDialogMarkup = `<dialog id="restore-dialog" aria-labelledby="restore-title" aria-describedby="restore-summary">${dialogHeader("restore-title", t("Restore backup"), icons.restore, "restore-cancel")}<p id="restore-summary"></p><p class="dialog-note" id="restore-note"></p><div class="dialog-actions" id="restore-actions"><button class="primary" id="restore-confirm">${icons.restore}<span>${t("Restore")}</span></button></div></dialog>`;
@@ -135,7 +134,6 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     showLastBackup(lastBackup, backupDue(maps, lastBackup, Date.now(), kept));
     const usage = estimate?.usage !== undefined ? formatBytes(estimate.usage) : t("Unknown");
     status("settings-storage", protection === undefined ? usage : `${usage} · ${protection ? t("Protected") : t("Not protected")}`);
-    status("settings-erase", maps.length ? t("{maps} on this device", { maps: plural(maps.length, "map") }) : t("Nothing saved yet"));
   }
 
   // A new language rebuilds every screen, so the app starts again in it.

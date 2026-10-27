@@ -577,41 +577,63 @@ small {
 #settings-restore .settings-icon {
   --k: var(--neon-saved);
 }
-/* A choice opens the system picker from a pill at the row's end. */
+#settings-storage .settings-icon {
+  --k: var(--muted);
+}
+.settings-page .share-row-label small:empty {
+  display: none;
+}
+/* A choice reads as its plain value at the row's end and opens the system picker. */
 .settings-select {
   position: relative;
   flex-shrink: 0;
-  color: var(--neon-view);
+  color: var(--muted);
 }
 .settings-select select {
   appearance: none;
   -webkit-appearance: none;
-  min-height: 40px;
-  padding: 0 var(--space-32) 0 var(--space-16);
-  border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--neon-view) 12%, #000);
-  color: var(--text);
+  min-height: 44px;
+  padding: 0 var(--space-24) 0 var(--space-8);
+  border: 0;
+  background: none;
+  color: var(--muted);
   font: inherit;
   font-size: var(--font-size-body);
+  text-align: right;
   cursor: pointer;
 }
 .settings-select svg {
   position: absolute;
   top: 50%;
-  right: var(--space-12);
+  right: 0;
   width: 16px;
   height: 16px;
   transform: translateY(-50%);
   pointer-events: none;
 }
-.settings-page .settings-erase {
+/* The one irreversible action stays quiet, apart from the settings it would remove. */
+.settings-erase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-height: 48px;
   margin-top: var(--space-32);
-}
-#settings-erase,
-#settings-erase .settings-icon {
-  --k: var(--danger);
+  background: none;
   color: var(--danger);
+  font-weight: 600;
+}
+.settings-erase svg {
+  width: 18px;
+  height: 18px;
+}
+.settings-foot {
+  margin: var(--space-4) var(--space-16) 0;
+  text-align: center;
+  font-size: var(--font-size-small);
+  line-height: 1.5;
+  color: var(--muted);
 }
 [data-state="ready"] > .settings-icon {
   --k: var(--neon-add);
@@ -619,7 +641,7 @@ small {
 #settings-update[data-state="ready"] small {
   color: var(--neon-add);
 }
-/* Notes line up with the row labels above them. */
+/* The backup note lines up with the row labels above it. */
 .settings-note,
 .settings-error {
   margin: var(--space-8) var(--space-12) 0;
