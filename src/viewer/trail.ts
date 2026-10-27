@@ -7,7 +7,7 @@ export interface TrailPoint extends Point {
   /** What the map showed as it was marked, so the user can come back to it. */
   view?: { center: Point; scale: number };
 }
-/** The last point pulses for a while, then slower, then rests: an old position is a guess. */
+/** The last point pulses briskly when drawn, slower once aging, then rests dimmed: an old position is a guess. */
 const FRESH_MS = 15 * 60 * 1000;
 const AGING_MS = 60 * 60 * 1000;
 export type TrailAge = "fresh" | "aging" | "old";

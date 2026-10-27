@@ -3590,12 +3590,14 @@ label.panel-row {
   transform-box: fill-box;
   transform-origin: center;
 }
+/* A few pulses each time it's drawn, then rest: a pulse inside the map's SVG
+   repaints it every frame, which went on for up to an hour. */
 .trail-here[data-age="fresh"] .trail-pulse {
-  animation: trail-pulse 2s ease-out infinite;
+  animation: trail-pulse 2s ease-out 3;
 }
 .trail-here[data-age="aging"] .trail-pulse {
   stroke-opacity: 0.5;
-  animation: trail-pulse 4s ease-out infinite;
+  animation: trail-pulse 4s ease-out 2;
 }
 .trail-here[data-age="old"] .trail-mark {
   opacity: 0.5;
