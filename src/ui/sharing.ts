@@ -11,6 +11,7 @@ import { icons } from "./icons";
 import { t } from "../i18n";
 import { downloadFile } from "./save-file";
 import { placeIcon } from "./place-icon";
+import { track } from "../stats";
 
 export const sharingMarkup = `
 <dialog id="share-dialog" class="sharing-dialog" aria-labelledby="share-title"><div id="share-main">${dialogHeader("share-title", t("Share map"), icons.share, "share-cancel")}<p class="share-map-name">${icons.map}<span id="share-map-name"></span></p><p id="share-loading" role="status">${t("Preparing share…")}</p>
@@ -123,8 +124,11 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
     el("share-error").hidden = true;
     try {
       // Browsers without file sharing (e.g. desktop Firefox) get a download instead.
+      const shared = selection();
+      const sent = { places: shared.markers.length, routes: shared.routes.length, image: shared.includeImage };
       if (!navigator.canShare?.({ files: [file] }) || !navigator.share) {
         downloadFile(file, root);
+        track("share_exported", { ...sent, method: "download" });
         el("share-size").textContent = t("File saved. Send it from your files app.");
         return;
       }
@@ -132,6 +136,7 @@ export function initSharing(root: HTMLElement, options: SharingOptions) {
       // The file is prepared before this click, preserving native user activation.
       // Only the file: iOS saves a title or text as a second file beside it.
       await navigator.share({ files: [file] });
+      track("share_exported", { ...sent, method: "share" });
       sendDialog.close();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) showError("share-error", error);

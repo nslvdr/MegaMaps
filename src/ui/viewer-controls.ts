@@ -46,6 +46,7 @@ import {
   type OcrIndex,
 } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
+import { track } from "../stats";
 import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
 const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
 /** A day as a date input holds it, in local time. */
@@ -361,7 +362,10 @@ export class ViewerControls {
     if (!points.length) return;
     const trip = points.length > 1 ? { id: crypto.randomUUID(), points, ended: Date.now() } : undefined;
     this.state.trail = [];
-    if (trip) this.state.trips.push(trip);
+    if (trip) {
+      this.state.trips.push(trip);
+      track("trip_ended", { minutes: Math.round((trip.ended - points[0]!.time) / 60_000), points: points.length });
+    }
     this.sheet(undefined);
     this.changed();
     if (trip) this.showTrip(trip);
@@ -404,6 +408,8 @@ export class ViewerControls {
   private sheet(name: Sheet | undefined) {
     const previous = this.openSheet;
     if (previous === "search" && name !== "search") {
+      if (normalizeText(this.searchQuery))
+        track("search_used", { results: this.searchMatches.length, places: this.searchMatches.some((match) => match.marker) });
       this.input("map-search").blur();
       this.input("map-search").value = "";
       this.renderSearch();
@@ -847,6 +853,7 @@ export class ViewerControls {
     if (!this.state.metresPerPixel) return showDialog(this.dialog("scale-ask-dialog"));
     this.measureHistory = [];
     this.mode("measure");
+    track("measure_used");
   }
   private closeMeasure() {
     this.measurePoints = [];
@@ -1543,6 +1550,7 @@ export class ViewerControls {
       // An edit keeps the place where it was in the Saved list.
       if (!existing) {
         this.state.markers.push(marker);
+        track("place_added", { kind: marker.kind, photos: this.formPhotos.length });
         this.newMarkerKind = marker.kind;
       } else if (!unchanged)
         this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
@@ -1578,6 +1586,7 @@ export class ViewerControls {
   }
   private setRotationMode(mode: RotationMode) {
     this.state.rotationMode = mode;
+    track("rotation_changed", { mode });
     this.changed();
     if (mode === "compass") void this.startCompass(true);
     else this.stopCompass();

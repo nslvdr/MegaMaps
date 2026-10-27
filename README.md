@@ -1,6 +1,8 @@
 # Mega Maps
 
-A mobile-first, private, offline PWA for exploring large local maps. No accounts, uploads, backend, external fonts, analytics, or runtime CDN dependencies.
+A mobile-first, private, offline PWA for exploring large local maps. No accounts, uploads, backend, external fonts, or runtime CDN dependencies.
+
+The released app sends anonymous usage counts to PostHog (EU), such as which place kinds are added or how long trips last, never names, notes, photos or positions. Events wait on the device while offline, and **Settings → Usage stats** turns them off. See `src/stats.ts`.
 
 ## Run
 
@@ -91,6 +93,7 @@ src/
     viewer-markup.ts         Touch controls, tools panel, place details and forms
     viewer-controls.ts       Navigation commands, dialogs and persistence
   pwa.ts                    Production service-worker registration
+  stats.ts                  Anonymous usage counts, queued offline, sent to PostHog
 public/
   manifest.webmanifest
   icons/                    Local PNG home-screen icons + SVG favicon
