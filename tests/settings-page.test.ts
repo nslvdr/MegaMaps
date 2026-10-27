@@ -24,7 +24,7 @@ test("deleting everything takes three separate confirmations, each after a pause
     levels: [], created: 1, status: "ready" } satisfies MapRecord);
   let erased = 0;
   initSettingsPage(document.querySelector("#settings")!, { restore: document.querySelector("#restore-dialog")!, erase: dialog }, {
-    back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, erase: () => { erased++; },
+    back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, setTiling() {}, erase: () => { erased++; },
   });
   const confirm = document.querySelector<HTMLButtonElement>("#erase-confirm")!;
   const step = () => document.querySelector("#erase-step")!.textContent;
@@ -56,7 +56,7 @@ test("Settings warns and says so beside the storage size when the browser may cl
   try {
     const page = initSettingsPage(document.querySelector("#settings")!, {
       restore: document.querySelector("#restore-dialog")!, erase: document.querySelector("#erase-dialog")!,
-    }, { back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, erase() {} });
+    }, { back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, setTiling() {}, erase() {} });
     await page.refresh();
     assert.match(document.querySelector("#settings-storage-status")!.textContent!, /· Not protected$/);
     assert.match(document.querySelector("#backup-note")!.textContent!, /^This browser may clear your maps when the device runs low on space\. /);
