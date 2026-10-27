@@ -157,7 +157,7 @@ export const fr = {
   "Tap the map where you were": "Touchez la carte là où vous étiez",
   "Trail point restored": "Point du parcours restauré",
   "Usage stats": "Statistiques d’usage",
-  "Usage stats only count which features are used, never names, notes, photos or positions.": "Les statistiques d’usage comptent seulement les fonctions utilisées, jamais les noms, notes, photos ou positions.",
+  "Usage stats count which features are used, with your nickname and type of phone, never place names, notes, photos or positions.": "Les statistiques d’usage comptent les fonctions utilisées, avec votre pseudo et le type de téléphone, jamais les noms de lieux, notes, photos ou positions.",
   "edited": "modifiée",
   "End trip": "Terminer le parcours",
   "Enter a map name.": "Saisissez un nom de carte.",
