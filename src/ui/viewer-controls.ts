@@ -237,8 +237,17 @@ export class ViewerControls {
     this.bind();
     this.sheet(undefined);
     this.render();
-    // Browsers that ask first only answer a tap, so this may wait for one.
-    if (state.rotationMode === "compass") void this.startCompass(false);
+    if (state.rotationMode === "compass") this.resumeCompass();
+  }
+  /** iOS forgets compass access when the app closes and only asks again from a tap,
+   *  so a map reopened in Compass mode asks on the first tap anywhere. */
+  private resumeCompass() {
+    void this.startCompass(false);
+    if (!compassNeedsPermission()) return;
+    const ask = () => {
+      if (this.state.rotationMode === "compass" && this.compass !== "on") void this.startCompass(true);
+    };
+    window.addEventListener("touchend", ask, { once: true, capture: true, signal: this.controller.signal });
   }
   private el<T extends HTMLElement = HTMLElement>(id: string) {
     return this.root.querySelector<T>(`#${id}`)!;
