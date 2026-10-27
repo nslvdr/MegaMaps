@@ -34,14 +34,15 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       total = tileCount(levels);
     const store = payloadStore(record.backend);
     let done = 0,
-      last = 0,
-      tileBytes = 0;
+      last = 0;
+    // By key: zoomed-out tiles of a JPEG are written twice, PNG then JPEG.
+    const tileSizes = new Map<string, number>();
     const measuredStore = {
       ...store,
       get: store.get.bind(store),
       deleteMap: store.deleteMap.bind(store),
       async put(id: string, key: string, blob: Blob) {
-        tileBytes += blob.size;
+        tileSizes.set(key, blob.size);
         await store.put(id, key, blob);
       },
     };
@@ -117,7 +118,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       if (cropped) decoder = CUT;
       else {
         // Restart the count: the decode rewrites every level-0 tile.
-        done = tileBytes = 0;
+        done = 0;
         await decodeJPEG(file, header, record.id, record.backend, consume);
       }
     } else if (header.format === "png") {
@@ -128,7 +129,14 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         else throw error;
       }
     } else await native();
-    await buildParents(levels, canvas, measuredStore, record.id, progress);
+    await buildParents(
+      levels,
+      canvas,
+      measuredStore,
+      record.id,
+      progress,
+      header.format === "jpeg" ? "image/jpeg" : "image/png",
+    );
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {
       ...record,
@@ -137,7 +145,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       levels,
       status: "ready",
       importMs: performance.now() - start,
-      tileBytes,
+      tileBytes: [...tileSizes.values()].reduce((sum, size) => sum + size, 0),
       decoder,
     };
     await saveMap(ready);

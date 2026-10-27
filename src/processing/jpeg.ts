@@ -37,12 +37,14 @@ export interface JPEGOptions {
   wasmBinary?: Uint8Array;
 }
 export type JPEGFactory = (options: JPEGOptions) => Promise<JPEGModule>;
-/** Map record notes. Maps still marked DECODED or JPEG_PARENTS are recut in the background. */
+/** Map record notes. Maps marked with an OLDER note are recut in the background. */
 export const DECODED = "libjpeg scanlines / OPFS coefficient spill",
-  /** Cut before zoomed-out levels went back to PNG; those levels are blurry. */
-  JPEG_PARENTS = "libjpeg lossless DCT crops / OPFS coefficient spill",
-  CUT = "libjpeg lossless DCT crops, PNG parents / OPFS coefficient spill",
+  /** Zoomed-out levels were JPEG made from JPEG, so loss added up. */
+  CHAINED_JPEG_PARENTS = "libjpeg lossless DCT crops / OPFS coefficient spill",
+  PNG_PARENTS = "libjpeg lossless DCT crops, PNG parents / OPFS coefficient spill",
+  CUT = "libjpeg lossless DCT crops, JPEG parents from PNG / OPFS coefficient spill",
   UNCUT = "libjpeg scanlines / could not cut DCT crops";
+export const OLDER = [DECODED, CHAINED_JPEG_PARENTS, PNG_PARENTS];
 export async function loadJPEG(): Promise<JPEGFactory> {
   const url = new URL("/codecs/jpeg.js", location.origin).href;
   const module: { default: JPEGFactory } = await import(/* @vite-ignore */ url);

@@ -406,3 +406,51 @@ test("parent tiles are lossless PNG with an odd-width edge fully opaque", async 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// JPEG drawn from JPEG blurs more at each level; drawn from PNG it is lossy once.
+test("JPEG parent tiles are saved once from the sharp PNG level below", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-once-"));
+  await installPlatform(root);
+  try {
+    const store = payloadStore("opfs"),
+      levels = pyramid(1100, 600);
+    assert.equal(levels.length, 3);
+    for (let y = 0; y < levels[0]!.rows; y++)
+      for (let x = 0; x < levels[0]!.cols; x++) {
+        const tile = createCanvas(
+            Math.min(TILE_SIZE, 1100 - x * TILE_SIZE),
+            Math.min(TILE_SIZE, 600 - y * TILE_SIZE),
+          ),
+          ctx = tile.getContext("2d");
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, tile.width, tile.height);
+        ctx.strokeStyle = "#c020ff";
+        for (let line = 3; line < tile.width; line += 7) {
+          ctx.beginPath();
+          ctx.moveTo(line, 0);
+          ctx.lineTo(tile.width - line, tile.height);
+          ctx.stroke();
+        }
+        const bytes = new Uint8Array(await tile.encode("png"));
+        for (const id of ["sharp", "once"])
+          await store.put(id, tileKey(0, x, y), new Blob([bytes]));
+      }
+    await buildParents(levels, new OffscreenCanvas(1, 1), store, "sharp", () => {});
+    await buildParents(levels, new OffscreenCanvas(1, 1), store, "once", () => {}, "image/jpeg");
+    for (let index = 1; index < levels.length; index++)
+      for (let y = 0; y < levels[index]!.rows; y++)
+        for (let x = 0; x < levels[index]!.cols; x++) {
+          const key = tileKey(index, x, y),
+            sharp = await loadImage(Buffer.from(await (await store.get("sharp", key)).arrayBuffer())),
+            canvas = createCanvas(sharp.width, sharp.height);
+          canvas.getContext("2d").drawImage(sharp, 0, 0);
+          const once = Buffer.from(await (await store.get("once", key)).arrayBuffer());
+          assert.deepEqual(once, await canvas.encode("jpeg", 92), key);
+        }
+    // Level 0 stays as it was.
+    const level0 = await (await store.get("once", tileKey(0, 0, 0))).arrayBuffer();
+    assert.deepEqual([...new Uint8Array(level0, 0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
