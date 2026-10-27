@@ -17,7 +17,7 @@ const choices = {
   /** Whether a found update installs by itself or waits for the user to agree. */
   "update-install": ["auto", "ask"],
   /** How map tiles are stored: compact JPEG, or sharp PNG at about twice the space. */
-  tiling: ["compact", "sharp"],
+  tiling: ["sharp", "compact"],
   /** The hidden map overlay: tile borders and live stats. */
   debug: ["off", "on"],
 } as const;
