@@ -161,6 +161,74 @@ test("tile cache limits concurrency and bytes, drops obsolete requests, closes o
   }
 });
 
+test("tiles just off screen load after the screen, one at a time, into room it leaves", async () => {
+  const canvas = createCanvas(512, 512);
+  const blob = new Blob([new Uint8Array(await canvas.encode("png"))]);
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-ahead-"));
+  await installPlatform(root);
+  const reads: string[] = [], broken = new Set([tileKey(0, 3, 1)]);
+  let screenLoading = 0, aheadActive = 0, aheadPeak = 0, repaints = 0;
+  const errors: string[] = [];
+  const isAhead = (key: string) => key.endsWith("-1.png");
+  const store = {
+    async put() {},
+    async deleteMap() {},
+    async get(_map: string, key: string) {
+      reads.push(key);
+      if (isAhead(key)) {
+        assert.equal(screenLoading, 0, "nothing ahead starts while the screen loads");
+        aheadPeak = Math.max(aheadPeak, ++aheadActive);
+      } else screenLoading++;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      if (isAhead(key)) aheadActive--;
+      else screenLoading--;
+      if (broken.has(key)) throw new Error("unreadable");
+      return blob;
+    },
+  };
+  const cache = new TileCache(store, "ahead", () => repaints++, (message) => errors.push(message));
+  const row = (y: number, length: number) => Array.from({ length }, (_, x) => ({ level: 0, x, y }));
+  // Done once no tile has been read for a while.
+  const settle = async () => {
+    for (let i = 0, last = -1, still = 0; i < 500 && still < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      still = reads.length === last ? still + 1 : 0;
+      last = reads.length;
+    }
+  };
+  try {
+    // Four on screen leave room for twenty ahead, of thirty offered.
+    cache.plan(row(0, 4), () => row(1, 30));
+    await settle();
+    assert.equal(reads.filter(isAhead).length, 0, "the ring waits for a plan with the screen loading or done");
+    assert.equal(repaints, 4);
+    cache.plan(row(0, 4), () => row(1, 30));
+    await settle();
+    assert.equal(aheadPeak, 1, "one tile ahead at a time");
+    assert.equal(repaints, 4, "tiles ahead don't repaint");
+    assert.deepEqual(reads.filter(isAhead), row(1, 20).map((t) => tileKey(0, t.x, 1)), "nearest first, up to the budget");
+    assert.equal(cache.decodedBytes, 23 * 1048576, "a broken tile ahead is skipped");
+    assert.deepEqual(errors, [], "and not reported");
+    cache.plan(row(0, 4), () => row(1, 30));
+    await settle();
+    assert.equal(reads.filter((key) => key === tileKey(0, 3, 1)).length, 1, "nor retried ahead");
+    // The screen moves onto the ring: tiles ahead are already there, the broken one is read and reported.
+    const before = reads.length;
+    cache.plan(row(1, 4));
+    await settle();
+    assert.deepEqual(reads.slice(before), [tileKey(0, 3, 1)]);
+    assert.equal(errors.length, 1);
+    // A whole new screen pushes the tiles ahead out.
+    cache.plan(row(2, 24));
+    await settle();
+    assert.equal(cache.complete, true);
+    assert.ok(cache.decodedBytes <= TILE_CACHE_BUDGET);
+  } finally {
+    cache.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("shipped decoder is small and the app does not depend on a remote codec", async () => {
   const binary = await readFile(
     new URL("../public/codecs/jpeg.wasm", import.meta.url),
