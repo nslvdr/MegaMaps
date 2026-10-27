@@ -66,9 +66,14 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
   const ocr = scan && !needsOcr(scan)
     ? new Blob([JSON.stringify({ version: scan.version, completedAt: scan.completedAt, lines: scan.lines })])
     : undefined;
-  // A photo missing from storage is dropped instead of breaking the share.
+  // A photo missing from storage is dropped instead of breaking the share. What was added
+  // here goes out under the nickname; what came from others keeps theirs.
   const stored = <T extends MapMarker | PlannedRoute>(item: T) => {
     const copy = structuredClone(item);
+    if (from) {
+      copy.by ??= from;
+      if ("log" in copy) for (const entry of copy.log ?? []) entry.by ??= from;
+    }
     const kept = copy.photos?.filter((id) => photos.has(id)) ?? [];
     if (kept.length) copy.photos = kept;
     else delete copy.photos;

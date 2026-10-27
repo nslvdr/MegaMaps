@@ -43,13 +43,13 @@ function fold(earlier: PlaceChange, later: PlaceChange): PlaceChange | undefined
 }
 
 /** Adds an edit to the place's history. An edit on the same day as the latest entry, when
- * that is an edit too, folds into it so a run of fixes reads as one entry. The folded entry
+ * that is an edit made here too, folds into it so a run of fixes reads as one entry. The folded entry
  * takes a new ID, so a copy shared before the fold arrives beside it rather than over it. */
 export function recordEdit(place: MapMarker, changes: PlaceChange[], now = Date.now()) {
   if (!changes.length) return;
   const log = [...place.log ?? []];
   const latest = log.at(-1);
-  if (latest?.changes && sameDay(latest.date, now)) {
+  if (latest?.changes && !latest.by && sameDay(latest.date, now)) {
     log.pop();
     place.deletedLog = [...place.deletedLog ?? [], latest.id];
     const byField = new Map(latest.changes.map((change) => [change.field, change]));

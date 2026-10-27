@@ -781,17 +781,17 @@ export class ViewerControls {
     return [name, scale];
   }
   /** The history as a timeline, newest first. Each entry shows its kind as an icon on the line, its
-   * kind and date, then its note or a line per change. Reading ends where the place was added;
-   * editing can remove entries. */
-  private logItems(log: PlaceLogEntry[], { added, remove }: { added?: number; remove?: (entry: PlaceLogEntry) => void }) {
+   * kind, who did it when it came from someone else, and date, then its note or a line per change.
+   * Reading ends where the place was added; editing can remove entries. */
+  private logItems(log: PlaceLogEntry[], { added, remove }: { added?: Pick<MapMarker, "created" | "by">; remove?: (entry: PlaceLogEntry) => void }) {
     const document = this.root.ownerDocument;
     const kinds = {
-      edit: { icon: icons.edit, label: t("Edited") },
-      note: { icon: icons.note, label: t("Note") },
-      visit: { icon: icons.visit, label: t("Visited") },
-      added: { icon: icons.added, label: t("Added") },
+      edit: { icon: icons.edit, label: t("Edited"), by: (name: string) => t("Edited by {name}", { name }) },
+      note: { icon: icons.note, label: t("Note"), by: (name: string) => t("Note by {name}", { name }) },
+      visit: { icon: icons.visit, label: t("Visited"), by: (name: string) => t("Visited by {name}", { name }) },
+      added: { icon: icons.added, label: t("Added"), by: (name: string) => t("Added by {name}", { name }) },
     };
-    const item = (kind: keyof typeof kinds, time: number, body?: HTMLElement) => {
+    const item = (kind: keyof typeof kinds, time: number, by?: string, body?: HTMLElement) => {
       const entry = document.createElement("li"), node = document.createElement("span");
       entry.dataset.kind = kind;
       node.className = "log-node";
@@ -799,7 +799,7 @@ export class ViewerControls {
       const content = document.createElement("div"), head = document.createElement("p");
       const label = document.createElement("strong"), date = document.createElement("time");
       head.className = "log-head";
-      label.textContent = kinds[kind].label;
+      label.textContent = by ? kinds[kind].by(by) : kinds[kind].label;
       date.dateTime = new Date(time).toISOString();
       date.textContent = logDate(time);
       head.append(label, date);
@@ -827,7 +827,7 @@ export class ViewerControls {
         body.className = "log-text";
         body.textContent = entry.text;
       }
-      const shown = item(entry.changes ? "edit" : entry.text ? "note" : "visit", entry.date, body);
+      const shown = item(entry.changes ? "edit" : entry.text ? "note" : "visit", entry.date, entry.by, body);
       if (remove) {
         const button = document.createElement("button");
         button.type = "button";
@@ -840,7 +840,7 @@ export class ViewerControls {
       }
       return shown;
     });
-    return added === undefined ? items : [...items, item("added", added)];
+    return added === undefined ? items : [...items, item("added", added.created, added.by)];
   }
   private renderFormLog() {
     this.el("marker-log-edit").replaceChildren(...this.logItems(this.formLog, { remove: (entry) => {
@@ -850,14 +850,14 @@ export class ViewerControls {
     this.el("marker-log-field").hidden = !this.formLog.length;
   }
   /** When the place was last updated, under its title, and its history under the description,
-   * ending where it was added. */
+   * ending where it was added; a place from someone else shows who added it even without history. */
   private renderPlaceLog(place?: MapMarker) {
     this.el("marker-detail-updated").hidden = !place;
     this.el("marker-add-entry").hidden = !place;
-    this.el("marker-detail-log").hidden = !place?.log?.length;
+    this.el("marker-detail-log").hidden = !place?.log?.length && !place?.by;
     if (!place) return;
     this.el("marker-detail-updated").textContent = updatedAgo(lastUpdated(place));
-    this.el("marker-log-list").replaceChildren(...this.logItems(place.log ?? [], { added: place.created }));
+    this.el("marker-log-list").replaceChildren(...this.logItems(place.log ?? [], { added: place }));
   }
   /** Opens on today, ready to type a note; Add with none records a visit. */
   private openLogEntry() {
@@ -1171,16 +1171,18 @@ export class ViewerControls {
       : danger ? this.levelScale("unstable", t("Danger level"), dangerSteps, danger) : []);
     levelLine.hidden = !water && !danger;
     this.renderPlaceLog(place);
-    // A route's length and walking time sit under its name, where a place says when it was updated.
+    // A route's length and walking time sit under its name, where a place says when it was updated,
+    // followed by who drew it when it came from someone else.
     if ("points" in item) {
-      const summary = travelSummary(item.points, this.state.metresPerPixel);
-      this.el("marker-detail-updated").textContent = summary ?? "";
+      const summary = [travelSummary(item.points, this.state.metresPerPixel),
+        item.by && t("Added by {name}", { name: item.by })].filter(Boolean).join(" · ");
+      this.el("marker-detail-updated").textContent = summary;
       this.el("marker-detail-updated").hidden = !summary;
     }
     const details = this.el("marker-details");
     details.setAttribute("aria-label", place ? t("Place details") : t("Route details"));
     // With nothing to read, the card shrinks to its header.
-    details.hidden = !item.description && !count && levelLine.hidden && !place?.log?.length;
+    details.hidden = !item.description && !count && levelLine.hidden && this.el("marker-detail-log").hidden;
     details.scrollTop = 0;
     this.presentCard(false);
     this.markMoreDetails();

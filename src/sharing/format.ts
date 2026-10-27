@@ -96,12 +96,18 @@ export function validateManifest(value: unknown): ShareManifest {
     return { x: value.x, y: value.y };
   };
   const ids = new Set<string>();
+  // Who added a place or route, or wrote a history entry; absent in older files.
+  const by = (value: Record<string, unknown>) => {
+    if (value.by === undefined) return {};
+    if (!name(value.by, 100)) invalid();
+    return { by: value.by.trim() };
+  };
   const identity = (value: Record<string, unknown>, kind: string) => {
     if (!name(value.id, 200) || !integer(value.created, 0, Number.MAX_SAFE_INTEGER)) invalid();
     const key = `${kind}:${value.id}`;
     if (ids.has(key)) invalid();
     ids.add(key);
-    return { id: value.id, created: value.created };
+    return { id: value.id, created: value.created, ...by(value) };
   };
   let photos: SharePhoto[] = [];
   if (value.photos !== undefined) {
@@ -176,7 +182,7 @@ export function validateManifest(value: unknown): ShareManifest {
             !entry.changes.length || entry.changes.length > 10))) invalid();
       entryIds.add(entry.id);
       return { id: entry.id, date: entry.date, ...(typeof entry.text === "string" ? { text: entry.text } : {}),
-        ...(Array.isArray(entry.changes) ? { changes: entry.changes.map(change) } : {}) };
+        ...(Array.isArray(entry.changes) ? { changes: entry.changes.map(change) } : {}), ...by(entry) };
     });
   };
   const markers = value.markers.map((value: unknown): MapMarker => {

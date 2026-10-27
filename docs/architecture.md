@@ -44,4 +44,5 @@ Benchmark baselines are in `docs/*-results.json`. Node RSS includes the test har
 - Every older version must stay readable. Older apps reject newer versions and ask to be updated.
 - A map matches a shared file only through the SHA-256 of the original image bytes plus its dimensions. Filenames don't count, and a re-encoded image doesn't match.
 - Merge never brings back imported items that were deleted locally, or log entries listed in `deletedLog`. Replace bumps a local annotation revision, so older saves can't restore removed items.
+- Places, routes and log entries carry an optional `by`. Sending fills in the Settings nickname where it is missing, so what came from others keeps its author. No `by` means it was made on this device. An edit never folds into another person's entry. Older apps drop `by` without a version bump.
 - Trips, the map scale, display settings and the camera stay on the device and are not shared.
