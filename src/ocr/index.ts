@@ -30,8 +30,33 @@ export const normalizeText = (text: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
-export function needsOcr(index: OcrIndex | undefined) {
+export function needsOcr(index: Omit<OcrIndex, "mapId"> | undefined) {
   return !index || index.version !== OCR_VERSION;
+}
+
+const object = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const finite = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+const time = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= 0;
+
+/** An index from a backup or share, rebuilt from only the fields search relies
+ * on; undefined when anything is malformed. The map it belongs to is set on import. */
+export function readOcrIndex(value: unknown): Omit<OcrIndex, "mapId"> | undefined {
+  if (!object(value) || !time(value.version) || !time(value.completedAt) || !Array.isArray(value.lines)) return;
+  const lines: OcrLine[] = [];
+  for (const line of value.lines) {
+    if (!object(line) || typeof line.text !== "string" || !finite(line.confidence) || !Array.isArray(line.words)) return;
+    const words: OcrWord[] = [];
+    for (const word of line.words) {
+      if (!object(word) || typeof word.text !== "string" || !Array.isArray(word.polygon) ||
+          !word.polygon.every((p) => object(p) && finite(p.x) && finite(p.y))) return;
+      words.push({ text: word.text, polygon: word.polygon.map((p: Point) => ({ x: p.x, y: p.y })) });
+    }
+    lines.push({ text: line.text, confidence: line.confidence, words });
+  }
+  return { version: value.version, completedAt: value.completedAt, lines };
 }
 
 const digit = /\p{N}/u;

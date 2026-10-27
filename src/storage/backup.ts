@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import type { ImportProgress, MapRecord } from "../types";
 import { MAX_FILE_BYTES } from "../types";
-import type { OcrIndex } from "../ocr/index";
+import { readOcrIndex, type OcrIndex } from "../ocr/index";
 import { readHeader } from "../processing/headers";
 import { importMap } from "../processing/import";
 import { normalizeNavigation, type NavigationState } from "../viewer/navigation";
@@ -144,19 +144,14 @@ function validateMap(value: unknown): BackupMap {
       !navigation.routes.every((route) => object(route) && typeof route.id === "string" &&
         typeof route.name === "string" && Array.isArray(route.points) && route.points.every(point)))
     invalid();
-  const ocr = value.ocr;
-  if (ocr !== undefined && (!object(ocr) || !integer(ocr.version) || !integer(ocr.completedAt) ||
-      !Array.isArray(ocr.lines) || !ocr.lines.every((line) => object(line) && typeof line.text === "string" &&
-        finite(line.confidence) && Array.isArray(line.words) && line.words.every((word) => object(word) &&
-          typeof word.text === "string" && Array.isArray(word.polygon) && word.polygon.every(point)))))
-    invalid();
+  const ocr = value.ocr === undefined ? undefined : readOcrIndex(value.ocr) ?? invalid();
   return {
     id: value.id, name: value.name, created: value.created,
     ...(value.opened !== undefined ? { opened: value.opened } : {}),
     ...(value.fingerprint !== undefined ? { fingerprint: value.fingerprint as string } : {}),
     image: { type: String(image.type), bytes: image.bytes },
     navigation: normalizeNavigation({ ...(navigation as unknown as NavigationState), mapId: value.id }),
-    ...(ocr ? { ocr: { ...(ocr as unknown as OcrIndex), mapId: value.id } } : {}),
+    ...(ocr ? { ocr: { ...ocr, mapId: value.id } } : {}),
     photos,
   };
 }

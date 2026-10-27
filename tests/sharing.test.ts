@@ -11,6 +11,8 @@ import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { deleteStoredMap, payloadStore } from "../src/storage/payloads";
 import { loadPhoto, prunePhotos, savePhoto } from "../src/storage/photos";
 import { saveSetting } from "../src/storage/settings";
+import { loadOcr, saveOcr } from "../src/storage/ocr";
+import { OCR_VERSION, type OcrIndex } from "../src/ocr/index";
 import type { MapRecord } from "../src/types";
 
 // A container header is enough for image identity checks; decoding stays in the existing importer.
@@ -25,7 +27,7 @@ function image(width = 512, height = 256, salt = "original") {
 }
 async function fixture() {
   const original = image();
-  const manifest: ShareManifest = { format: "megamap", version: 5,
+  const manifest: ShareManifest = { format: "megamap", version: 6,
     map: { name: "Survey <2026>", width: 512, height: 256, fingerprint: await fingerprint(original) },
     markers: [{ id: "place-a", label: "Entrance <west>", description: "First line\nSecond line", point: { x: 12, y: 20 }, kind: "entrance", created: 1 }],
     routes: [{ id: "route-a", name: "Way out", points: [{ x: 12, y: 20 }, { x: 400, y: 200 }], draft: false, created: 2 }] };
@@ -106,7 +108,7 @@ test("place photos travel with their place, and version 1 notes arrive as descri
   const { description, ...place } = manifest.markers[0]!;
   const legacy = await readShare(rawFile({ ...manifest, version: 1, markers: [{ ...place, note: description }] }));
   assert.equal(legacy.manifest.markers[0]!.description, description);
-  assert.equal(legacy.manifest.version, 5, "older shares re-export in the current format");
+  assert.equal(legacy.manifest.version, 6, "older shares re-export in the current format");
 
   const encoded = (value: unknown, tail: Blob) => readShare(rawFile(value, tail));
   const bytes = new Blob(["first jpeg", "second"]);
@@ -147,6 +149,49 @@ test("exports carry only the chosen places' photos; imports store photos of adde
 
   await deleteStoredMap(destination);
   assert.equal(await loadPhoto(destination.id, first), undefined, "deleting a map deletes its photos");
+});
+
+test("a finished text scan travels with the map image and fills in maps without one", async () => {
+  const original = image(512, 256, "ocr");
+  const source = record("ocr-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", original);
+  const scan: OcrIndex = { mapId: source.id, version: OCR_VERSION, completedAt: 5, lines: [{ text: "Gallery 3", confidence: 90,
+    words: [{ text: "Gallery", polygon: [{ x: 1, y: 2 }, { x: 9, y: 2 }, { x: 9, y: 6 }, { x: 1, y: 6 }] }] }] };
+  await saveOcr(scan);
+  const state = defaultNavigation(source.id);
+  state.markers = [{ id: "gate", label: "Gate", description: "", point: { x: 1, y: 1 }, kind: "entrance", created: 1 }];
+  const prepared = await prepareExport(source, state);
+  const annotations = await readShare(exportFile(prepared, { markers: ["gate"], routes: [], includeImage: false }));
+  assert.equal(annotations.ocr, undefined, "annotation-only shares stay small");
+  const shared = await readShare(exportFile(prepared, { markers: ["gate"], routes: [], includeImage: true }));
+  const { mapId: _, ...portable } = scan;
+  assert.deepEqual(shared.ocr, portable);
+
+  const create = async () => {
+    const map = record("ocr-copy");
+    await saveMap(map);
+    return map;
+  };
+  const copy = await importNewCopy(shared, shared.image!, () => {}, new AbortController().signal, create);
+  assert.deepEqual(await loadOcr(copy.map.id), { ...portable, mapId: copy.map.id }, "the new copy needs no scan");
+
+  const scanned = { ...record("ocr-scanned"), fingerprint: shared.manifest.map.fingerprint };
+  await saveMap(scanned);
+  const own = { ...scan, mapId: scanned.id, completedAt: 9, lines: [] };
+  await saveOcr(own);
+  await importAnnotations(scanned.id, shared.manifest, "merge", undefined, shared.photos, shared.ocr);
+  assert.deepEqual(await loadOcr(scanned.id), own, "a map's own current scan is kept");
+
+  const outdated = { ...record("ocr-outdated"), fingerprint: shared.manifest.map.fingerprint };
+  await saveMap(outdated);
+  await saveOcr({ ...own, mapId: outdated.id, version: OCR_VERSION - 1 });
+  await importAnnotations(outdated.id, shared.manifest, "merge", undefined, shared.photos, shared.ocr);
+  assert.deepEqual(await loadOcr(outdated.id), { ...portable, mapId: outdated.id }, "an outdated scan is replaced");
+
+  const { manifest } = await fixture();
+  const broken = new TextEncoder().encode(JSON.stringify({ ...portable, lines: [{ text: "x", words: "nope" }] }));
+  await assert.rejects(readShare(rawFile({ ...manifest, ocr: { bytes: broken.byteLength } }, new Blob([broken]))), /invalid/);
 });
 
 test("shares carry the sender's name from settings only when one is set", async () => {
@@ -249,7 +294,7 @@ test("route descriptions and ordered photos survive sharing, import and pruning"
   const { manifest } = await fixture();
   const legacy = await readShare(rawFile({ ...manifest, version: 2 }));
   assert.deepEqual(legacy.manifest.routes, manifest.routes, "version 2 routes remain readable");
-  assert.equal(legacy.manifest.version, 5);
+  assert.equal(legacy.manifest.version, 6);
 });
 
 test("fingerprints read bounded chunks and agree with SHA-256", async () => {
@@ -280,7 +325,7 @@ test("import routing recognizes the shared header regardless of filename or MIME
 test("untrusted shares reject malformed manifests, excessive sizes, and truncated payloads", async () => {
   const { manifest, original } = await fixture();
   await assert.rejects(readShare(new Blob(["not a MegaMaps file"])), /exported by MegaMaps/);
-  await assert.rejects(readShare(rawFile({ ...manifest, version: 6 })), /not supported/);
+  await assert.rejects(readShare(rawFile({ ...manifest, version: 7 })), /not supported/);
   await assert.rejects(readShare(rawFile({ ...manifest, map: { ...manifest.map, width: 0 } })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], point: { x: 513, y: 2 } }] })), /invalid/);
   await assert.rejects(readShare(rawFile({ ...manifest, markers: [{ ...manifest.markers[0], kind: "__proto__" }] })), /invalid/);

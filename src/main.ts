@@ -200,7 +200,7 @@ const sharing = initSharing(app, {
       const result = await mutate(async () => {
         if (destination.mapId) {
           controller.signal.throwIfAborted();
-          const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal, share.photos);
+          const counts = await importAnnotations(destination.mapId, share.manifest, destination.mode, controller.signal, share.photos, share.ocr);
           const map = (await listMaps()).find((map) => map.id === destination.mapId);
           if (!map) throw new Error(t("This map is no longer available."));
           return { map, ...counts };
