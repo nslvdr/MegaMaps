@@ -25,7 +25,8 @@ Benchmark baselines are in `docs/*-results.json`. Node RSS includes the test har
 - An import is marked `ready` only after every tile is written. A deletion writes a `deleting` tombstone first. At startup, abandoned records are cleaned up under an origin-wide Web Lock, so one window can't delete another window's active import.
 - Annotation and OCR writes check the ready map metadata in the same transaction. This stops late writes from bringing a deleted map back.
 - The camera saves only after resting for 2 s, so a moving or compass-turned map doesn't write several times a second.
-- The service worker precaches the whole shell with `cache.addAll`, so a partial shell never activates. Map bytes never come from the network.
+- The service worker gets the whole shell before writing any of it, so a partial shell never activates. Map bytes never come from the network.
+- An update copies each file an earlier version already holds, but only when its bytes hash to the new build's SHA-256; otherwise it downloads. The OCR models and runtime are 27 of the shell's 28 MB and rarely change.
 
 ## OCR
 
