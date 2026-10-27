@@ -337,3 +337,84 @@ test("an update copies files an earlier version holds intact and downloads chang
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a page opened before an update still gets its renamed worker files offline, until the next update", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-sw-"));
+  try {
+    await mkdir(path.join(root, "dist/assets"), { recursive: true });
+    await mkdir(path.join(root, "dist/ocr"));
+    const assets: Record<string, string> = {
+      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__"></html>',
+      "/assets/darken.worker-new.js": "new darkener",
+      "/assets/shared.js": "new shared chunk",
+      "/ocr/model.onnx": "model",
+    };
+    for (const [name, contents] of Object.entries(assets))
+      await writeFile(path.join(root, "dist", name), contents);
+    execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/build-sw.mjs", import.meta.url))], { cwd: root });
+    const script = await readFile(path.join(root, "dist/sw.js"), "utf8");
+    assets["/index.html"] = await readFile(path.join(root, "dist/index.html"), "utf8");
+    // Made in this order: two versions back, then the version the open page runs.
+    const stores = new Map<string, Map<string, Response>>([
+      ["map-viewer-shell-older", new Map([["/assets/darken.worker-older.js", new Response("older darkener")]])],
+      ["map-viewer-shell-previous", new Map([
+        ["/index.html", new Response("previous page")],
+        ["/assets/darken.worker-old.js", new Response("old darkener")],
+        ["/assets/shared.js", new Response("old shared chunk")],
+        ["/ocr/model.onnx", new Response("model")],
+      ])],
+      ["unrelated-user-cache", new Map([["/assets/darken.worker-old.js", new Response("not ours")]])],
+    ]);
+    const caches = {
+      async open(name: string) {
+        const data = stores.get(name) ?? new Map<string, Response>();
+        stores.set(name, data);
+        return {
+          put: async (url: string, response: Response) => void data.set(url, response),
+          match: async (url: string) => data.get(url)?.clone(),
+          keys: async () => [...data.keys()].map((url) => new Request(`https://map.local${url}`)),
+          delete: async (request: Request) => data.delete(new URL(request.url).pathname),
+        };
+      },
+      keys: async () => [...stores.keys()],
+      delete: async (name: string) => stores.delete(name),
+    };
+    let online = true;
+    const listeners = new Map<string, (event: unknown) => void>();
+    runInNewContext(script, {
+      caches, crypto, URL, Request, Response, Headers, Blob,
+      fetch: async (url: string) => {
+        if (!online) throw new Error("Offline");
+        return new Response(assets[url === "/" ? "/index.html" : url]);
+      },
+      self: {
+        location: { origin: "https://map.local" },
+        skipWaiting: async () => {},
+        clients: { matchAll: async () => [], claim: async () => {} },
+        addEventListener: (name: string, listener: (event: unknown) => void) => listeners.set(name, listener),
+      },
+    });
+    for (const name of ["install", "activate"]) {
+      let done: Promise<unknown> | undefined;
+      listeners.get(name)!({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+      await done;
+    }
+    assert.equal(stores.has("map-viewer-shell-older"), false, "versions before the previous one go");
+    assert.deepEqual([...stores.get("map-viewer-shell-previous")!.keys()], ["/assets/darken.worker-old.js"],
+      "the previous version keeps only the files this one renamed");
+    online = false;
+    const request = async (url: string) => {
+      let response: Promise<Response> | undefined;
+      listeners.get("fetch")!({
+        request: { url: `https://map.local${url}`, method: "GET", mode: "cors" },
+        respondWith: (p: Promise<Response>) => { response = p; },
+      });
+      return (await response!).text();
+    };
+    assert.equal(await request("/assets/darken.worker-old.js"), "old darkener");
+    assert.equal(await request("/assets/shared.js"), "new shared chunk", "a kept name serves this version's bytes");
+    await assert.rejects(request("/assets/darken.worker-older.js"), /Offline/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
