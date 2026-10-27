@@ -532,9 +532,11 @@ export class ViewerControls {
     this.root.querySelector<HTMLElement>(".sheet-content")!.scrollTop = 0;
     // A hidden wheel cannot scroll, so it finds its degree once it shows.
     if (name === "rotation") this.renderRotation();
-    // How long ago is worked out as the panel opens.
-    if (name === "trail") this.renderTrail();
-    this.renderTool();
+    // Lists, and how long ago, are worked out as their panel opens; a closed
+    // panel keeps no rows, so none can go stale.
+    if (name !== previous) for (const id of ["marker-list", "route-list", "trip-list"]) this.el(id).replaceChildren();
+    if (name === "saved" || name === "trail") this.render();
+    else this.renderTool();
   }
   /** Opens Search ready to type. */
   private openSearch() {
@@ -2194,9 +2196,8 @@ export class ViewerControls {
     this.rowPopover = undefined;
     this.rowMenuAnchor = undefined;
     const markers = this.el("marker-list"),
-      routes = this.el("route-list");
-    markers.replaceChildren();
-    routes.replaceChildren();
+      routes = this.el("route-list"),
+      trips = this.el("trip-list");
     // Kinds no longer saved here drop out, so the filter can't hide every place,
     // and with its menu gone below two places, the filter goes too.
     const kinds = this.savedKinds();
@@ -2216,7 +2217,11 @@ export class ViewerControls {
     this.el("saved-routes-count").textContent = String(counts.routes);
     this.el("saved-places-count").textContent = this.placeKinds.size
       ? `${placeList.length}/${counts.places}` : String(counts.places);
-    for (const marker of placeList) {
+    this.el("trip-history-count").textContent = String(this.state.trips.length);
+    // Rows are built only while their panel shows; opening it builds them.
+    const lists = this.openSheet === "saved" ? [markers, routes] : this.openSheet === "trail" ? [trips] : [];
+    for (const list of lists) list.replaceChildren();
+    if (this.openSheet === "saved") for (const marker of placeList) {
       this.row(markers, {
         key: marker.id,
         label: marker.label,
@@ -2253,7 +2258,7 @@ export class ViewerControls {
         ],
       });
     }
-    for (const route of routeList) {
+    if (this.openSheet === "saved") for (const route of routeList) {
       this.row(routes, {
         key: route.id,
         label: route.name,
@@ -2286,11 +2291,8 @@ export class ViewerControls {
         ],
       });
     }
-    const trips = this.el("trip-list");
-    trips.replaceChildren();
-    this.el("trip-history-count").textContent = String(this.state.trips.length);
     // Newest first: the trip just ended is the one most likely looked for.
-    for (const trip of [...this.state.trips].reverse()) {
+    if (this.openSheet === "trail") for (const trip of [...this.state.trips].reverse()) {
       const scale = this.state.metresPerPixel;
       const minutes = Math.round((trip.ended - trip.points[0]!.time) / 60_000);
       this.row(trips, {
@@ -2321,7 +2323,7 @@ export class ViewerControls {
       [routes, t("No routes yet.")],
       [trips, t("No trips yet.")],
     ] as const)
-      if (!container.childElementCount) {
+      if (lists.includes(container) && !container.childElementCount) {
         const item = document.createElement("li");
         item.className = "empty-list";
         item.textContent = empty;
