@@ -3,6 +3,7 @@ import { setPreference } from "../preferences";
 import { dialogHeader, showDialog } from "./dialog";
 import { icons } from "./icons";
 import { fakePlan } from "./landing-map";
+import { track } from "../stats";
 
 type Browser = Pick<Navigator, "userAgent" | "maxTouchPoints"> & { standalone?: boolean };
 /** Chrome's own install sheet, offered once the app is installable. */
@@ -95,6 +96,7 @@ export function initInstallPage(page: HTMLElement, dialog: HTMLDialogElement, br
     render();
   });
   events.addEventListener("appinstalled", () => {
+    track("app_installed");
     prompt = undefined;
     installed = true;
     render();

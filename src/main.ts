@@ -33,6 +33,7 @@ import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
+import { startStats, track } from "./stats";
 
 document.documentElement.lang = language;
 document.documentElement.dataset.labels = preference("label-size");
@@ -84,6 +85,7 @@ let ocrJob:
 const ocrErrors = new Map<string, string>();
 const settingsPage = element("settings");
 const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
+if (import.meta.env.PROD) startStats(loadedVersion);
 const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
 const canUpdate = import.meta.env.PROD && "serviceWorker" in navigator;
 const settings = initSettingsPage(settingsPage, {
@@ -215,6 +217,7 @@ const sharing = initSharing(app, {
     }
   },
   imported: async (result, destination) => {
+    track("share_imported", { into: destination.mapId ? destination.mode : "new", items: result.added });
     await refresh();
     await openMap(result.map);
     if (!destination.mapId) showMessage(t("Share imported"), t("{items} added to a new map.", { items: plural(result.added, "item") }));
@@ -581,6 +584,7 @@ function importImage(file: File) {
   element("import-name").textContent = file.name;
   showProgress(0, t("Reading image metadata…"));
   showDialog(progressDialog);
+  const started = Date.now();
   // The map opens once its tiles are saved; text detection follows in the background.
   void mutate(() =>
     importMap(
@@ -590,6 +594,7 @@ function importImage(file: File) {
     ),
   )
     .then(async (map) => {
+      track("map_imported", { ok: true, megapixels: Math.round(map.width * map.height / 1e6), seconds: Math.round((Date.now() - started) / 1000) });
       channel?.postMessage("changed");
       progressDialog.close();
       importing = undefined;
@@ -597,11 +602,12 @@ function importImage(file: File) {
       await openMap(map);
     })
     .catch((error) => {
-      if (!(error instanceof DOMException && error.name === "AbortError"))
-        showMessage(
-          t("Couldn’t import this map"),
-          error instanceof Error ? error.message : String(error),
-        );
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      track("map_imported", { ok: false });
+      showMessage(
+        t("Couldn’t import this map"),
+        error instanceof Error ? error.message : String(error),
+      );
     })
     .finally(() => {
       progressDialog.close();
@@ -773,6 +779,7 @@ async function runOcr(
   try {
     previous = await loadOcr(map.id);
     update();
+    const started = Date.now();
     const index = await detectMapText(
       map,
       (progress) => {
@@ -783,10 +790,12 @@ async function runOcr(
       },
       controller.signal,
     );
+    track("text_scanned", { ok: true, labels: index.lines.length, seconds: Math.round((Date.now() - started) / 1000) });
     if (currentMap?.id === map.id) controls?.updateOcr(index);
     channel?.postMessage("changed");
     return index;
   } catch (error) {
+    if (!controller.signal.aborted) track("text_scanned", { ok: false });
     const message = controller.signal.aborted
       ? t("Text detection stopped. Rerun it in Advanced settings.")
       : t("Text detection failed. Rerun it in Advanced settings.");
@@ -863,6 +872,7 @@ void registerOfflineShell().then(refreshFooter);
 async function start() {
   // Maps imported in a browser tab stay there, so a tab only shows how to install.
   if (import.meta.env.PROD && !isInstalled()) {
+    track("app_opened", { installed: false });
     home.hidden = true;
     return initInstallPage(element("install"), element("install-dialog"));
   }
@@ -873,6 +883,10 @@ async function start() {
   await refresh();
   // Ask on every launch: Chrome may grant it later, once the app is installed or used more.
   if (maps.length) void protectStorage().then(showBackupReminder);
+  void storageProtected().then((kept) => track("app_opened", {
+    installed: true, maps: maps.length, protected: kept ?? "unknown", language,
+    "label-size": preference("label-size"), "update-install": preference("update-install"),
+  }));
   if (import.meta.env.DEV) await restoreDevData().catch((error) => console.warn("Dev data", error));
   // Reloading on the Settings page stays there.
   if (history.state?.settings) return showSettings();
