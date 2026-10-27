@@ -18,7 +18,7 @@ import {
   worldToScreen,
   transformAt,
 } from "./camera";
-import { TILE_CACHE_BUDGET, TileCache, type TileRequest } from "./cache";
+import { MOST_TILES, TILE_CACHE_BUDGET, TileCache, type TileRequest } from "./cache";
 import { attachInteractions, type Hold } from "./interactions";
 import {
   defaultNavigation,
@@ -43,6 +43,8 @@ import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
 import type { MapSearchMatch } from "./map-search";
+/** How long the scale holds still before a sharper level loads. */
+const ZOOM_SETTLE_MS = 150;
 export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
@@ -107,6 +109,9 @@ export class Viewer {
   /** Whether the map needs repainting; labels can move without it. */
   private stale = true;
   private level?: { view: string; level: number };
+  /** When the scale last changed, so a pinch can finish before tiles sharpen. */
+  private zoomed = { scale: 0, at: 0 };
+  private settle = 0;
   private animation = 0;
   // Where the running animation ends, so quick key presses add up.
   private destination?: Camera;
@@ -822,9 +827,19 @@ export class Viewer {
     ctx.fillRect(0, 0, this.map.width, this.map.height);
     // Only zooming, turning or resizing changes the level, never panning.
     const { scale, rotation = 0 } = this.camera,
-      view = `${scale} ${rotation} ${this.width} ${this.height} ${this.dpr}`;
-    if (this.level?.view !== view)
-      this.level = { view, level: tileLevel(this.map.levels, this.camera, this.viewport(), this.dpr) };
+      view = `${scale} ${rotation} ${this.width} ${this.height} ${this.dpr}`,
+      now = performance.now();
+    if (this.zoomed.scale !== scale) this.zoomed = { scale, at: now };
+    if (this.level?.view !== view) {
+      const level = tileLevel(this.map.levels, this.camera, this.viewport(), this.dpr, MOST_TILES);
+      // A sharper level waits until zooming pauses, so a pinch doesn't decode
+      // tiles for scales the fingers have already left. A coarser one can't
+      // wait: the sharper level's tiles would overflow the budget.
+      if (this.level && level < this.level.level && now - this.zoomed.at < ZOOM_SETTLE_MS) {
+        clearTimeout(this.settle);
+        this.settle = window.setTimeout(() => this.invalidate(), ZOOM_SETTLE_MS);
+      } else this.level = { view, level };
+    }
     const { level } = this.level;
     const tiles = visibleTiles(this.map.levels[level]!, this.camera, viewport);
     // The ring one tile beyond each edge loads next, so a short pan finds it ready.
@@ -834,15 +849,16 @@ export class Viewer {
       return visibleTiles(this.map.levels[level]!, camera, { width: viewport.width + 2 * margin, height: viewport.height + 2 * margin })
         .map((t) => ({ ...t, level }));
     };
-    if (this.measured) this.cache.plan(tiles.map((t) => ({ ...t, level })), around);
+    if (this.measured)
+      this.cache.plan(tiles.map((t) => ({ ...t, level })), around, this.map.levels.length - 1);
     // The overview stays beneath everything: it hides hairline seams where
-    // anti-aliased tile edges meet. Coarser tiles only fill in while sharper
-    // ones load.
+    // anti-aliased tile edges meet. While the level loads, every cached tile
+    // fills in, coarsest first, so sharper ones left from zooming in stay on top.
     if (this.base)
       ctx.drawImage(this.base, 0, 0, this.map.width, this.map.height);
     const covered = this.cache.complete;
     const entries = this.cache.tiles
-      .filter((t) => (covered ? t.level === level : t.level >= level))
+      .filter((t) => !covered || t.level === level)
       .sort((a, b) => b.level - a.level);
     // Cached tiles from earlier views stay decoded but are not drawn off screen.
     const bounds = viewBounds(this.camera, viewport);
@@ -888,7 +904,7 @@ export class Viewer {
     if (this.debug) this.paintDebug(ctx, world, level, tiles, drawn);
   }
   /** Each drawn tile's border and name: green at the wanted level, orange
-   * for a coarser one filling in, red dashed where a wanted tile is missing. */
+   * for another one filling in, red dashed where a wanted tile is missing. */
   private paintDebug(ctx: CanvasRenderingContext2D, world: DOMMatrix, level: number,
     wanted: { x: number; y: number }[], drawn: TileRequest[]) {
     const loaded = new Set(this.cache.tiles.map((tile) => tileKey(tile.level, tile.x, tile.y)));
@@ -970,6 +986,7 @@ export class Viewer {
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
+    clearTimeout(this.settle);
     this.stopAnimation();
     this.controller.abort();
     this.observer.disconnect();

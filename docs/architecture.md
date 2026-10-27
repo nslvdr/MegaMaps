@@ -19,6 +19,7 @@ Benchmark baselines are in `docs/*-results.json`. Node RSS includes the test har
 ## Rendering
 
 - Dark mode is applied to each tile's pixels once, as it decodes, in a worker. A CSS filter on the canvas recolors the whole screen every frame, and that measurably drained batteries underground. Brightness is a translucent fill drawn on frames that are rendered anyway.
+- Decoded tiles share a 56 MiB budget, 24 MiB on devices reporting under 4 GB; Safari reports none and gets the larger one. A view uses at most 44 tiles (22), so a 3× phone shows tiles at most about 1.5× their pixels. The rest of the budget holds the parents of missing tiles, which load first so the screen fills in at half sharpness. While a level loads, every cached tile is drawn, coarsest first, so zooming out keeps the sharper tiles on screen. A sharper level waits until the scale has held for 150 ms, so a pinch doesn't decode tiles for scales it has already passed.
 - SVG annotations are a separate layer with no filter. They use the canvas camera but keep a constant screen size.
 - The viewer controls map rotation only. It never locks screen orientation; the phone's own setting does that.
 - In compass mode, the map turns only after a new heading has held for a while, so a swaying phone doesn't keep redrawing it.

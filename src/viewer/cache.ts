@@ -11,22 +11,29 @@ interface Entry extends TileRequest {
   bytes: number;
   used: number;
 }
-export const TILE_CACHE_BUDGET = 24 * 1024 * 1024;
+// Safari reports no memory: assume 4 GB, as the OCR pool does.
+const lowMemory = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4) < 4;
+export const TILE_CACHE_BUDGET = (lowMemory ? 24 : 56) * 1024 * 1024;
+/** Decoded tiles a view may need at once; the budget keeps room for their parents. */
+export const MOST_TILES = lowMemory ? 22 : 44;
 /** A full tile decoded; edge tiles are smaller. */
 const TILE_BYTES = TILE_SIZE * TILE_SIZE * 4;
 // Two decodes in flight and an explicit byte budget. Invisible requests are replaced
 // on every camera change; a fling cannot build an unbounded loading queue.
-// Tiles just off screen load ahead, one at a time and only into room the screen
-// leaves, so they never delay or push out what the screen shows.
+// While the screen loads, the parents of its missing tiles load first: a quarter
+// as many, they fill it at half sharpness. Tiles just off screen load ahead, one
+// at a time and only into room the screen leaves, so they never delay or push
+// out what the screen shows.
 export class TileCache {
   private entries = new Map<string, Entry>();
   private pending = new Set<string>();
   private wanted = new Set<string>();
   private queue: TileRequest[] = [];
   private failed = new Set<string>();
+  private parents = new Set<string>();
   private ahead = new Set<string>();
   private aheadQueue: TileRequest[] = [];
-  /** Kept apart so a tile that fails ahead still loads, and reports, once on screen. */
+  /** Kept apart so a tile that fails as a parent or ahead still loads, and reports, once on screen. */
   private aheadFailed = new Set<string>();
   private bytes = 0;
   private active = 0;
@@ -57,14 +64,31 @@ export class TileCache {
     for (const key of this.wanted) if (!this.entries.has(key)) return false;
     return true;
   }
-  /** `around` lists tiles near the screen, nearest first; it is read only once the screen is loading or done. */
-  plan(tiles: TileRequest[], around?: () => TileRequest[]) {
+  /** `around` lists tiles near the screen, nearest first; it is read only once
+   * the screen is loading or done. Parents load only for levels below `overview`,
+   * the level drawn whole beneath every tile. */
+  plan(tiles: TileRequest[], around?: () => TileRequest[], overview = 0) {
     this.wanted = new Set(tiles.map((t) => tileKey(t.level, t.x, t.y)));
-    for (const key of this.wanted) {
+    this.parents = new Set();
+    const parents: TileRequest[] = [];
+    let room = TILE_CACHE_BUDGET;
+    for (const key of this.wanted) room -= this.entries.get(key)?.bytes ?? TILE_BYTES;
+    for (const t of tiles) {
+      if (t.level + 1 >= overview || this.entries.has(tileKey(t.level, t.x, t.y))) continue;
+      const parent = { level: t.level + 1, x: t.x >> 1, y: t.y >> 1 },
+        key = tileKey(parent.level, parent.x, parent.y);
+      if (this.parents.has(key)) continue;
+      const bytes = this.entries.get(key)?.bytes ?? TILE_BYTES;
+      if (bytes > room) break;
+      room -= bytes;
+      this.parents.add(key);
+      if (!this.aheadFailed.has(key)) parents.push(parent);
+    }
+    for (const key of [...this.wanted, ...this.parents]) {
       const entry = this.entries.get(key);
       if (entry) entry.used = performance.now();
     }
-    this.queue = tiles.filter((t) => {
+    this.queue = [...parents, ...tiles].filter((t) => {
       const key = tileKey(t.level, t.x, t.y);
       return (
         !this.entries.has(key) &&
@@ -76,7 +100,7 @@ export class TileCache {
     this.aheadQueue = [];
     if (around && !this.queue.length) {
       let room = TILE_CACHE_BUDGET;
-      for (const key of this.wanted)
+      for (const key of [...this.wanted, ...this.parents])
         room -= this.entries.get(key)?.bytes ?? (this.pending.has(key) ? TILE_BYTES : 0);
       for (const t of around()) {
         const key = tileKey(t.level, t.x, t.y);
@@ -95,7 +119,7 @@ export class TileCache {
     const candidates = [...this.entries].sort((a, b) => a[1].used - b[1].used);
     for (const [key, entry] of candidates) {
       if (this.bytes + incoming <= TILE_CACHE_BUDGET) break;
-      if (this.wanted.has(key) || this.ahead.has(key)) continue;
+      if (this.wanted.has(key) || this.parents.has(key) || this.ahead.has(key)) continue;
       entry.bitmap.close();
       this.entries.delete(key);
       this.bytes -= entry.bytes;
@@ -131,8 +155,11 @@ export class TileCache {
     try {
       const bitmap = await this.decode(await this.store.get(this.mapId, key));
       const bytes = bitmap.width * bitmap.height * 4;
-      const wanted = this.wanted.has(key);
-      if (this.disposed || generation !== this.generation || !(wanted || this.ahead.has(key)) || !this.evict(bytes))
+      const shown = this.wanted.has(key) || this.parents.has(key);
+      // A tile the camera has moved past stays while there is free room: drawn
+      // beneath, it softens the next change of level.
+      if (this.disposed || generation !== this.generation ||
+          !(shown || this.ahead.has(key) ? this.evict(bytes) : this.bytes + bytes <= TILE_CACHE_BUDGET))
         bitmap.close();
       else {
         this.entries.set(key, {
@@ -143,7 +170,7 @@ export class TileCache {
         });
         this.bytes += bytes;
         // Off screen, it waits to be drawn without a repaint.
-        if (wanted) this.invalidate();
+        if (shown) this.invalidate();
       }
     } catch {
       if (this.disposed || generation !== this.generation) return;
@@ -152,7 +179,7 @@ export class TileCache {
         this.onError(
           t("A map tile could not be read. Reopen the map or reimport the original."),
         );
-      } else if (this.ahead.has(key)) this.aheadFailed.add(key);
+      } else if (this.parents.has(key) || this.ahead.has(key)) this.aheadFailed.add(key);
     } finally {
       this.active--;
       if (generation === this.generation) this.pending.delete(key);

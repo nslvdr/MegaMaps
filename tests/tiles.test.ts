@@ -197,19 +197,20 @@ test("tiles just off screen load after the screen, one at a time, into room it l
     }
   };
   try {
-    // Four on screen leave room for twenty ahead, of thirty offered.
-    cache.plan(row(0, 4), () => row(1, 30));
+    // Four on screen leave room for the rest of the budget ahead, of more offered.
+    const room = TILE_CACHE_BUDGET / 1048576 - 4, offered = room + 10;
+    cache.plan(row(0, 4), () => row(1, offered));
     await settle();
     assert.equal(reads.filter(isAhead).length, 0, "the ring waits for a plan with the screen loading or done");
     assert.equal(repaints, 4);
-    cache.plan(row(0, 4), () => row(1, 30));
+    cache.plan(row(0, 4), () => row(1, offered));
     await settle();
     assert.equal(aheadPeak, 1, "one tile ahead at a time");
     assert.equal(repaints, 4, "tiles ahead don't repaint");
-    assert.deepEqual(reads.filter(isAhead), row(1, 20).map((t) => tileKey(0, t.x, 1)), "nearest first, up to the budget");
-    assert.equal(cache.decodedBytes, 23 * 1048576, "a broken tile ahead is skipped");
+    assert.deepEqual(reads.filter(isAhead), row(1, room).map((t) => tileKey(0, t.x, 1)), "nearest first, up to the budget");
+    assert.equal(cache.decodedBytes, (3 + room) * 1048576, "a broken tile ahead is skipped");
     assert.deepEqual(errors, [], "and not reported");
-    cache.plan(row(0, 4), () => row(1, 30));
+    cache.plan(row(0, 4), () => row(1, offered));
     await settle();
     assert.equal(reads.filter((key) => key === tileKey(0, 3, 1)).length, 1, "nor retried ahead");
     // The screen moves onto the ring: tiles ahead are already there, the broken one is read and reported.
@@ -223,6 +224,50 @@ test("tiles just off screen load after the screen, one at a time, into room it l
     await settle();
     assert.equal(cache.complete, true);
     assert.ok(cache.decodedBytes <= TILE_CACHE_BUDGET);
+  } finally {
+    cache.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("while the screen loads, the parents of its missing tiles load first, and decodes it moved past stay", async () => {
+  const canvas = createCanvas(512, 512);
+  const blob = new Blob([new Uint8Array(await canvas.encode("png"))]);
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-parents-"));
+  await installPlatform(root);
+  const reads: string[] = [];
+  const store = {
+    async put() {},
+    async deleteMap() {},
+    async get(_map: string, key: string) {
+      reads.push(key);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return blob;
+    },
+  };
+  const cache = new TileCache(store, "parents", () => {}, (message) => assert.fail(message));
+  const row = (level: number, y: number, from: number, to: number) =>
+    Array.from({ length: to - from }, (_, i) => ({ level, x: from + i, y }));
+  const settle = async () => {
+    for (let i = 0, last = -1, still = 0; i < 500 && still < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      still = reads.length === last ? still + 1 : 0;
+      last = reads.length;
+    }
+  };
+  const keys = (tiles: { level: number; x: number; y: number }[]) => tiles.map((t) => tileKey(t.level, t.x, t.y));
+  try {
+    cache.plan(row(0, 0, 0, 4), undefined, 3);
+    await settle();
+    assert.deepEqual(reads, keys([...row(1, 0, 0, 2), ...row(0, 0, 0, 4)]));
+    // Only the new tiles' parent loads first. Zooming out mid-load leaves both
+    // decodes in flight to finish and stay; the overview's level loads no parents.
+    cache.plan(row(0, 0, 0, 6), undefined, 3);
+    cache.plan(row(1, 0, 0, 4), undefined, 2);
+    await settle();
+    assert.deepEqual(reads.slice(6), keys([{ level: 1, x: 2, y: 0 }, { level: 0, x: 4, y: 0 }, { level: 1, x: 3, y: 0 }]));
+    assert.equal(cache.complete, true);
+    assert.ok(cache.tiles.some((t) => t.level === 0 && t.x === 4), "the decode the camera moved past stays");
   } finally {
     cache.dispose();
     await rm(root, { recursive: true, force: true });
