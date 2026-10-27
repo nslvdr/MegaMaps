@@ -46,8 +46,12 @@ class CanvasAdapter {
     this.canvas = createCanvas(drawn.width, drawn.height);
     return Object.assign(drawn, { close() {} });
   }
-  async convertToBlob() {
-    return new Blob([new Uint8Array(await this.canvas.encode("png"))]);
+  async convertToBlob(options?: { type?: string; quality?: number }) {
+    const bytes =
+      options?.type === "image/jpeg"
+        ? await this.canvas.encode("jpeg", Math.round((options.quality ?? 0.92) * 100))
+        : await this.canvas.encode("png");
+    return new Blob([new Uint8Array(bytes)], { type: options?.type ?? "image/png" });
   }
 }
 class Directory {

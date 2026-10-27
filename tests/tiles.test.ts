@@ -6,12 +6,12 @@ import path from "node:path";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { installPlatform, jpegFactory, nativeStats } from "./node-platform";
 import { readHeader } from "../src/processing/headers";
-import { decodeJPEG } from "../src/processing/jpeg";
+import { cropJPEG, decodeJPEG } from "../src/processing/jpeg";
 import { tileBand, buildParents } from "../src/processing/tiles";
 import { payloadStore } from "../src/storage/payloads";
 import { pyramid, tileCount } from "../src/processing/pyramid";
 import { TileCache, TILE_CACHE_BUDGET } from "../src/viewer/cache";
-import { tileKey } from "../src/types";
+import { TILE_SIZE, tileKey } from "../src/types";
 
 test("JPEG rows become lossless native tiles and correct odd-sized pyramid edges", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "map-viewer-test-"));
@@ -261,6 +261,147 @@ test("CMYK JPEG scanlines convert Adobe ink channels to display RGBA", async () 
     );
     assert.deepEqual(pixel, [245, 122, 0, 255]);
     await store.deleteMap("cmyk");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Cuts a fixture into level-0 tiles and decodes the whole original for comparison.
+async function cutFixture(name: string) {
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-crop-"));
+  await installPlatform(root);
+  try {
+    const file = new Blob([
+      new Uint8Array(
+        await readFile(new URL(`./fixtures/${name}`, import.meta.url)),
+      ),
+    ]);
+    const header = await readHeader(file),
+      store = payloadStore("opfs");
+    await store.put("crop", "original", file);
+    const original = new Uint8Array(header.width * header.height * 4);
+    await decodeJPEG(
+      file,
+      header,
+      "crop",
+      "opfs",
+      async (row, y) => original.set(row, y * header.width * 4),
+      jpegFactory,
+    );
+    const tiles = new Map<string, Buffer>();
+    const cut = await cropJPEG(
+      file,
+      header,
+      "crop",
+      async (x, y, tile) => {
+        tiles.set(`${x}-${y}`, Buffer.from(await tile.arrayBuffer()));
+      },
+      jpegFactory,
+    );
+    // Scratch spill files are gone once cutting ends.
+    assert.deepEqual(await readdir(path.join(root, "maps", "crop")), [
+      "original",
+    ]);
+    return { file, header, original, tiles, cut };
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+/** Largest channel difference from the original, split by distance to a cut. */
+async function tileErrors(fixture: Awaited<ReturnType<typeof cutFixture>>) {
+  const { header, original, tiles } = fixture;
+  let inside = 0,
+    nearCut = 0;
+  for (const [key, bytes] of tiles) {
+    const [tx, ty] = key.split("-").map(Number) as [number, number];
+    const image = await loadImage(bytes),
+      canvas = createCanvas(image.width, image.height),
+      ctx = canvas.getContext("2d");
+    assert.equal(
+      image.width,
+      Math.min(TILE_SIZE, header.width - tx * TILE_SIZE),
+    );
+    assert.equal(
+      image.height,
+      Math.min(TILE_SIZE, header.height - ty * TILE_SIZE),
+    );
+    ctx.drawImage(image, 0, 0);
+    const pixels = ctx.getImageData(0, 0, image.width, image.height).data;
+    for (let y = 0; y < image.height; y++)
+      for (let x = 0; x < image.width; x++) {
+        const at =
+            ((ty * TILE_SIZE + y) * header.width + tx * TILE_SIZE + x) * 4,
+          cut =
+            (tx > 0 && x < 2) ||
+            (ty > 0 && y < 2) ||
+            (x >= image.width - 2 && image.width === TILE_SIZE) ||
+            (y >= image.height - 2 && image.height === TILE_SIZE);
+        for (let c = 0; c < 4; c++) {
+          const error = Math.abs(
+            pixels[(y * image.width + x) * 4 + c]! - original[at + c]!,
+          );
+          if (cut) nearCut = Math.max(nearCut, error);
+          else inside = Math.max(inside, error);
+        }
+      }
+  }
+  return { inside, nearCut };
+}
+
+test("JPEG originals are cut into exact JPEG tiles no bigger than the original", async () => {
+  const fixture = await cutFixture("plan-444.jpg");
+  assert.equal(fixture.cut, true);
+  assert.deepEqual([...fixture.tiles.keys()], ["0-0", "1-0", "0-1", "1-1"]);
+  for (const tile of fixture.tiles.values())
+    assert.deepEqual([...tile.subarray(0, 2)], [0xff, 0xd8]);
+  assert.deepEqual(await tileErrors(fixture), { inside: 0, nearCut: 0 });
+  const bytes = [...fixture.tiles.values()].reduce(
+    (n, tile) => n + tile.length,
+    0,
+  );
+  assert.ok(bytes < fixture.file.size * 1.1);
+});
+
+// Chroma smoothing cannot reach across a cut, so only pixels next to one differ.
+test("subsampled JPEG tiles keep chroma aligned away from cut edges", async () => {
+  const fixture = await cutFixture("plan-420.jpg");
+  assert.equal(fixture.cut, true);
+  assert.equal((await tileErrors(fixture)).inside, 0);
+});
+
+test("CMYK JPEGs are not cut, so import decodes them instead", async () => {
+  const fixture = await cutFixture("cmyk.jpg");
+  assert.equal(fixture.cut, false);
+  assert.equal(fixture.tiles.size, 0);
+});
+
+test("JPEG parent tiles keep an odd-width edge in colour, not darkened", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "map-viewer-parents-"));
+  await installPlatform(root);
+  try {
+    const store = payloadStore("opfs"),
+      levels = pyramid(1025, 300);
+    for (let x = 0; x < 3; x++) {
+      const tile = createCanvas(x === 2 ? 1 : TILE_SIZE, 300),
+        ctx = tile.getContext("2d");
+      ctx.fillStyle = "#004488";
+      ctx.fillRect(0, 0, tile.width, tile.height);
+      await store.put(
+        "edge",
+        tileKey(0, x, 0),
+        new Blob([new Uint8Array(await tile.encode("png"))]),
+      );
+    }
+    const canvas = new OffscreenCanvas(1, 1);
+    await buildParents(levels, canvas, store, "edge", () => {}, "image/jpeg");
+    const tile = await store.get("edge", tileKey(1, 1, 0)),
+      bytes = new Uint8Array(await tile.arrayBuffer());
+    assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xd8]);
+    const image = await loadImage(Buffer.from(bytes)),
+      pixel = createCanvas(1, 1).getContext("2d");
+    pixel.drawImage(image, 0, 0);
+    const [, g, b] = pixel.getImageData(0, 0, 1, 1).data;
+    assert.ok(Math.abs(g! - 0x44) < 8 && Math.abs(b! - 0x88) < 8);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
