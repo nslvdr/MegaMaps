@@ -4,7 +4,7 @@ import { tileKey, type MapRecord } from "./types";
 import { listMaps, markOpened, renameMap } from "./storage/database";
 import { payloadStore, deleteAllData, deleteStoredMap } from "./storage/payloads";
 import { importMap } from "./processing/import";
-import { startShrinking } from "./processing/shrink";
+import { startRetiling } from "./processing/retile";
 import { Viewer } from "./viewer/viewer";
 import { registerOfflineShell } from "./pwa";
 import { findAppUpdate, installAppUpdate } from "./app-update";
@@ -98,6 +98,7 @@ const settings = initSettingsPage(settingsPage, {
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
+  setTiling: () => void stopRetiling().then(retileMaps),
 });
 // Versions installed automatically this session, so a failed one waits for a tap instead of retrying.
 const autoInstalled = new Set<string>();
@@ -240,9 +241,9 @@ async function shareMap(map: MapRecord, item?: { kind: "marker" | "route"; id: s
   }
 }
 // An origin-wide lock prevents launch cleanup from racing another tab's import.
-// Shrinking older maps steps aside for any change and resumes after it.
+// Recutting maps steps aside for any change and resumes after it.
 async function mutate<T>(work: () => Promise<T>): Promise<T> {
-  await stopShrinking();
+  await stopRetiling();
   try {
     if (navigator.locks)
       return await navigator.locks.request(
@@ -258,14 +259,15 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
       );
     return await work();
   } finally {
-    shrinkMaps();
+    retileMaps();
   }
 }
-let shrinking: ReturnType<typeof startShrinking> | undefined;
-// Maps imported with PNG tiles shrink quietly; the open map and its text scan are left alone.
-function shrinkMaps() {
-  if (shrinking || !navigator.locks) return;
-  const job = startShrinking(
+let retiling: ReturnType<typeof startRetiling> | undefined;
+// Maps quietly follow the tiling mode; the open map and its text scan are left alone.
+function retileMaps() {
+  if (retiling || !navigator.locks) return;
+  const job = startRetiling(
+    preference("tiling"),
     (id) => id === currentMap?.id || id === ocrJob?.mapId,
     (id) => {
       const url = thumbnails.get(id);
@@ -273,14 +275,14 @@ function shrinkMaps() {
       thumbnails.delete(id);
     },
   );
-  shrinking = job;
+  retiling = job;
   void job.done.then(() => {
-    if (shrinking === job) shrinking = undefined;
+    if (retiling === job) retiling = undefined;
   });
 }
-async function stopShrinking() {
-  const job = shrinking;
-  shrinking = undefined;
+async function stopRetiling() {
+  const job = retiling;
+  retiling = undefined;
   await job?.stop();
 }
 const appTitle = document.title;
@@ -305,7 +307,7 @@ function closeViewer() {
   viewerSection.hidden = true;
   home.hidden = false;
   void refreshFooter();
-  shrinkMaps();
+  retileMaps();
   document.body.classList.remove("viewing");
   void refresh()
     .then(() => {
@@ -322,7 +324,7 @@ async function openMap(map: MapRecord) {
   viewer = undefined;
   if (!home.hidden) libraryScroll = window.scrollY;
   currentMap = map;
-  if (shrinking?.mapId === map.id) void stopShrinking();
+  if (retiling?.mapId === map.id) void stopRetiling();
   map.opened = Date.now();
   void markOpened(map.id, map.opened).catch(() => {});
   showTitle();
@@ -791,7 +793,7 @@ async function runOcr(
   };
   ocrJob = job;
   ocrErrors.delete(map.id);
-  if (shrinking?.mapId === map.id) await stopShrinking();
+  if (retiling?.mapId === map.id) await stopRetiling();
   const update = () => {
     if (currentMap?.id === map.id)
       controls?.updateOcr(previous, job.message, job.fraction);
@@ -921,7 +923,7 @@ async function start() {
   const resume = await lastMap();
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
-  shrinkMaps();
+  retileMaps();
 }
 // A dev server on a new port starts empty; it brings back the shared dev maps.
 async function restoreDevData() {

@@ -16,6 +16,8 @@ const choices = {
   "walking-speed": ["4", "2", "3", "5"],
   /** Whether a found update installs by itself or waits for the user to agree. */
   "update-install": ["auto", "ask"],
+  /** How map tiles are stored: compact JPEG, or sharp PNG at about twice the space. */
+  tiling: ["compact", "sharp"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };

@@ -11,11 +11,12 @@ import { saveMap } from "../storage/database";
 import { readHeader } from "./headers";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
-import { CUT, DECODED, cropJPEG, decodeJPEG } from "./jpeg";
+import { CUT, DECODED, UNCUT, cropJPEG, decodeJPEG } from "./jpeg";
 import { tileBand, buildParents } from "./tiles";
+import type { Preferences } from "../preferences";
 const reply = (message: WorkerReply) => postMessage(message);
-onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
-  const { file, record } = event.data;
+onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: Preferences["tiling"] }>) => {
+  const { file, record, tiling } = event.data;
   const start = performance.now();
   try {
     if (
@@ -108,8 +109,11 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         bitmap.close();
       }
     }
+    const compact = header.format === "jpeg" && tiling === "compact";
     if (header.format === "jpeg") {
+      // Sharp maps are always decoded; compact ones only when the JPEG can't be cut.
       const cropped =
+        compact &&
         record.backend === "opfs" &&
         (await cropJPEG(file, header, record.id, async (x, y, tile) => {
           await measuredStore.put(record.id, tileKey(0, x, y), tile);
@@ -117,6 +121,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         }));
       if (cropped) decoder = CUT;
       else {
+        if (compact) decoder = UNCUT;
         // Restart the count: the decode rewrites every level-0 tile.
         done = 0;
         await decodeJPEG(file, header, record.id, record.backend, consume);
@@ -135,7 +140,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       measuredStore,
       record.id,
       progress,
-      header.format === "jpeg" ? "image/jpeg" : "image/png",
+      compact ? "image/jpeg" : "image/png",
     );
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {

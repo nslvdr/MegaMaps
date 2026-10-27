@@ -1,38 +1,42 @@
 import { language } from "../i18n";
 import { listMaps, recordTiles } from "../storage/database";
-import type { MapRecord } from "../types";
-import { CUT, OLDER, UNCUT } from "./jpeg";
-import type { ShrinkReply } from "./shrink.worker";
-function shrink(map: MapRecord, signal: AbortSignal) {
-  return new Promise<ShrinkReply | undefined>((resolve) => {
+import type { Preferences } from "../preferences";
+import { CHAINED_JPEG_PARENTS, CUT, DECODED, PNG_PARENTS, UNCUT } from "./jpeg";
+import type { RetileReply, RetileRequest } from "./retile.worker";
+/** Tile formats a JPEG map can be recut from. Maps that failed once (UNCUT) are left alone. */
+const RECUTTABLE = [DECODED, CHAINED_JPEG_PARENTS, PNG_PARENTS, CUT];
+function retile(request: RetileRequest, signal: AbortSignal) {
+  return new Promise<RetileReply | undefined>((resolve) => {
     if (signal.aborted) return resolve(undefined);
-    const worker = new Worker(new URL("./shrink.worker.ts", import.meta.url), {
+    const worker = new Worker(new URL("./retile.worker.ts", import.meta.url), {
       type: "module",
       name: language,
     });
-    const finish = (reply?: ShrinkReply) => {
+    const finish = (reply?: RetileReply) => {
       worker.terminate();
       signal.removeEventListener("abort", stop);
       resolve(reply);
     };
     const stop = () => finish();
     signal.addEventListener("abort", stop, { once: true });
-    worker.onmessage = (event: MessageEvent<ShrinkReply>) => finish(event.data);
+    worker.onmessage = (event: MessageEvent<RetileReply>) => finish(event.data);
     worker.onerror = () => finish({ type: "error", message: "" });
-    worker.postMessage(map);
+    worker.postMessage(request);
   });
 }
 /**
- * JPEG maps imported before the current tile format are recut in the
- * background, one at a time under the storage lock. It skips busy maps and ends when there is
+ * JPEG maps not in the chosen tiling mode are recut in the background, one at
+ * a time under the storage lock. It skips busy maps and ends when there is
  * nothing left, when another window holds storage, or when stopped. A stopped
- * map keeps working tiles and is shrunk on a later run.
+ * map keeps working tiles and is recut on a later run.
  */
-export function startShrinking(
+export function startRetiling(
+  tiling: Preferences["tiling"],
   busy: (id: string) => boolean,
   /** Files read before a cut can no longer be read once their tiles are replaced. */
   replaced: (id: string) => void,
 ) {
+  const target = tiling === "sharp" ? DECODED : CUT;
   const controller = new AbortController();
   const tried = new Set<string>();
   let mapId: string | undefined;
@@ -42,7 +46,8 @@ export function startShrinking(
         (map) =>
           map.status === "ready" &&
           map.backend === "opfs" &&
-          OLDER.includes(map.decoder ?? "") &&
+          map.decoder !== target &&
+          RECUTTABLE.includes(map.decoder ?? "") &&
           !tried.has(map.id) &&
           !busy(map.id),
       );
@@ -52,16 +57,17 @@ export function startShrinking(
       const reply = await navigator.locks.request(
         "map-viewer-storage",
         { ifAvailable: true },
-        (lock) => (lock ? shrink(map, controller.signal) : undefined),
+        (lock) => (lock ? retile({ map, tiling }, controller.signal) : undefined),
       );
       mapId = undefined;
       if (!reply) return;
-      if (reply.type === "done" && reply.cut) replaced(map.id);
+      const converted = reply.type === "done" && reply.converted;
+      if (converted) replaced(map.id);
       // A failed map keeps its tiles and is not tried again.
       await recordTiles(
         map.id,
-        reply.type === "done" && reply.cut
-          ? { decoder: CUT, tileBytes: reply.tileBytes }
+        converted
+          ? { decoder: target, tileBytes: reply.tileBytes }
           : { decoder: UNCUT, tileBytes: map.tileBytes },
       ).catch(() => {});
     }
