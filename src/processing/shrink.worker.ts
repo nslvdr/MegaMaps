@@ -6,14 +6,15 @@ import { buildParents } from "./tiles";
 export type ShrinkReply =
   | { type: "done"; cut: boolean; tileBytes: number }
   | { type: "error"; message: string };
-// Re-cuts a map imported with decoded or JPEG-parent tiles. Each tile is replaced whole, so a
+// Re-cuts a map imported before the current tile format. Each tile is replaced whole, so a
 // map stopped midway still opens, and a later run starts it again.
 onmessage = async (event: MessageEvent<MapRecord>) => {
   const map = event.data,
     store = payloadStore(map.backend);
-  let tileBytes = 0;
+  // By key: zoomed-out tiles are written twice, PNG then JPEG.
+  const tileSizes = new Map<string, number>();
   const put = async (key: string, tile: Blob) => {
-    tileBytes += tile.size;
+    tileSizes.set(key, tile.size);
     await store.put(map.id, key, tile);
   };
   try {
@@ -35,7 +36,9 @@ onmessage = async (event: MessageEvent<MapRecord>) => {
         },
         map.id,
         () => {},
+        "image/jpeg",
       );
+    const tileBytes = [...tileSizes.values()].reduce((sum, size) => sum + size, 0);
     postMessage({ type: "done", cut, tileBytes } satisfies ShrinkReply);
   } catch (error) {
     postMessage({

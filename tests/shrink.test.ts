@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { listMaps, saveMap } from "../src/storage/database";
 import { startShrinking } from "../src/processing/shrink";
 import type { ShrinkReply } from "../src/processing/shrink.worker";
-import { CUT, DECODED, JPEG_PARENTS, UNCUT } from "../src/processing/jpeg";
+import { CHAINED_JPEG_PARENTS, CUT, DECODED, PNG_PARENTS, UNCUT } from "../src/processing/jpeg";
 import type { MapRecord } from "../src/types";
 
 const map = (id: string, decoder = DECODED): MapRecord => ({
@@ -33,21 +33,22 @@ function fakeWorkers(replies: Record<string, ShrinkReply | undefined>) {
 const decoders = async () =>
   Object.fromEntries((await listMaps()).map((map) => [map.id, [map.decoder, map.tileBytes]]));
 
-test("older and blurry JPEG maps are recut one by one, skipping busy maps and not retrying failures", async () => {
-  for (const record of [map("old"), map("blurry", JPEG_PARENTS), map("cmyk"), map("open"), map("png", "PNG streaming scanlines")])
+test("JPEG maps in an older tile format are recut one by one, skipping busy maps and not retrying failures", async () => {
+  for (const record of [map("old"), map("blurry", CHAINED_JPEG_PARENTS), map("large", PNG_PARENTS), map("cmyk"), map("open"), map("png", "PNG streaming scanlines")])
     await saveMap(record);
   const { sent, terminated } = fakeWorkers({
     old: { type: "done", cut: true, tileBytes: 300 },
     blurry: { type: "done", cut: true, tileBytes: 400 },
+    large: { type: "done", cut: true, tileBytes: 500 },
     cmyk: { type: "done", cut: false, tileBytes: 0 },
   });
   const replaced: string[] = [];
   await startShrinking((id) => id === "open", (id) => replaced.push(id)).done;
-  assert.deepEqual(sent.sort(), ["blurry", "cmyk", "old"]);
-  assert.deepEqual(terminated.sort(), ["blurry", "cmyk", "old"]);
-  assert.deepEqual(replaced.sort(), ["blurry", "old"]);
+  assert.deepEqual(sent.sort(), ["blurry", "cmyk", "large", "old"]);
+  assert.deepEqual(terminated.sort(), ["blurry", "cmyk", "large", "old"]);
+  assert.deepEqual(replaced.sort(), ["blurry", "large", "old"]);
   assert.deepEqual(await decoders(), {
-    old: [CUT, 300], blurry: [CUT, 400], cmyk: [UNCUT, 900], open: [DECODED, 900], png: ["PNG streaming scanlines", 900],
+    old: [CUT, 300], blurry: [CUT, 400], large: [CUT, 500], cmyk: [UNCUT, 900], open: [DECODED, 900], png: ["PNG streaming scanlines", 900],
   });
 });
 

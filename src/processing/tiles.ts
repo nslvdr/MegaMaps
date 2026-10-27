@@ -43,14 +43,16 @@ export function tileBand(
   };
   return consume;
 }
-// Zoomed-out tiles are PNG even for a JPEG map: each level is built from the
-// one below, so JPEG would blur thin lines a little more at every level.
+// Each level is drawn from the sharp PNG level below. A JPEG map then saves
+// each zoomed-out level as JPEG once, after the next level has been drawn
+// from it, so JPEG loss never adds up from level to level.
 export async function buildParents(
   levels: Level[],
   canvas: OffscreenCanvas,
   store: PayloadStore,
   id: string,
   progress: () => void,
+  type: "image/png" | "image/jpeg" = "image/png",
 ) {
   // Parents read one child at a time. No whole intermediate resolution is decoded.
   for (let index = 1; index < levels.length; index++) {
@@ -92,5 +94,36 @@ export async function buildParents(
         );
         progress();
       }
+    if (type === "image/jpeg" && index > 1)
+      await saveAsJPEG(levels[index - 1]!, index - 1, canvas, store, id);
   }
+  if (type === "image/jpeg" && levels.length > 1)
+    await saveAsJPEG(levels.at(-1)!, levels.length - 1, canvas, store, id);
+}
+async function saveAsJPEG(
+  level: Level,
+  index: number,
+  canvas: OffscreenCanvas,
+  store: PayloadStore,
+  id: string,
+) {
+  for (let y = 0; y < level.rows; y++)
+    for (let x = 0; x < level.cols; x++) {
+      const key = tileKey(index, x, y),
+        bitmap = await createImageBitmap(await store.get(id, key));
+      try {
+        if (canvas.width !== bitmap.width) canvas.width = bitmap.width;
+        if (canvas.height !== bitmap.height) canvas.height = bitmap.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.clearRect(0, 0, bitmap.width, bitmap.height);
+        ctx.drawImage(bitmap, 0, 0);
+      } finally {
+        bitmap.close();
+      }
+      await store.put(
+        id,
+        key,
+        await canvas.convertToBlob({ type: "image/jpeg", quality: 0.92 }),
+      );
+    }
 }
