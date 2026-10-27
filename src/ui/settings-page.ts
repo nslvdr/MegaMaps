@@ -9,7 +9,7 @@ import { backupDue, backupSummary, createBackup, readBackup, type Backup } from 
 import { listMaps } from "../storage/database";
 import { storageProtected } from "../storage/protection";
 import { loadSetting, saveSetting } from "../storage/settings";
-import { clearStats, track } from "../stats";
+import { track } from "../stats";
 
 const heading = (text: string) => `<h2 class="settings-heading">${text}</h2>`;
 
@@ -35,8 +35,8 @@ ${note(t("Sets the travel times shown for routes and measured lines on maps with
 ${heading(t("Sharing"))}<div class="share-summary"><label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span><span class="share-row-label">${t("Nickname")}</span><input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
 ${note(t("Appears as “Shared by …” on maps you send."))}
 ${heading(t("Backup"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps from a .megabackup file and keeps the ones already here"))}</div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
-${heading(t("About"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.rotateRight, t("Check for updates"))}${choice("usage-stats", icons.stats, t("Usage stats"), [["on", t("Send")], ["off", t("Don’t send")]])}<div class="share-row"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>
-${note(`${t("Automatic updates install from the main menu while online, then Mega Maps restarts where you left off.")} ${t("No accounts: your maps, places and photos stay on this device.")} ${t("Usage stats count which features are used, with your nickname and type of phone, never place names, notes, photos or positions.")}`)}
+${heading(t("About"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.rotateRight, t("Check for updates"))}<div class="share-row"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>
+${note(`${t("Automatic updates install from the main menu while online, then Mega Maps restarts where you left off.")} ${t("No accounts: your maps, places and photos stay on this device.")}`)}
 <div class="share-summary settings-erase">${row("settings-erase", icons.trash, t("Delete everything"))}</div>
 </section>`;
 
@@ -154,10 +154,6 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
       setPreference("label-distance", select.value as Preferences["label-distance"]);
     } else if (select.name === "update-install") {
       setPreference("update-install", select.value as Preferences["update-install"]);
-    } else if (select.name === "usage-stats") {
-      const stats = select.value as Preferences["usage-stats"];
-      setPreference("usage-stats", stats);
-      if (stats === "off") clearStats();
     }
   });
 

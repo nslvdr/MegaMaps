@@ -1,8 +1,7 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { setPreference } from "../src/preferences";
-import { clearStats, sendStats, startStats, track } from "../src/stats";
+import { sendStats, startStats, track } from "../src/stats";
 import { saveSetting } from "../src/storage/settings";
 
 let online = false;
@@ -44,24 +43,6 @@ test("events wait offline, go out once in one batch, and stay when the server is
   assert.equal(first!.properties.app_version, "2026.10.27");
   assert.equal(first!.properties.distinct_id, second!.properties.distinct_id);
   sent.length = 0;
-});
-
-test("turned off, nothing is recorded, and turning back on starts a new anonymous id", async () => {
-  online = true;
-  track("measure_used");
-  await sendStats();
-  const before = sent[0]!.batch[0]!.properties.distinct_id;
-
-  setPreference("usage-stats", "off");
-  clearStats();
-  track("measure_used");
-  await sendStats();
-  assert.equal(sent.length, 1);
-
-  setPreference("usage-stats", "on");
-  track("measure_used");
-  await sendStats();
-  assert.notEqual(sent[1]!.batch[0]!.properties.distinct_id, before);
 });
 
 test("events name the phone, and the person by their Settings nickname until it's cleared", async () => {
