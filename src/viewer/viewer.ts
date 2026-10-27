@@ -11,6 +11,7 @@ import {
   viewBounds,
   type Camera,
   type Point,
+  type Size,
   cameraAt,
   screenToWorld,
   worldToScreen,
@@ -102,6 +103,8 @@ export class Viewer {
   private covered = 0;
   private dpr = 1;
   private frame = 0;
+  /** Whether the map needs repainting; labels can move without it. */
+  private stale = true;
   private level?: { view: string; level: number };
   private animation = 0;
   // Where the running animation ends, so quick key presses add up.
@@ -179,6 +182,8 @@ export class Viewer {
       },
       { signal: this.controller.signal },
     );
+    // A restored context comes back blank, and label frames don't repaint.
+    canvas.addEventListener("contextrestored", () => this.invalidate(), { signal: this.controller.signal });
     this.observer.observe(canvas);
     const saved = this.navigation.view;
     this.resize();
@@ -251,6 +256,7 @@ export class Viewer {
     if (this.disposed) return;
     cancelAnimationFrame(this.frame);
     this.frame = 0;
+    this.stale = true;
     this.draw(performance.now());
   }
   private async loadBase() {
@@ -362,7 +368,7 @@ export class Viewer {
   }
   // Floating controls can move while the map itself is idle.
   refreshLabels() {
-    this.invalidate();
+    this.requestFrame();
   }
   updateNavigation(state: NavigationState) {
     this.interactions.reset();
@@ -751,7 +757,12 @@ export class Viewer {
       y: this.visible().height / 2,
     }));
   }
+  /** Repaints the map and its labels on the next frame. */
   private invalidate() {
+    this.stale = true;
+    this.requestFrame();
+  }
+  private requestFrame() {
     if (!this.frame && !this.disposed)
       this.frame = requestAnimationFrame((now) => {
         this.frame = 0;
@@ -760,6 +771,30 @@ export class Viewer {
   }
   private draw(now: number) {
     this.turn(now);
+    const viewport = this.viewport();
+    // Cleared first: painting can ask for another frame, which must repaint.
+    if (this.stale) {
+      this.stale = false;
+      this.paint(viewport);
+    }
+    const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
+    this.searchOverlay?.reserve(this.camera, labels);
+    this.overlay?.reserve(this.camera, labels);
+    // The current search result gets space first, then saved items share it.
+    const searchGliding = this.searchOverlay?.draw(this.camera, viewport, labels);
+    // Labels finish gliding to a new spot after the map stops, without
+    // repainting the map beneath them.
+    // Saved names show once zoomed in close; before, only pins.
+    const named = this.camera.scale >= labelZoom(this.limits(), viewport, this.navigation.metresPerPixel);
+    if (this.overlay?.draw(this.camera, viewport, labels, named) || searchGliding) this.requestFrame();
+    if (this.lastFrame && now - this.lastFrame < 100) {
+      this.frameTimes.push(now - this.lastFrame);
+      if (this.frameTimes.length > 120) this.frameTimes.shift();
+    }
+    this.lastFrame = now;
+    this.frames++;
+  }
+  private paint(viewport: Size) {
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#000";
@@ -793,7 +828,6 @@ export class Viewer {
       .filter((t) => (covered ? t.level === level : t.level >= level))
       .sort((a, b) => b.level - a.level);
     // Cached tiles from earlier views stay decoded but are not drawn off screen.
-    const viewport = this.viewport();
     const bounds = viewBounds(this.camera, viewport);
     for (const tile of entries) {
       const scale = this.map.levels[tile.level]!.scale;
@@ -831,21 +865,6 @@ export class Viewer {
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
     }
-    const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
-    this.searchOverlay?.reserve(this.camera, labels);
-    this.overlay?.reserve(this.camera, labels);
-    // The current search result gets space first, then saved items share it.
-    const searchGliding = this.searchOverlay?.draw(this.camera, viewport, labels);
-    // Labels finish gliding to a new spot after the map stops.
-    // Saved names show once zoomed in close; before, only pins.
-    const named = this.camera.scale >= labelZoom(this.limits(), viewport, this.navigation.metresPerPixel);
-    if (this.overlay?.draw(this.camera, viewport, labels, named) || searchGliding) this.invalidate();
-    if (this.lastFrame && now - this.lastFrame < 100) {
-      this.frameTimes.push(now - this.lastFrame);
-      if (this.frameTimes.length > 120) this.frameTimes.shift();
-    }
-    this.lastFrame = now;
-    this.frames++;
   }
   // Useful for device profiling; byte counts exclude browser/GPU/encoder overhead.
   diagnostics() {
