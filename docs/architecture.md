@@ -27,6 +27,7 @@ Benchmark baselines are in `docs/*-results.json`. Node RSS includes the test har
 - The camera saves only after resting for 2 s, so a moving or compass-turned map doesn't write several times a second.
 - The service worker gets the whole shell before writing any of it, so a partial shell never activates. Map bytes never come from the network.
 - An update copies each file an earlier version already holds, but only when its bytes hash to the new build's SHA-256; otherwise it downloads. The OCR models and runtime are 27 of the shell's 28 MB and rarely change.
+- A page opened before an update keeps running under the new worker. The version just before keeps the hashed `/assets/` files that the new one renamed, so that page can still start its workers offline. Those files go at the next update.
 
 ## OCR
 

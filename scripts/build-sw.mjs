@@ -106,9 +106,38 @@ self.addEventListener('install', event => {
     await self.skipWaiting();
   })());
 });
+// A page opened before an update keeps running and may still start its own
+// workers, whose hashed files this version renamed. The version just before
+// keeps only those files, until the next update; older versions go.
+function earlierShells(keys) {
+  return keys.filter(name => name.startsWith('map-viewer-shell-') && name !== CACHE);
+}
+async function keepRenamed(name) {
+  try {
+    const cache = await caches.open(name);
+    let left = 0;
+    for (const request of await cache.keys()) {
+      const path = new URL(request.url, self.location.origin).pathname;
+      if (path.startsWith('/assets/') && !ASSETS.includes(path)) left++;
+      else await cache.delete(request);
+    }
+    if (left) return;
+  } catch {}
+  await caches.delete(name);
+}
+async function renamedAsset(path) {
+  for (const name of earlierShells(await caches.keys())) {
+    const response = await (await caches.open(name)).match(path);
+    if (response) return response;
+  }
+}
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key.startsWith('map-viewer-shell-') && key !== CACHE) await caches.delete(key);
+    // Caches list in the order they were made, so the last is the version just before.
+    const earlier = earlierShells(await caches.keys());
+    const previous = earlier.pop();
+    for (const key of earlier) await caches.delete(key);
+    if (previous) await keepRenamed(previous);
     await self.clients.claim();
   })());
 });
@@ -138,6 +167,8 @@ self.addEventListener('fetch', event => {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(SHELL)).then(response => response ? clean(response) : fetch(request)));
   } else if (ASSETS.includes(url.pathname)) {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(url.pathname)).then(response => response || fetch(request)));
+  } else if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(renamedAsset(url.pathname).catch(() => undefined).then(response => response || fetch(request)));
   }
 });
 `;
