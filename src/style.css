@@ -371,20 +371,13 @@ small {
   height: 44px;
 }
 .map-more:hover,
-.map-more:active,
-.map-more[aria-expanded="true"] {
+.map-more:active {
   color: var(--neon-saved);
   background: color-mix(in srgb, var(--neon-saved) 12%, #000);
 }
 .map-more svg {
   width: 20px;
   height: 20px;
-}
-/* Library card menu: same look as the viewer's row menus, pinned to the viewport. */
-.map-menu {
-  position: fixed;
-  --glass-line: rgb(255 255 255 / 0.16);
-  --fill-strong: rgb(255 255 255 / 0.13);
 }
 .empty {
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
@@ -1314,6 +1307,98 @@ dialog .dialog-error {
 }
 dialog > button {
   width: 100%;
+}
+
+/* ⋯ actions: what they act on, then the actions, then Delete apart. */
+.action-sheet {
+  --accent: var(--neon-saved);
+  padding: 0;
+}
+/* Fills the dialog, so a tap that reaches the dialog itself fell on the backdrop. */
+.action-sheet-body {
+  padding: var(--surface-padding);
+}
+.action-sheet .dialog-header {
+  align-items: center;
+  gap: var(--space-12);
+}
+.action-sheet-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  color: var(--muted);
+}
+.action-sheet-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.action-sheet-title {
+  flex: 1;
+  min-width: 0;
+}
+.action-sheet h2 {
+  font-size: var(--font-size-body);
+  line-height: 1.3;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-sheet-title small {
+  display: block;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-sheet-list {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.action-sheet-list:empty {
+  display: none;
+}
+.action-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 52px;
+  padding: var(--space-8) var(--space-16);
+  background: none;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  text-align: left;
+}
+.action-sheet-item + .action-sheet-item {
+  border-top: 1px solid var(--line);
+}
+.action-sheet-item svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+.action-sheet-item:active:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+@media (hover: hover) {
+  .action-sheet-item:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+}
+.action-sheet .danger {
+  width: 100%;
+}
+.action-sheet-list + .danger {
+  margin-top: var(--space-12);
 }
 #message-dialog .primary {
   margin-top: var(--space-8);
@@ -3313,10 +3398,6 @@ label.panel-row {
   width: 20px;
   height: 20px;
 }
-.row-more[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--c) 18%, transparent);
-  color: var(--c);
-}
 /* With a mouse, show which row and which pill button a click will hit. */
 @media (hover: hover) {
   .row-more:hover:not([aria-expanded="true"]) { background: #ffffff12; color: var(--text); }
@@ -3398,36 +3479,10 @@ label.panel-row {
 .popover-item[aria-checked="true"] .popover-check {
   visibility: visible;
 }
-/* A plain row like the others, not the bordered, centered .danger pill. */
-.popover-item.danger {
-  justify-content: flex-start;
-  margin-top: var(--space-8);
-  border: 0;
-  padding: var(--row-padding);
-  background: none;
-  color: var(--danger);
-}
-.popover-item.danger:active:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-}
 @media (hover: hover) {
   .popover-item:hover:not(:disabled) {
     background: var(--fill-strong);
   }
-  .popover-item.danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 14%, transparent);
-  }
-}
-.popover-item.danger svg {
-  color: currentColor;
-}
-.popover-item.danger:before {
-  content: "";
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  top: -4px;
-  border-top: 1px solid var(--line);
 }
 .empty-list {
   margin: 0;

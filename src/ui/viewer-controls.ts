@@ -39,6 +39,7 @@ import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
 import { wheelChoice, type WheelChoice } from "./hold-wheel";
+import { showActionSheet } from "./action-sheet";
 import { popoverPosition } from "./popover-position";
 import {
   normalizeText,
@@ -183,6 +184,7 @@ export class ViewerControls {
   private rowMenu?: string;
   private rowMenuAnchor?: HTMLElement;
   private rowPopover?: HTMLElement;
+  private rowSheet?: HTMLDialogElement;
   /** How Saved lists places and routes, kept for the device. */
   private placeOrder = preference("place-order");
   private routeOrder = preference("route-order");
@@ -1370,7 +1372,7 @@ export class ViewerControls {
     this.on(document, "pointerdown", (event) => {
       if (!this.rowMenu) return;
       const target = event.target as Element | null;
-      if (target?.closest?.(".row-popover, .row-more, .section-menu")) return;
+      if (target?.closest?.(".row-popover, .row-more, .section-menu, .action-sheet")) return;
       this.closeRowMenu();
     });
     this.on(this.root.querySelector(".sheet-content")!, "scroll", () =>
@@ -1985,54 +1987,29 @@ export class ViewerControls {
       this.viewer?.pulse?.(options.key);
       this.sheet(undefined);
     });
-    const open = this.rowMenu === options.key;
     const toggle = document.createElement("button");
     toggle.className = "row-more";
     toggle.innerHTML = icons.more;
     toggle.setAttribute("aria-label", t("Actions for {name}", { name: options.label }));
-    toggle.setAttribute("aria-haspopup", "menu");
-    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-haspopup", "dialog");
     toggle.addEventListener("click", () => {
-      const wasOpen = this.rowMenu === options.key;
       this.closeRowMenu();
-      if (wasOpen) return;
       this.rowMenu = options.key;
-      showMenu();
-      this.positionRowMenu();
+      const sheet = this.rowSheet = showActionSheet(this.root, {
+        title: options.label,
+        detail: options.meta,
+        icon: options.icon,
+        actions: options.actions.map((extra) => extra.danger
+          ? { ...extra, label: this.deleteLabel(options.key), stay: true }
+          : extra),
+      });
+      sheet.addEventListener("close", () => {
+        if (this.rowSheet === sheet) this.closeRowMenu();
+      });
     });
     main.append(button, toggle);
     row.append(main);
     container.append(row);
-    // Render outside the scrolling list so overflow cannot clip the actions.
-    const showMenu = () => {
-      const menu = document.createElement("div");
-      menu.id = "saved-row-menu";
-      this.rowPopover = menu;
-      this.rowMenuAnchor = toggle;
-      toggle.setAttribute("aria-expanded", "true");
-      toggle.setAttribute("aria-controls", menu.id);
-      menu.className = "row-popover";
-      menu.setAttribute("role", "menu");
-      menu.setAttribute("aria-label", options.label);
-      for (const extra of options.actions) {
-        const action = document.createElement("button");
-        action.className = extra.danger ? "popover-item danger" : "popover-item";
-        action.setAttribute("role", "menuitem");
-        const label = document.createElement("span");
-        label.textContent = extra.danger
-          ? this.deleteLabel(options.key)
-          : extra.label;
-        action.innerHTML = extra.icon;
-        action.append(label);
-        action.addEventListener("click", () => {
-          if (!extra.danger) this.closeRowMenu();
-          extra.action();
-        });
-        menu.append(action);
-      }
-      this.root.append(menu);
-    };
-    if (open) showMenu();
   }
   // A section's menu: an order, picked once, and for places the kinds to show, several at a time.
   private savedMenu(id: "routes-order" | "places-order") {
@@ -2105,8 +2082,10 @@ export class ViewerControls {
   // Dismiss without rebuilding rows: pointerdown must not remove the pending click target.
   private closeRowMenu() {
     if (!this.rowMenu && !this.rowPopover) return;
-    const anchor = this.rowMenuAnchor;
+    const anchor = this.rowMenuAnchor, sheet = this.rowSheet;
     this.rowPopover?.remove();
+    this.rowSheet = undefined;
+    sheet?.close();
     anchor?.setAttribute("aria-expanded", "false");
     anchor?.removeAttribute("aria-controls");
     this.rowMenu = undefined;
@@ -2135,17 +2114,18 @@ export class ViewerControls {
   }
   // Two taps to delete: the first arms the button for a few seconds.
   private confirmDelete(key: string, action: () => void) {
-    // Keep the menu and scrolled list in place while arming or expiring Delete.
+    // Keep the sheet and scrolled list in place while arming or expiring Delete.
     const updateLabel = () => {
       if (this.rowMenu !== key) return;
-      const label = this.rowPopover?.querySelector(".danger span");
-      if (label) label.textContent = this.deleteLabel(key);
-      this.positionRowMenu();
+      const button = this.rowSheet?.querySelector(".danger");
+      button?.classList.toggle("armed", this.confirming === key);
+      if (button) button.querySelector("span")!.textContent = this.deleteLabel(key);
     };
     return () => {
       if (this.confirming === key) {
         clearTimeout(this.confirmTimer);
         this.confirming = undefined;
+        this.closeRowMenu();
         action();
         return;
       }
@@ -2262,7 +2242,6 @@ export class ViewerControls {
             icon: icons.trash,
             danger: true,
             action: this.confirmDelete(marker.id, () => {
-              this.rowMenu = undefined;
               const index = this.state.markers.indexOf(marker);
               this.state.markers = this.state.markers.filter(
                 (m) => m.id !== marker.id,
@@ -2301,7 +2280,6 @@ export class ViewerControls {
             icon: icons.trash,
             danger: true,
             action: this.confirmDelete(route.id, () => {
-              this.rowMenu = undefined;
               this.deleteRoute(route);
             }),
           },
@@ -2328,7 +2306,6 @@ export class ViewerControls {
           icon: icons.trash,
           danger: true,
           action: this.confirmDelete(trip.id, () => {
-            this.rowMenu = undefined;
             const index = this.state.trips.indexOf(trip);
             this.state.trips = this.state.trips.filter((other) => other.id !== trip.id);
             if (this.viewingTrip === trip.id) this.dialog("trip-dialog").close();

@@ -24,20 +24,25 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     value: window,
     configurable: true,
   });
-  // Linkedom supplies DOM/events but not native modal-dialog behavior.
-  for (const dialog of document.querySelectorAll("dialog")) {
-    for (const method of ["show", "showModal"])
-      Object.defineProperty(dialog, method, {
-        value: () => dialog.setAttribute("open", ""),
-      });
-    Object.defineProperty(dialog, "close", {
-      value: () => {
-        if (!dialog.hasAttribute("open")) return;
-        dialog.removeAttribute("open");
-        dialog.dispatchEvent(new window.Event("close"));
+  // Linkedom supplies DOM/events but no dialog element, so every element,
+  // including the dialogs made later, gets native modal-dialog behavior.
+  const open = { value(this: HTMLElement) { this.setAttribute("open", ""); }, configurable: true };
+  Object.defineProperties(window.HTMLElement.prototype, {
+    show: open,
+    showModal: open,
+    close: {
+      value(this: HTMLElement) {
+        if (!this.hasAttribute("open")) return;
+        this.removeAttribute("open");
+        this.dispatchEvent(new window.Event("close"));
       },
-    });
-  }
+      configurable: true,
+    },
+  });
+  t.after(() => {
+    for (const method of ["show", "showModal", "close"])
+      delete (window.HTMLElement.prototype as unknown as Record<string, unknown>)[method];
+  });
   const root = document.querySelector<HTMLElement>("#viewer")!;
   const focus = t.mock.method(window.HTMLElement.prototype, "focus");
   // Linkedom has no text selection either.
@@ -603,8 +608,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       "#7dff8a",
       "the row shows the entrance pin as drawn on the map",
     );
-    // A row's actions stay tucked behind ⋯, in a small floating menu.
-    const popover = () => root.querySelector<HTMLElement>(".row-popover");
+    // A row's actions stay tucked behind ⋯, in a small sheet.
+    const popover = () => root.querySelector<HTMLElement>(".action-sheet[open]");
+    const actions = () => [...popover()!.querySelectorAll<HTMLButtonElement>(".action-sheet-item, .danger")];
     const placeMore = () =>
       el("marker-list").querySelector<HTMLButtonElement>(".row-more")!;
     click("open-saved");
@@ -627,31 +633,25 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       root,
       "the menu escapes the scroll container's clipping",
     );
-    assert.equal(popover()?.getAttribute("role"), "menu");
+    assert.equal(popover()!.querySelector("h2")!.textContent, "<Entrance>", "the sheet names what it acts on");
     assert.deepEqual(
-      [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
+      actions().map((b) => b.textContent),
       ["Edit", "Move", "Share", "Delete"],
     );
-    assert.equal(placeMore().getAttribute("aria-expanded"), "true");
-    [...popover()!.querySelectorAll("button")].find((button) => button.textContent === "Share")!
+    actions().find((button) => button.textContent === "Share")!
       .dispatchEvent(new window.Event("click"));
     assert.deepEqual(shares.at(-1), { kind: "marker", id: state.markers[0]!.id });
     assert.equal(state.markers.length, 1, "sharing does not modify the selected place");
+    assert.equal(popover(), null, "an action closes the sheet");
     placeMore().dispatchEvent(new window.Event("click"));
-    // Tapping elsewhere closes it; so does Back, before the panel.
-    document.body.dispatchEvent(
-      new window.Event("pointerdown", { bubbles: true }),
-    );
+    // Tapping the backdrop closes it.
+    popover()!.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    assert.notEqual(popover(), null, "pressing the sheet does not close it before its click");
+    popover()!.dispatchEvent(new window.Event("click"));
     assert.equal(popover(), null);
-    assert.equal(
-      placeMore(),
-      originalMore,
-      "outside pointerdown must not replace pending click targets",
-    );
-    placeMore().dispatchEvent(new window.Event("click"));
+    assert.equal(placeMore(), originalMore, "closing the sheet keeps the rows intact");
     const jump = el("marker-list").querySelector<HTMLButtonElement>(".navigation-jump")!;
     jump.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
-    assert.equal(popover(), null);
     assert.equal(jump.isConnected, true);
     jump.dispatchEvent(new window.Event("click"));
     assert.equal(
@@ -667,14 +667,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("marker-cancel");
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
-    root
-      .querySelector(".sheet-content")!
-      .dispatchEvent(new window.Event("scroll"));
-    assert.equal(
-      popover(),
-      null,
-      "scrolling dismisses the menu instead of leaving it at a stale position",
-    );
+    popover()!.querySelector(".dialog-close")!.dispatchEvent(new window.Event("click"));
+    assert.equal(popover(), null, "the ✕ closes the sheet");
     placeMore().dispatchEvent(new window.Event("click"));
     window.dispatchEvent(new window.Event("resize"));
     assert.equal(popover(), null, "rotation/resize dismisses the menu");
@@ -685,7 +679,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
 
     // Move lifts the pin: tap (or drag) where it goes; × puts it back.
     placeMore().dispatchEvent(new window.Event("click"));
-    popover()!.querySelectorAll("button")[1]!.dispatchEvent(new window.Event("click"));
+    actions()[1]!.dispatchEvent(new window.Event("click"));
     assert.equal(root.dataset.tool, "move");
     assert.equal(tools.at(-1), "move");
     assert.equal(sheet.hidden, true);
@@ -706,7 +700,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(root.dataset.tool, "browse");
     click("open-saved");
     placeMore().dispatchEvent(new window.Event("click"));
-    popover()!.querySelectorAll("button")[1]!.dispatchEvent(new window.Event("click"));
+    actions()[1]!.dispatchEvent(new window.Event("click"));
     tap(700, 800);
     click("tool-done");
     assert.deepEqual(state.markers[0]?.point, { x: 700, y: 800 });
@@ -765,7 +759,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
       el("route-list")
         .querySelector(".row-more")!
         .dispatchEvent(new window.Event("click"));
-      [...popover()!.querySelectorAll("button")]
+      actions()
         .find((b) => b.textContent === "Edit points")!
         .dispatchEvent(new window.Event("click"));
     };
@@ -819,16 +813,13 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Edit uses the place form, delete needs two taps; all behind ⋯.
     const openMenu = () => {
       const more = el("route-list").querySelector<HTMLButtonElement>(".row-more")!;
-      if (more.getAttribute("aria-expanded") !== "true")
-        more.dispatchEvent(new window.Event("click"));
+      if (!popover()) more.dispatchEvent(new window.Event("click"));
     };
     const rowButton = (label: RegExp) =>
-      [...popover()!.querySelectorAll("button")].find((b) =>
-        label.test(b.textContent!),
-      )!;
+      actions().find((b) => label.test(b.textContent!))!;
     openMenu();
     assert.deepEqual(
-      [...popover()!.querySelectorAll("button")].map((b) => b.textContent),
+      actions().map((b) => b.textContent),
       ["Edit", "Edit points", "Share", "Delete"],
     );
     rowButton(/^Share$/).dispatchEvent(new window.Event("click"));
@@ -860,8 +851,9 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(
       popover(),
       deleteMenu,
-      "confirmation keeps the same menu in place",
+      "confirmation keeps the same sheet in place",
     );
+    assert.ok(rowButton(/Tap again/).classList.contains("armed"), "an armed Delete fills red");
     assert.equal(
       el("route-list").firstElementChild,
       routeRow,
@@ -886,6 +878,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     );
     rowButton(/Tap again/).dispatchEvent(new window.Event("click"));
     assert.equal(state.routes.length, 0);
+    assert.equal(popover(), null, "deleting closes the sheet");
     assert.equal(el("toast").textContent, "Exit plan deleted");
 
     // Layers hide/show and the highlight briefly reveals everything.
