@@ -21,7 +21,7 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText } from "./ocr/detect";
 import { initMapRename, mapRenameMarkup } from "./ui/map-rename";
-import { initMapMenu } from "./ui/map-menu";
+import { showActionSheet } from "./ui/action-sheet";
 import { initSharing, sharingMarkup } from "./ui/sharing";
 import { initUpdateDialog, updateDialogMarkup } from "./ui/update-dialog";
 import { eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "./ui/settings-page";
@@ -71,7 +71,6 @@ const progressDialog = element<HTMLDialogElement>("progress-dialog");
 const messageDialog = element<HTMLDialogElement>("message-dialog");
 const deleteDialog = element<HTMLDialogElement>("delete-dialog");
 const advancedDialog = element<HTMLDialogElement>("advanced-map-dialog");
-const mapMenu = initMapMenu();
 let selectedMap: MapRecord | undefined;
 let ocrJob:
   | {
@@ -406,7 +405,6 @@ async function refresh() {
   // Behind an open map the grid is unseen; going home renders it afresh.
   if (home.hidden) return;
   void showBackupReminder();
-  mapMenu.close();
   grid.replaceChildren();
   element("empty").hidden = maps.length > 0;
   element("map-count").textContent = `${maps.length}`;
@@ -416,7 +414,7 @@ async function refresh() {
     const card = document.createElement("article");
     card.className = "map-card";
     card.dataset.map = map.id;
-    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="menu" aria-expanded="false">${icons.more}</button>`;
+    card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="dialog">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
     // What's on a map is what tells two maps apart; when it was last used
     // (which is also the list's order) and its size follow. On narrow
@@ -450,26 +448,31 @@ async function refresh() {
       void openMap(map);
     });
     more.addEventListener("click", () =>
-      mapMenu.toggle(more, name, [
-        { label: t("Share"), icon: icons.share, action: () => { void shareMap(map); } },
-        { label: t("Rename"), icon: icons.edit, action: () => openRenameMap(map) },
-        {
-          label: t("Advanced settings"),
-          icon: icons.tools,
-          action: () => {
-            selectedMap = map;
-            element("ocr-status").textContent = t("Checking text detection…");
-            showDialog(advancedDialog);
-            void renderOcrSettings();
+      showActionSheet(document.body, {
+        title: name,
+        detail: saved.textContent?.trim() || undefined,
+        icon: card.querySelector(".thumbnail img")?.cloneNode() ?? icons.map,
+        actions: [
+          { label: t("Share"), icon: icons.share, action: () => { void shareMap(map); } },
+          { label: t("Rename"), icon: icons.edit, action: () => openRenameMap(map) },
+          {
+            label: t("Advanced settings"),
+            icon: icons.tools,
+            action: () => {
+              selectedMap = map;
+              element("ocr-status").textContent = t("Checking text detection…");
+              showDialog(advancedDialog);
+              void renderOcrSettings();
+            },
           },
-        },
-        {
-          label: t("Delete"),
-          icon: icons.trash,
-          danger: true,
-          action: () => confirmDelete(map),
-        },
-      ]),
+          {
+            label: t("Delete"),
+            icon: icons.trash,
+            danger: true,
+            action: () => confirmDelete(map),
+          },
+        ],
+      }),
     );
     grid.append(card);
     const showThumbnail = async (url: string) => {
