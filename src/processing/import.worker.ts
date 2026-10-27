@@ -128,14 +128,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         else throw error;
       }
     } else await native();
-    await buildParents(
-      levels,
-      canvas,
-      measuredStore,
-      record.id,
-      progress,
-      header.format === "jpeg" ? "image/jpeg" : "image/png",
-    );
+    await buildParents(levels, canvas, measuredStore, record.id, progress);
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {
       ...record,

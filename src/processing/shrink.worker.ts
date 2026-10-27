@@ -6,7 +6,7 @@ import { buildParents } from "./tiles";
 export type ShrinkReply =
   | { type: "done"; cut: boolean; tileBytes: number }
   | { type: "error"; message: string };
-// Re-cuts a map imported with PNG tiles. Each tile is replaced whole, so a
+// Re-cuts a map imported with decoded or JPEG-parent tiles. Each tile is replaced whole, so a
 // map stopped midway still opens, and a later run starts it again.
 onmessage = async (event: MessageEvent<MapRecord>) => {
   const map = event.data,
@@ -35,7 +35,6 @@ onmessage = async (event: MessageEvent<MapRecord>) => {
         },
         map.id,
         () => {},
-        "image/jpeg",
       );
     postMessage({ type: "done", cut, tileBytes } satisfies ShrinkReply);
   } catch (error) {

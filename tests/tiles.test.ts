@@ -375,7 +375,7 @@ test("CMYK JPEGs are not cut, so import decodes them instead", async () => {
   assert.equal(fixture.tiles.size, 0);
 });
 
-test("JPEG parent tiles keep an odd-width edge in colour, not darkened", async () => {
+test("parent tiles are lossless PNG with an odd-width edge fully opaque", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "map-viewer-parents-"));
   await installPlatform(root);
   try {
@@ -393,15 +393,15 @@ test("JPEG parent tiles keep an odd-width edge in colour, not darkened", async (
       );
     }
     const canvas = new OffscreenCanvas(1, 1);
-    await buildParents(levels, canvas, store, "edge", () => {}, "image/jpeg");
+    await buildParents(levels, canvas, store, "edge", () => {});
     const tile = await store.get("edge", tileKey(1, 1, 0)),
       bytes = new Uint8Array(await tile.arrayBuffer());
-    assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xd8]);
+    // PNG, not JPEG: lossy parents of parents blur thin lines when zoomed out.
+    assert.deepEqual([...bytes.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
     const image = await loadImage(Buffer.from(bytes)),
       pixel = createCanvas(1, 1).getContext("2d");
     pixel.drawImage(image, 0, 0);
-    const [, g, b] = pixel.getImageData(0, 0, 1, 1).data;
-    assert.ok(Math.abs(g! - 0x44) < 8 && Math.abs(b! - 0x88) < 8);
+    assert.deepEqual([...pixel.getImageData(0, 0, 1, 1).data], [0x00, 0x44, 0x88, 0xff]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
