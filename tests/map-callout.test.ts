@@ -10,6 +10,8 @@ import { SearchOverlay } from "../src/viewer/search-overlay";
 import { MapCallout } from "../src/viewer/map-callout";
 import type { Point } from "../src/viewer/camera";
 
+const pinRoom = (tip: Point): CalloutBounds => ({ left: tip.x - 12, right: tip.x + 12, top: tip.y - 30, bottom: tip.y + 2 });
+
 test("saved places and routes have typed callouts that follow their anchors and retain layer/edit controls", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);
@@ -52,10 +54,11 @@ test("saved places and routes have typed callouts that follow their anchors and 
     const anchor = worldToScreen(camera, marker.point);
     const endpoint = { x: position[0]! + Number(connector.getAttribute("x2")),
       y: position[1]! + Number(connector.getAttribute("y2")) };
-    assert.ok(Math.abs(endpoint.x - anchor.x) <= 12 + 1e-9);
-    assert.ok(Math.abs(endpoint.y - anchor.y) <= 12 + 1e-9);
-    assert.ok(Math.abs(Math.max(Math.abs(endpoint.x - anchor.x), Math.abs(endpoint.y - anchor.y)) - 12) < 1e-9,
-      "the leader reaches the anchor edge from whichever direction has space");
+    // A teardrop pin rises from its tip on the place: 12px around its head, 18px above.
+    const pin = pinRoom(anchor);
+    const edges = [endpoint.x - pin.left, pin.right - endpoint.x, endpoint.y - pin.top, pin.bottom - endpoint.y];
+    assert.ok(edges.every(edge => edge >= -1e-9) && edges.some(edge => Math.abs(edge) < 1e-9),
+      "the leader reaches the pin's edge from whichever direction has space");
     assert.ok(callout.classList.contains("overlay-label"), "Names controls the complete callout");
   }
   const boxes = callouts.map(callout => {
@@ -68,8 +71,7 @@ test("saved places and routes have typed callouts that follow their anchors and 
     for (const other of boxes.slice(index + 1)) assert.equal(boundsOverlap(box, other), false);
     for (const marker of state.markers) {
       const p = worldToScreen(camera, marker.point);
-      assert.equal(boundsOverlap(box, { left: p.x - 12, right: p.x + 12,
-        top: p.y - 12, bottom: p.y + 12 }), false, "labels never cover another saved point");
+      assert.equal(boundsOverlap(box, pinRoom(p)), false, "labels never cover another saved pin");
     }
   }
   assert.ok(!svg.querySelector("landmark"), "saved names remain literal text");

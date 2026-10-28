@@ -2458,13 +2458,11 @@ dialog.place-card::backdrop {
   gap: var(--space-12);
   min-width: 0;
 }
-/* The water rim reaches past the pin's box; the margin keeps it inside. */
 .kind-current svg {
   flex-shrink: 0;
   width: 32px;
   height: 32px;
   margin: calc(32px / 6);
-  overflow: visible;
 }
 /* Spelled out in the pin's colour so the choice reads as changeable; like
    the settings rows, a chevron pointing on says it opens something. */
@@ -2561,13 +2559,10 @@ dialog.place-card::backdrop {
     background-color 0.15s,
     border-color 0.15s;
 }
-/* The water rim reaches 4 of 24 units past the box on each side; the margin
-   makes room for it so the whole pin sits centred above its name. */
 .level-step svg {
   width: 28px;
   height: 28px;
   margin: calc(28px / 6);
-  overflow: visible;
 }
 .level-step[aria-pressed="true"] {
   border-color: var(--level);

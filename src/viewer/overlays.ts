@@ -1,6 +1,6 @@
 import { worldToScreen, type Camera, type Point, type Size } from "./camera";
 import { icons, markerCalloutIcon } from "../ui/icons";
-import { PIN_CASING, placeIcon } from "../ui/place-icon";
+import { PIN_CASING, PLACE_PIN, placeIcon } from "../ui/place-icon";
 import { MapCallout } from "./map-callout";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
@@ -24,17 +24,24 @@ const node = <K extends keyof SVGElementTagNameMap>(
 export const CASING = PIN_CASING;
 
 // Pin containers retain their animation and position while sharing library icons.
-const pinIcon = (body: SVGGElement, markup: string, size: number) => {
+// The anchor is the icon's point that sits on the map point: its centre, or a teardrop's tip.
+const pinIcon = (body: SVGGElement, markup: string, size: number, anchor = { x: size / 2, y: size / 2 }) => {
   body.innerHTML = markup;
   const icon = body.querySelector("svg")!;
-  icon.setAttribute("x", String(-size / 2));
-  icon.setAttribute("y", String(-size / 2));
+  icon.setAttribute("x", String(-anchor.x));
+  icon.setAttribute("y", String(-anchor.y));
   icon.setAttribute("width", String(size));
   icon.setAttribute("height", String(size));
   icon.style.width = `${size}px`;
   icon.style.height = `${size}px`;
   icon.style.overflow = "visible";
   return icon;
+};
+/** A place pin's room on screen: its head, `padding` around, down to the tip at `tip`.
+ * Raised pins (selected or moving) are drawn half again as large. */
+const pinBounds = (tip: Point, padding: number, raised: boolean): CalloutBounds => {
+  const head = tip.y - PLACE_PIN.head * (raised ? 1.5 : 1);
+  return { left: tip.x - padding, right: tip.x + padding, top: head - padding, bottom: tip.y + 2 };
 };
 type Layer = keyof Layers;
 interface PathItem {
@@ -290,7 +297,7 @@ export class NavigationOverlay {
       }
     }
     const placeBody = (body: SVGGElement, kind: MapMarker["kind"], levels?: Pick<MapMarker, "water" | "danger">) => {
-      pinIcon(body, placeIcon(kind, levels), 24);
+      pinIcon(body, placeIcon(kind, levels), PLACE_PIN.size, PLACE_PIN.tip);
     };
     const places = group("places");
     for (const marker of state.markers) {
@@ -345,23 +352,24 @@ export class NavigationOverlay {
   // Reserve every visible pin and route vertex before placing any label.
   reserve(camera: Camera, layout: CalloutLayout) {
     this.anchors = [];
-    const reservePoint = (point: Point, padding: number) => {
-      const p = worldToScreen(camera, point);
-      const bounds = { left: p.x - padding, right: p.x + padding,
-        top: p.y - padding, bottom: p.y + padding };
+    const reserve = (bounds: CalloutBounds) => {
       this.anchors.push(bounds);
       layout.addObstacle(bounds);
     };
+    const reservePoint = (point: Point, padding: number) => {
+      const p = worldToScreen(camera, point);
+      reserve({ left: p.x - padding, right: p.x + padding, top: p.y - padding, bottom: p.y + padding });
+    };
     if (this.visible("places"))
-      for (const marker of this.state?.markers ?? [])
-        // A water ring widens the pin a little; keep labels off it too.
-        reservePoint(marker.point, (marker.id === this.moving || marker.id === this.selected ? 18 : 12) +
-          (marker.water && marker.kind === "flooded" ? 4 : 0));
+      for (const marker of this.state?.markers ?? []) {
+        const raised = marker.id === this.moving || marker.id === this.selected;
+        reserve(pinBounds(worldToScreen(camera, marker.point), raised ? 18 : 12, raised));
+      }
     if (this.visible("routes"))
       for (const route of this.state?.routes ?? [])
         for (const point of route.points)
           reservePoint(point, route.id === this.editing ? 10 : 8);
-    if (this.preview) reservePoint(this.preview.point, 18);
+    if (this.preview) reserve(pinBounds(worldToScreen(camera, this.preview.point), 18, true));
     for (const point of this.measure ?? []) reservePoint(point, 10);
     for (const point of this.trip ?? []) reservePoint(point, 8);
   }
@@ -412,13 +420,13 @@ export class NavigationOverlay {
         continue;
       }
       const p = worldToScreen(camera, point);
-      let bounds = {
+      let bounds = markerId ? pinBounds(p, padding, priority > 0) : {
         left: p.x - padding, right: p.x + padding,
         top: p.y - padding, bottom: p.y + padding,
       };
       // A route can start on a place: connect outside the combined symbols.
-      // Anchors reach at most 36px from a pin, so one this far out has none.
-      if (p.x >= -40 && p.y >= -40 && p.x <= viewport.width + 40 && p.y <= viewport.height + 40)
+      // Anchors reach at most 45px above a pin's tip, so one this far out has none.
+      if (p.x >= -40 && p.y >= -40 && p.x <= viewport.width + 40 && p.y <= viewport.height + 48)
         for (const anchor of this.anchors)
           if (p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
             bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),

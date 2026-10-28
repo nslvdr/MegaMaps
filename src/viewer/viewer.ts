@@ -31,6 +31,7 @@ import {
   type PlannedRoute,
 } from "./navigation";
 import { NavigationOverlay } from "./overlays";
+import { PLACE_PIN } from "../ui/place-icon";
 import {
   darkMode,
   measureTone,
@@ -88,7 +89,8 @@ export class Viewer {
   private tool: Tool = "browse";
   /** The route being edited or the place being moved. */
   private target?: string;
-  private dragging?: { point: Point; from: Point };
+  // Where the finger held the point, so it moves with the finger instead of jumping under it.
+  private dragging?: { point: Point; from: Point; offset: Point };
   /** The points of the line being measured, or of the scale being set. */
   private measure?: Point[];
   private tone?: MapTone;
@@ -587,13 +589,18 @@ export class Viewer {
     const p = worldToScreen(this.camera, target);
     return Math.hypot(p.x - screen.x, p.y - screen.y);
   }
+  // A place's pin is its teardrop's head, above the point it marks; `scale` for a lifted pin.
+  private nearPin(place: MapMarker, screen: Point, scale = 1) {
+    const p = worldToScreen(this.camera, place.point);
+    return Math.hypot(p.x - screen.x, p.y - PLACE_PIN.head * scale - screen.y);
+  }
   // A visible place within reach; where pins crowd, the closest one wins.
   private nearestPlace(screen: Point) {
     if (!this.navigation.layers.places) return undefined;
     let nearest: MapMarker | undefined,
       best = 24;
     for (const marker of this.navigation.markers) {
-      const distance = this.near(marker.point, screen);
+      const distance = this.nearPin(marker, screen);
       if (distance < best) [nearest, best] = [marker, distance];
     }
     return nearest;
@@ -629,7 +636,7 @@ export class Viewer {
     });
     if (this.tool === "move") {
       const marker = markers.find((m) => m.id === this.target);
-      if (marker && this.near(marker.point, screen) < 36)
+      if (marker && this.nearPin(marker, screen, 1.5) < 36)
         found = { point: marker.point, replace: (p) => (marker.point = p) };
     }
     return found;
@@ -641,14 +648,15 @@ export class Viewer {
     // Its own copy, so a route point snapped onto a place moves alone.
     const point = { ...found.point };
     found.replace(point);
-    this.dragging = { point, from: { ...point } };
+    const at = worldToScreen(this.camera, point);
+    this.dragging = { point, from: { ...point }, offset: { x: at.x - screen.x, y: at.y - screen.y } };
     this.overlay?.rebuild(this.navigation);
     return true;
   }
   private dragTo(screen: Point) {
     const dragging = this.dragging;
     if (!dragging) return;
-    const p = screenToWorld(this.camera, screen);
+    const p = screenToWorld(this.camera, { x: screen.x + dragging.offset.x, y: screen.y + dragging.offset.y });
     dragging.point.x = Math.max(0, Math.min(this.map.width, p.x));
     dragging.point.y = Math.max(0, Math.min(this.map.height, p.y));
     this.invalidate();
@@ -659,7 +667,7 @@ export class Viewer {
     if (!dragging) return;
     this.dragging = undefined;
     if (this.tool === "route" || this.tool === "measure") {
-      const place = this.nearestPlace(screen);
+      const place = this.nearestPlace(worldToScreen(this.camera, dragging.point));
       if (place) Object.assign(dragging.point, place.point);
     }
     this.options?.onDrop?.(true);

@@ -496,7 +496,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     input("marker-label", "Point of interest 1");
     assert.equal(el("marker-move").hidden, true, "a new place has nothing to move yet");
     assert.equal(
-      el("kind-dialog").querySelectorAll(".kind-pick .place-icon > circle").length,
+      el("kind-dialog").querySelectorAll(".kind-pick .place-icon > .place-pin").length,
       12,
       "kinds show the map's pins",
     );
@@ -529,7 +529,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.deepEqual(previews.at(-1), { point: { x: 500, y: 600 }, kind: "entrance" });
     assert.equal(el("marker-dialog").style.getPropertyValue("--c"), "#7dff8a", "the card takes the chosen pin's colour");
     assert.equal(
-      el("marker-dialog-title-icon").querySelector(".place-icon > circle")!.getAttribute("fill"),
+      el("marker-dialog-title-icon").querySelector(".place-icon > .place-pin")!.getAttribute("fill"),
       "#7dff8a",
       "and its title shows the chosen pin",
     );
@@ -607,7 +607,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     // Saved is one list: a Routes section then a Places section, no tabs.
     assert.ok(!document.querySelector("#sheet-saved [role=tab]"), "no tabs in Saved");
     assert.equal(
-      el("marker-list").querySelector(".row-icon svg circle")?.getAttribute("fill"),
+      el("marker-list").querySelector(".row-icon svg .place-pin")?.getAttribute("fill"),
       "#7dff8a",
       "the row shows the entrance pin as drawn on the map",
     );
@@ -1507,7 +1507,7 @@ test("a flooded place's water level and a danger place's level show on its pin a
     assert.equal(el("marker-list").querySelector(".water-gauge"), null);
 
     const danger = (level: number) => document.querySelector<HTMLElement>(`.level-step[data-danger="${level}"]`)!;
-    const pinFill = () => el("marker-dialog-title-icon").querySelector(".place-icon > circle")!.getAttribute("fill");
+    const pinFill = () => el("marker-dialog-title-icon").querySelector(".place-icon > .place-pin")!.getAttribute("fill");
     controls.options().onMarker(state.markers[1]!);
     assert.equal(level(), "Danger level: Severe (2/2)", "danger without a level is severe");
     assert.equal(pinFill(), "#ff4d4d");

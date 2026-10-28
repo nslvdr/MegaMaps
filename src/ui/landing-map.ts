@@ -1,6 +1,6 @@
 import { markerKinds, routeColors, type MapMarker } from "../viewer/navigation";
 import { icons, markerCalloutIcon } from "./icons";
-import { PIN_CASING, placeIcon } from "./place-icon";
+import { PIN_CASING, PLACE_PIN, placeIcon } from "./place-icon";
 
 // A made-up cave survey as the app shows one: the scan, darkened, with
 // places and a route drawn over it by the app itself.
@@ -29,9 +29,9 @@ const scan = `<defs><filter id="plan-rough"><feTurbulence type="fractalNoise" ba
 <g class="plan-cave" filter="url(#plan-rough)"><g class="cave-wall">${walls}</g><g class="cave-floor">${walls}</g></g>
 <g class="plan-ink"><path class="survey" d="${passages.slice(0, 4).join("")}"/><text x="300" y="72">Salle ronde</text><text x="40" y="560" transform="rotate(-70 40 560)">Siphon</text></g>`;
 
-// App icons are sized and placed like the viewer's pins.
-const placed = (markup: string, at: Point, size: number, extra = "") =>
-  markup.replace("<svg ", `<svg x="${at.x - size / 2}" y="${at.y - size / 2}" width="${size}" height="${size}" ${extra}`);
+// App icons are sized and placed like the viewer's pins: centred, or a teardrop by its tip.
+const placed = (markup: string, at: Point, size: number, extra = "", anchor = { x: size / 2, y: size / 2 }) =>
+  markup.replace("<svg ", `<svg x="${at.x - anchor.x}" y="${at.y - anchor.y}" width="${size}" height="${size}" ${extra}`);
 
 // A label as the viewer draws it: a chip with the kind's icon, tied to its pin.
 function callout(name: string, icon: string, color: string, from: Point, left: number, top: number) {
@@ -62,5 +62,5 @@ export function fakePlan() {
   const path = [{ x: 330, y: 690 }, { x: 290, y: 700 }, { x: 230, y: 690 }, { x: 180, y: 640 }, { x: 140, y: 650 }, { x: 105, y: 650 }];
   return `<svg class="landing-map" viewBox="0 0 ${WIDTH} ${HEIGHT}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${scan}${route(path)}
 ${places.map(([kind, name, point, left, top]) => callout(name, markerCalloutIcon(kind), markerKinds[kind].color, point, left, top)).join("")}
-${places.map(([kind, , point]) => placed(placeIcon(kind), point, 24)).join("")}</svg>`;
+${places.map(([kind, , point]) => placed(placeIcon(kind), point, PLACE_PIN.size, "", PLACE_PIN.tip)).join("")}</svg>`;
 }
