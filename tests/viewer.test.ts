@@ -305,6 +305,14 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       [Math.round(place.point.x), Math.round(place.point.y)],
       [128, 64],
     );
+    // A pin held by its raised head moves with the finger: its tip doesn't jump under it.
+    const tip = screen(place.point), before = { ...place.point };
+    const head = { x: tip.x, y: tip.y - 27 };
+    assert.equal(internals.grab(head), true);
+    internals.drop({ x: head.x + 40, y: head.y + 10 });
+    const moved = screen(place.point);
+    assert.deepEqual([Math.round(moved.x - tip.x), Math.round(moved.y - tip.y)], [40, 10]);
+    Object.assign(place.point, before);
     viewer.setTool("browse");
     // Jumping to a place glides there instead of cutting.
     const away = structuredClone(state.view);
@@ -380,8 +388,9 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
       point: screenToWorld(internals.camera, { x: pin.x + 16, y: pin.y }),
     });
     viewer.updateNavigation(state);
-    assert.equal(internals.tap({ x: pin.x + 12, y: pin.y }), true);
-    assert.equal(internals.tap({ x: pin.x + 2, y: pin.y }), true);
+    // Pins are tapped on their head, above the place they mark.
+    assert.equal(internals.tap({ x: pin.x + 12, y: pin.y - 18 }), true);
+    assert.equal(internals.tap({ x: pin.x + 2, y: pin.y - 18 }), true);
     assert.deepEqual(opened, ["near", place.id]);
     assert.equal(emptyTaps, 0);
     assert.equal(internals.tap({ x: pin.x + 120, y: pin.y + 120 }), false,
