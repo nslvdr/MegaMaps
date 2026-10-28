@@ -10,5 +10,13 @@
   ],
   "assets": {
     "directory": "./dist"
+  },
+  "env": {
+    // The dev site, built with `npm run build:dev`.
+    "dev": {
+      "routes": [
+        { "pattern": "dev.mega-maps.natan-slvdr.fr", "custom_domain": true }
+      ]
+    }
   }
 }

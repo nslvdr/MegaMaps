@@ -7,6 +7,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
+    "build:dev": "tsc --noEmit && vite build --mode dev && node scripts/build-sw.mjs",
     "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview --host 0.0.0.0",
     "test": "tsx --import ./tests/setup.ts --test tests/*.test.ts",

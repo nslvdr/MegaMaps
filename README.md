@@ -11,12 +11,17 @@ npm run dev          # http://localhost:5173, no service worker
 npm run build && npm run preview   # http://localhost:4173, production shell with offline support
 npm test
 npm run deploy       # Cloudflare Worker serving dist/ (needs `npx wrangler login` once)
+npm run build:dev    # the dev site: "Mega Maps Dev", orange icons, no stats
 npm run fixtures     # 1k–15k PNG fixtures (Python stdlib); large fixtures are git-ignored
 npm run benchmark -- fixtures/map-9000.png   # one file per process for comparable memory numbers
 npm run benchmark:ocr -- [workers]           # OCR recall on a synthetic 170-label sheet
 ```
 
 JPEG and dense fixtures need Pillow in a throwaway venv (`scripts/generate-fixtures.py --jpeg`, `scripts/generate-detail-fixture.py`). Never add Pillow or host-side image allocation to app code.
+
+## Dev site
+
+Cloudflare builds `main` into the released app at `mega-maps.natan-slvdr.fr`, and the `dev` branch into a second Worker, `mega-maps-dev`, at `dev.mega-maps.natan-slvdr.fr` (`npm run build:dev`, then `npx wrangler deploy --env dev`). It is another origin, so it installs as a separate app with its own maps, and a broken build there can't reach the released app. Run `npm run icons` after changing `public/icons/icon.svg` or `assets/dev-icons/icon.svg`.
 
 ## Dev gotchas
 
