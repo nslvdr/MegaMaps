@@ -59,6 +59,16 @@ export async function transact<T>(
     tx.onerror = () => reject(tx.error ?? request.error);
   });
 }
+/** Safari can't put a Blob backed by a picked file into IndexedDB ("Error preparing
+ * Blob/File data to be stored in object store"), so imports store a copy held in memory.
+ * Read in parts, so a large original never needs one huge buffer. */
+const COPY_CHUNK = 8 * 1024 * 1024;
+export async function inMemory(blob: Blob) {
+  const parts: ArrayBuffer[] = [];
+  for (let offset = 0; offset < blob.size; offset += COPY_CHUNK)
+    parts.push(await blob.slice(offset, offset + COPY_CHUNK).arrayBuffer());
+  return new Blob(parts, { type: blob.type });
+}
 export const saveMap = (map: MapRecord) =>
   transact("maps", "readwrite", (s) => s.put(map));
 export const listMaps = () =>

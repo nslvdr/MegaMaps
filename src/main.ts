@@ -34,7 +34,7 @@ import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
-import { startStats, track } from "./stats";
+import { failure, startStats, track } from "./stats";
 
 document.documentElement.lang = language;
 document.documentElement.dataset.labels = preference("label-size");
@@ -214,13 +214,17 @@ const sharing = initSharing(app, {
       });
       channel?.postMessage({ type: "annotations", mapId: result.map.id });
       return result;
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        track("share_imported", { ok: false, into: destination.mapId ? destination.mode : "new", error: failure(error) });
+      throw error;
     } finally {
       progressDialog.close();
       importing = undefined;
     }
   },
   imported: async (result, destination) => {
-    track("share_imported", { into: destination.mapId ? destination.mode : "new", items: result.added });
+    track("share_imported", { ok: true, into: destination.mapId ? destination.mode : "new", items: result.added });
     await refresh();
     await openMap(result.map);
     if (!destination.mapId) showMessage(t("Share imported"), t("{items} added to a new map.", { items: plural(result.added, "item") }));
@@ -632,7 +636,7 @@ function importImage(file: File) {
     })
     .catch((error) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      track("map_imported", { ok: false });
+      track("map_imported", { ok: false, error: failure(error) });
       showMessage(
         t("Couldn’t import this map"),
         error instanceof Error ? error.message : String(error),
@@ -704,11 +708,14 @@ async function restore(backup: Backup) {
   try {
     const result = await mutate(() => restoreBackup(backup, (progress) =>
       showProgress(progress.fraction * 100, progress.message), controller.signal));
+    track("backup_restored", { ok: true, maps: result.added });
     progressDialog.close();
     showMessage(t("Backup restored"), t("{maps} added to your library.", { maps: plural(result.added, "map") }));
   } catch (error) {
-    if (!(error instanceof DOMException && error.name === "AbortError"))
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      track("backup_restored", { ok: false, error: failure(error) });
       showMessage(t("Couldn’t restore the backup"), error instanceof Error ? error.message : String(error));
+    }
   } finally {
     progressDialog.close();
     importing = undefined;

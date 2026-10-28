@@ -7,7 +7,7 @@ import {
   type WorkerReply,
 } from "../types";
 import { payloadStore } from "../storage/payloads";
-import { saveMap } from "../storage/database";
+import { inMemory, saveMap } from "../storage/database";
 import { readHeader } from "./headers";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
@@ -64,7 +64,8 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: 
       type: "progress",
       progress: { fraction: 0.01, message: t("Saving original on this device…") },
     });
-    await store.put(record.id, "original", file);
+    // The picked file itself can't go into IndexedDB on Safari; OPFS writes it as is.
+    await store.put(record.id, "original", record.backend === "indexeddb" ? await inMemory(file) : file);
     reply({
       type: "progress",
       progress: {
