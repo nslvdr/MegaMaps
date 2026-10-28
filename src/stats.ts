@@ -84,6 +84,12 @@ export function startStats(appVersion: string) {
   void sendStats();
 }
 
+/** Why an import failed, as the browser or app put it, so device-specific bugs show up. */
+export function failure(error: unknown) {
+  const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return text.slice(0, 200);
+}
+
 export function track(event: string, properties: Properties = {}) {
   if (version === undefined) return;
   try {
