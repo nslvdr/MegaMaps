@@ -209,7 +209,7 @@ export class NavigationOverlay {
       this.points.push({ element, point });
       return { element, body };
     };
-    // The trail is faint and lowest: a record, not something to read.
+    // The trail's line is faint and lowest: a record, not something to read.
     clearTimeout(this.ageTimer);
     const trail = node("g", { class: "trail" });
     this.svg.append(trail);
@@ -217,21 +217,6 @@ export class NavigationOverlay {
     path(trail, state.trail, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, "dots");
     // Which way the user went, to find the way back.
     path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", class: "trail-arrow" }, "arrows");
-    const here = state.trail.at(-1);
-    if (here) {
-      const element = node("g", { class: "trail-here" });
-      element.append(node("circle", { r: "18", class: "trail-pulse" }), node("circle", { r: "8", class: "trail-mark" }));
-      trail.append(element);
-      this.points.push({ element, point: here });
-      // The pulse slows, then stops, as the position gets older.
-      const age = () => {
-        const now = Date.now();
-        element.dataset.age = trailAge(here.time, now);
-        const next = trailAgeChange(here.time, now);
-        if (next !== undefined) this.ageTimer = setTimeout(age, next);
-      };
-      age();
-    }
     // A past trip, whatever the layers: bright and whole, from start to end.
     if (this.trip) {
       const trip = node("g", { class: "trip" });
@@ -334,6 +319,22 @@ export class NavigationOverlay {
       path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "4", "stroke-dasharray": "12 8" });
       path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, "dots");
       path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, "dots");
+    }
+    // Where the user is, over everything else: the trail beneath it is only a record.
+    const here = state.trail.at(-1);
+    if (here) {
+      const element = node("g", { class: "trail-here" });
+      element.append(node("circle", { r: "18", class: "trail-pulse" }), node("circle", { r: "8", class: "trail-mark" }));
+      this.svg.append(element);
+      this.points.push({ element, point: here });
+      // The pulse slows, then stops, as the position gets older.
+      const age = () => {
+        const now = Date.now();
+        element.dataset.age = trailAge(here.time, now);
+        const next = trailAgeChange(here.time, now);
+        if (next !== undefined) this.ageTimer = setTimeout(age, next);
+      };
+      age();
     }
     this.sortCallouts();
   }

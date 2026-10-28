@@ -422,3 +422,20 @@ test("selecting in place keeps every pin and label and lays them out as a rebuil
   overlay(inPlace!).dispose();
   overlay(rebuilt!).dispose();
 });
+
+test("the trip's current position is drawn over every place, route and tool", () => {
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("here-on-top");
+  const here = { x: 100, y: 100 };
+  state.trail = [{ x: 40, y: 40, time: Date.now() }, { ...here, time: Date.now() }];
+  state.markers = [{ id: "gate", kind: "entrance", label: "Gate", description: "", point: here, created: 0 }];
+  state.routes = [{ id: "exit", name: "Exit", created: 0, draft: false, points: [here, { x: 200, y: 200 }] }];
+  const overlay = new NavigationOverlay(svg);
+  overlay.setTrip([here, { x: 300, y: 300 }]);
+  overlay.setMeasure([here, { x: 150, y: 50 }]);
+  overlay.rebuild(state);
+  assert.ok(svg.lastElementChild!.classList.contains("trail-here"));
+  overlay.dispose();
+});
