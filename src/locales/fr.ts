@@ -377,6 +377,7 @@ export const fr = {
   "Saved": "Enregistrés",
   "Saved {date}": "Enregistrée le {date}",
   "Saving original on this device…": "Enregistrement de l’original sur cet appareil…",
+  "Saving places and photos…": "Enregistrement des lieux et des photos…",
   "Saving your place…": "Enregistrement du lieu…",
   "Scale set": "Échelle enregistrée",
   "Scroll down the list if you don’t see it": "Faites défiler la liste si vous ne le voyez pas",

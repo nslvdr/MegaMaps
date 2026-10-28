@@ -228,6 +228,8 @@ export async function restoreBackup(
     });
     try {
       const map = await create(new File([files.image], entry.name, { type: entry.image.type }), step, signal, entry.id);
+      // Many photos take a while to save once the tiles are done.
+      step({ fraction: 0.99, message: t("Saving places and photos…") });
       await commitRestored(map, entry, files.photos).catch(async (error) => {
         await deleteStoredMap(map).catch(() => {});
         throw error;

@@ -53,7 +53,10 @@ test("a backup restores every map's places, routes, photos, view and text detect
   for (const map of await listMaps()) await deleteStoredMap(map);
   await saveSetting("share-name", "");
   const backup = await readBackup(file);
-  assert.deepEqual(await restoreBackup(backup, () => {}, new AbortController().signal, create), { added: 2, kept: 0 });
+  const steps: { fraction: number; message: string }[] = [];
+  assert.deepEqual(await restoreBackup(backup, (step) => steps.push(step), new AbortController().signal, create), { added: 2, kept: 0 });
+  assert.deepEqual(steps.at(-1), { fraction: 0.995, message: "Map 2 of 2 · Saving places and photos…" },
+    "the last map's places and photos are saved under their own step, short of 100%");
   assert.deepEqual(rebuilt, ["north quarry", "south quarry"]);
   const maps = await listMaps();
   assert.deepEqual(maps.map(({ id, name, created, opened }) => ({ id, name, created, opened })), [

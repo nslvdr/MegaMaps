@@ -648,8 +648,9 @@ function importImage(file: File) {
     });
 }
 // The tab title carries the percentage too, for imports left in the background.
+// Rounded down, so 100% only shows once the work is done.
 function showProgress(percent: number, message: string) {
-  const rounded = Math.round(percent);
+  const rounded = Math.floor(percent);
   element("progress-fill").style.width = `${percent}%`;
   element("progress-percent").textContent = `${rounded}%`;
   element("progress-track").setAttribute("aria-valuenow", String(rounded));

@@ -22,11 +22,12 @@ test("worker commits ready only after all tiles, and malformed imports remain re
   const root = await mkdtemp(path.join(tmpdir(), "map-viewer-worker-"));
   await installPlatform(root);
   const messages: WorkerReply[] = [];
-  Object.defineProperty(globalThis, "onmessage", {
-    value: null,
-    writable: true,
-    configurable: true,
-  });
+  for (const handler of ["onmessage", "onunhandledrejection"])
+    Object.defineProperty(globalThis, handler, {
+      value: null,
+      writable: true,
+      configurable: true,
+    });
   Object.defineProperty(globalThis, "postMessage", {
     value: (message: WorkerReply) => messages.push(message),
     writable: true,

@@ -15,6 +15,9 @@ import { CUT, DECODED, UNCUT, cropJPEG, decodeJPEG } from "./jpeg";
 import { tileBand, buildParents } from "./tiles";
 import type { Preferences } from "../preferences";
 const reply = (message: WorkerReply) => postMessage(message);
+// A failed promise nothing waits on would otherwise leave the import waiting forever.
+onunhandledrejection = ({ reason }) =>
+  reply({ type: "error", message: reason instanceof Error ? reason.message : String(reason) });
 onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: Preferences["tiling"] }>) => {
   const { file, record, tiling } = event.data;
   const start = performance.now();
