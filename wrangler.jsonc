@@ -6,7 +6,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
-    { "pattern": "mega-maps.natan-slvdr.fr", "custom_domain": true }
+    { "pattern": "mega-maps.fr", "custom_domain": true }
   ],
   "assets": {
     "directory": "./dist"
@@ -15,7 +15,7 @@
     // The dev site, built with `npm run build:dev`.
     "dev": {
       "routes": [
-        { "pattern": "dev.mega-maps.natan-slvdr.fr", "custom_domain": true }
+        { "pattern": "dev.mega-maps.fr", "custom_domain": true }
       ]
     }
   }
