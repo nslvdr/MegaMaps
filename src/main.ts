@@ -85,7 +85,9 @@ let ocrJob:
 const ocrErrors = new Map<string, string>();
 const settingsPage = element("settings");
 const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
-if (import.meta.env.PROD) startStats(loadedVersion);
+// The dev site (`npm run build:dev`) is for trying changes: it sends no stats.
+const released = import.meta.env.PROD && import.meta.env.MODE !== "dev";
+if (released) startStats(loadedVersion);
 const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
 const canUpdate = import.meta.env.PROD && "serviceWorker" in navigator;
 const settings = initSettingsPage(settingsPage, {
