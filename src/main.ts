@@ -42,7 +42,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <div class="top-edge" aria-hidden="true"></div>
-    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps</h1></div><button class="settings-open" id="settings-open">${icons.settings}<span class="update-dot" aria-hidden="true"></span><span>${t("Settings")}</span></button></header>
+    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps${import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>'}</h1></div><button class="settings-open" id="settings-open">${icons.settings}<span class="update-dot" aria-hidden="true"></span><span>${t("Settings")}</span></button></header>
     <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
     ${libraryFooterMarkup}

@@ -172,6 +172,10 @@ svg {
   font-weight: 700;
   letter-spacing: -0.6px;
 }
+/* Dev builds say so in the title, in the orange of the dev icons. */
+.dev-title {
+  color: var(--neon-lock);
+}
 .settings-open {
   position: relative;
   font-size: var(--font-size-small);
