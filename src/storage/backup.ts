@@ -9,7 +9,7 @@ import { database, listMaps } from "./database";
 import { loadNavigation } from "./navigation";
 import { loadOcr } from "./ocr";
 import { deleteStoredMap, payloadStore } from "./payloads";
-import { loadPhotos, putPhotos } from "./photos";
+import { copyPhotos, loadPhotos, putPhotos } from "./photos";
 import { loadSetting, saveSetting } from "./settings";
 
 const MAGIC = "MEGABAK1";
@@ -194,6 +194,7 @@ export async function readBackup(file: Blob): Promise<Backup> {
 
 // Places, routes, photos and text detection land together or not at all.
 async function commitRestored(map: MapRecord, entry: BackupMap, photos: Map<string, Blob>) {
+  const copies = await copyPhotos(photos);
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(["maps", "navigation", "ocr", "photos"], "readwrite");
@@ -202,7 +203,7 @@ async function commitRestored(map: MapRecord, entry: BackupMap, photos: Map<stri
       ...(entry.fingerprint ? { fingerprint: entry.fingerprint } : {}) });
     tx.objectStore("navigation").put({ ...entry.navigation, mapId: map.id });
     if (entry.ocr) tx.objectStore("ocr").put({ ...entry.ocr, mapId: map.id });
-    putPhotos(tx, map.id, photos);
+    putPhotos(tx, map.id, copies);
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(tx.error ?? new Error(t("Could not restore this map.")));
   });
@@ -227,6 +228,8 @@ export async function restoreBackup(
     });
     try {
       const map = await create(new File([files.image], entry.name, { type: entry.image.type }), step, signal, entry.id);
+      // Many photos take a while to save once the tiles are done.
+      step({ fraction: 0.99, message: t("Saving places and photos…") });
       await commitRestored(map, entry, files.photos).catch(async (error) => {
         await deleteStoredMap(map).catch(() => {});
         throw error;

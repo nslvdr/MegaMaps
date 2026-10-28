@@ -6,7 +6,7 @@ import { defaultNavigation, normalizeNavigation, type MapMarker, type Navigation
 import { importMap } from "../processing/import";
 import { readHeader } from "../processing/headers";
 import { loadOcr } from "../storage/ocr";
-import { loadPhotos, putPhotos } from "../storage/photos";
+import { copyPhotos, loadPhotos, putPhotos } from "../storage/photos";
 import { needsOcr, type OcrIndex } from "../ocr/index";
 import { loadSetting } from "../storage/settings";
 import { mergeAnnotations, replaceAnnotations } from "./annotations";
@@ -120,6 +120,7 @@ export async function importAnnotations(
   photos = new Map<string, Blob>(), ocr?: Omit<OcrIndex, "mapId">,
 ) {
   signal?.throwIfAborted();
+  const copies = await copyPhotos(photos);
   const db = await database();
   signal?.throwIfAborted();
   return new Promise<{ added: number; updated: number; skipped: number; removed: number }>((resolve, reject) => {
@@ -148,7 +149,7 @@ export async function importAnnotations(
       navigation.put(next.state);
       // Only places and routes that were added bring their photos along.
       const used = new Set([...next.state.markers, ...next.state.routes].flatMap((item) => item.photos ?? []));
-      putPhotos(tx, mapId, new Map([...photos].filter(([id]) => used.has(id))));
+      putPhotos(tx, mapId, new Map([...copies].filter(([id]) => used.has(id))));
       if (ocr && !needsOcr(ocr) && needsOcr(ocrRequest.result)) tx.objectStore("ocr").put({ ...ocr, mapId });
     };
     tx.oncomplete = () => { finish(); resolve(result); };

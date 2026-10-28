@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BACKUP_INTERVAL, UNPROTECTED_BACKUP_INTERVAL, backupDue, createBackup, isBackupFile, readBackup, restoreBackup } from "../src/storage/backup";
-import { listMaps, saveMap } from "../src/storage/database";
+import { inMemory, listMaps, saveMap } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { loadOcr, saveOcr } from "../src/storage/ocr";
 import { deleteAllData, deleteStoredMap, payloadStore } from "../src/storage/payloads";
@@ -53,7 +53,10 @@ test("a backup restores every map's places, routes, photos, view and text detect
   for (const map of await listMaps()) await deleteStoredMap(map);
   await saveSetting("share-name", "");
   const backup = await readBackup(file);
-  assert.deepEqual(await restoreBackup(backup, () => {}, new AbortController().signal, create), { added: 2, kept: 0 });
+  const steps: { fraction: number; message: string }[] = [];
+  assert.deepEqual(await restoreBackup(backup, (step) => steps.push(step), new AbortController().signal, create), { added: 2, kept: 0 });
+  assert.deepEqual(steps.at(-1), { fraction: 0.995, message: "Map 2 of 2 · Saving places and photos…" },
+    "the last map's places and photos are saved under their own step, short of 100%");
   assert.deepEqual(rebuilt, ["north quarry", "south quarry"]);
   const maps = await listMaps();
   assert.deepEqual(maps.map(({ id, name, created, opened }) => ({ id, name, created, opened })), [
@@ -69,6 +72,13 @@ test("a backup restores every map's places, routes, photos, view and text detect
   // Restoring again keeps what is already here instead of duplicating it.
   assert.deepEqual(await restoreBackup(backup, () => {}, new AbortController().signal, create), { added: 0, kept: 2 });
   assert.equal(rebuilt.length, 2);
+});
+
+test("an in-memory copy keeps every byte and the type of a large picked file", async () => {
+  const bytes = new Uint8Array(9 * 1024 * 1024 + 5).map((_, index) => index % 251);
+  const copy = await inMemory(new File([bytes], "map.jpg", { type: "image/jpeg" }).slice(3, bytes.length, "image/jpeg"));
+  assert.equal(copy.type, "image/jpeg");
+  assert.deepEqual(new Uint8Array(await copy.arrayBuffer()), bytes.subarray(3));
 });
 
 test("damaged, truncated and foreign files are refused before anything is written", async () => {

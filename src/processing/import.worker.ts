@@ -7,7 +7,7 @@ import {
   type WorkerReply,
 } from "../types";
 import { payloadStore } from "../storage/payloads";
-import { saveMap } from "../storage/database";
+import { inMemory, saveMap } from "../storage/database";
 import { readHeader } from "./headers";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
@@ -15,6 +15,9 @@ import { CUT, DECODED, UNCUT, cropJPEG, decodeJPEG } from "./jpeg";
 import { tileBand, buildParents } from "./tiles";
 import type { Preferences } from "../preferences";
 const reply = (message: WorkerReply) => postMessage(message);
+// A failed promise nothing waits on would otherwise leave the import waiting forever.
+onunhandledrejection = ({ reason }) =>
+  reply({ type: "error", message: reason instanceof Error ? reason.message : String(reason) });
 onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: Preferences["tiling"] }>) => {
   const { file, record, tiling } = event.data;
   const start = performance.now();
@@ -64,7 +67,8 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: 
       type: "progress",
       progress: { fraction: 0.01, message: t("Saving original on this device…") },
     });
-    await store.put(record.id, "original", file);
+    // The picked file itself can't go into IndexedDB on Safari; OPFS writes it as is.
+    await store.put(record.id, "original", record.backend === "indexeddb" ? await inMemory(file) : file);
     reply({
       type: "progress",
       progress: {

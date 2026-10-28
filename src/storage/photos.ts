@@ -1,4 +1,4 @@
-import { database, transact } from "./database";
+import { database, inMemory, transact } from "./database";
 import type { NavigationState } from "../viewer/navigation";
 
 export interface StoredPhoto {
@@ -28,6 +28,13 @@ export async function loadPhotos(mapId: string, ids: string[]) {
     if (blob) photos.set(id, blob);
   }
   return photos;
+}
+
+/** Imported photos are slices of the picked file; Safari only stores them once copied. */
+export async function copyPhotos(photos: Map<string, Blob>) {
+  const copies = new Map<string, Blob>();
+  for (const [id, blob] of photos) copies.set(id, await inMemory(blob));
+  return copies;
 }
 
 /** Write shared photos within an annotation import so both land or neither does. */
