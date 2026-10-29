@@ -162,6 +162,27 @@ test("a pin grows into its balloon, moves to a free side, and shrinks back into 
   overlay.dispose();
 });
 
+test("a place on screen keeps its balloon at the screen's edge", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("edge");
+  state.markers = [
+    { id: "side", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 8, y: 300 }, created: 0 },
+    { id: "corner", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 592, y: 8 }, created: 0 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  const [side, corner] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  assert.ok(!side!.hasAttribute("hidden") && balloonBox(side!).left >= 8, "by the side, it opens away from the edge");
+  assert.equal(corner!.hasAttribute("hidden"), false, "in a corner, it runs past the edge rather than close");
+  overlay.dispose();
+});
+
 test("zoomed out, saved items show only pins, except the selected one", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);
