@@ -8,6 +8,7 @@ import { preference, setPreference, type Preferences } from "../preferences";
 import { backupDue, backupSummary, createBackup, readBackup, type Backup } from "../storage/backup";
 import { listMaps } from "../storage/database";
 import { storageProtected } from "../storage/protection";
+import { storedBytes } from "../storage/usage";
 import { loadSetting, saveSetting } from "../storage/settings";
 import { track } from "../stats";
 
@@ -125,18 +126,18 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     const current = ++version;
     showError();
     void prepareBackup(current);
-    const [shareName, lastBackup, maps, estimate, protection] = await Promise.all([
+    const [shareName, lastBackup, maps, used, protection] = await Promise.all([
       loadSetting("share-name").catch(() => undefined),
       loadSetting("last-backup").catch(() => undefined),
       listMaps().then((maps) => maps.filter((map) => map.status === "ready")).catch(() => []),
-      navigator.storage?.estimate?.().catch(() => undefined),
+      storedBytes().catch(() => navigator.storage?.estimate?.().then((estimate) => estimate.usage).catch(() => undefined)),
       storageProtected(),
     ]);
     if (current !== version) return;
     name.value = shareName ?? "";
     kept = protection !== false;
     showLastBackup(lastBackup, backupDue(maps, lastBackup, Date.now(), kept));
-    const usage = estimate?.usage !== undefined ? formatBytes(estimate.usage) : t("Unknown");
+    const usage = used !== undefined ? formatBytes(used) : t("Unknown");
     status("settings-storage", protection === undefined ? usage : `${usage} · ${protection ? t("Protected") : t("Not protected")}`);
   }
 

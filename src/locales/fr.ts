@@ -574,6 +574,7 @@ export const fr = {
   "{points} · Tap to add, drag to adjust": "{points} · Touchez pour ajouter, glissez pour ajuster",
   "{removed} removed · {added} added.": "{removed} retirés · {added} ajoutés.",
   "{restored} of {total} maps were restored before this problem: {reason}": "{restored} cartes sur {total} ont été restaurées avant ce problème : {reason}",
+  "{size} GB": "{size} Go",
   "{size} KB": "{size} Ko",
   "{size} MB": "{size} Mo",
   "{speed} km/h": "{speed} km/h",
