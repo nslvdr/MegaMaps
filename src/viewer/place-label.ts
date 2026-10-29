@@ -17,7 +17,7 @@ const CHIP = "#080c0c";
  * half the tail's width where it leaves the body. */
 const TAIL = 12, TAIL_WIDTH = 8;
 /** The sides a balloon can open to, in order of preference: unit steps from the place. */
-const SIDES = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }] as const;
+const SIDES = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: -1, y: 0 }] as const;
 type Side = (typeof SIDES)[number];
 let clips = 0;
 
@@ -43,17 +43,17 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
 };
 
 /** A place's name in a balloon that grows out of its pin: its tail ends on
- * the place and its head holds the symbol. It opens above its place, or else
- * to the right, the left or below. Names only ever use textContent. */
+ * the place and its head holds the symbol. It opens above or below its place,
+ * or else to the right or the left. Names only ever use textContent. */
 export class PlaceLabel {
   readonly element = document.createElementNS(NS, "g");
-  private parts: Record<"textClip" | "outline" | "fill" | "head" | "text", SVGElement> &
+  private parts: Record<"textClip" | "casing" | "outline" | "fill" | "head" | "text", SVGElement> &
     Partial<Record<"headClip" | "water" | "icon", SVGElement>>;
   private name = "";
   private size?: { raised: boolean; max: number; text: string; textSize: number; width: number; height: number };
   private shown?: CalloutBounds;
   private open = 0;
-  /** The side it took, once it first opened. */
+  /** The side it took, while open. */
   private side?: Side;
   private speed = 0;
   private drawn = 0;
@@ -67,10 +67,11 @@ export class PlaceLabel {
       : "";
     this.element.setAttribute("class", "place-label");
     // The body pulses with its pin when the place is found (see .found in style.css).
-    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/></g>`;
+    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="casing" fill="${PIN_CASING}" stroke="${PIN_CASING}" stroke-width="7" stroke-linejoin="round"/><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/></g>`;
     const part = (selector: string) => this.element.querySelector<SVGElement>(selector) ?? undefined;
     this.parts = {
-      textClip: part("clipPath rect")!, outline: part(".outline")!, fill: part(".fill")!, head: part(".head")!, text: part("text")!,
+      textClip: part("clipPath rect")!, casing: part(".casing")!, outline: part(".outline")!, fill: part(".fill")!,
+      head: part(".head")!, text: part("text")!,
       headClip: part("clipPath circle"), water: part(".water"), icon: part("svg"),
     };
     this.parts.icon?.style.setProperty("color", PIN_CASING);
@@ -81,6 +82,11 @@ export class PlaceLabel {
   /** Where the balloon sits on screen, while it is open. */
   get bounds() {
     return this.shown;
+  }
+
+  /** Whether it is open, or growing or shrinking. */
+  get opened() {
+    return this.open > 0;
   }
 
   /** Takes over a balloon for the same place, when overlays rebuild. */
@@ -100,7 +106,7 @@ export class PlaceLabel {
   hide() {
     this.element.setAttribute("hidden", "");
     this.open = this.speed = 0;
-    this.shown = undefined;
+    this.side = this.shown = undefined;
     if (this.pin) this.pin.style.opacity = "";
   }
 
@@ -127,15 +133,15 @@ export class PlaceLabel {
         Math.max(0, Math.min(body.bottom, viewport.height) - Math.max(body.top, 0));
       return seen * 2 >= (body.right - body.left) * (body.bottom - body.top);
     };
-    // A balloon keeps the side it took, even when a better one frees up. It moves
-    // only when that side is taken or mostly off screen: it shrinks back into its
-    // pin and grows out again on the side it took. While its place is on screen,
-    // the screen's edge alone never closes it: it may run past it.
-    const kept = this.side, sides = kept ? [kept, ...SIDES.filter(side => side !== kept)] : SIDES;
-    const free = away ? undefined : kept && showing(kept) && layout.claim(room(kept), own, false) ? kept
-      : sides.find(side => layout.claim(room(side), own)) ?? sides.find(side => layout.claim(room(side), own, false));
-    if (free && !this.open) this.side = free;
-    const claimed = !!free && free === this.side, target = claimed ? 1 : 0;
+    // A closed balloon opens on the first free side, fully on screen if it can,
+    // else at least half on screen. Open, it keeps that side, even when a better
+    // one frees up or a pan takes it past the screen's edge. When the side is
+    // taken, it shrinks back into its pin, still holding its spot, and then opens again.
+    const kept = this.open ? this.side : undefined;
+    this.side = kept ?? SIDES.find(side => layout.claim(room(side), own))
+      ?? SIDES.find(side => showing(side) && layout.claim(room(side), own, false));
+    const claimed = !away && !!this.side && (!kept || layout.claim(room(kept), own, false)), target = claimed ? 1 : 0;
+    if (kept && !claimed && !away) for (const spot of room(kept)) layout.addObstacle(spot);
     const now = performance.now();
     // Small steps keep the spring steady through a slow frame; a long pause just settles it.
     for (let left = this.open || this.speed ? Math.min(0.5, (now - this.drawn) / 1000) : 1 / 60; left > 0; left -= 1 / 120) {
@@ -151,7 +157,8 @@ export class PlaceLabel {
     const side = this.side;
     if (this.open <= 0 || !side) {
       this.hide();
-      return false;
+      // Closing frees its spot: one more frame lets a balloon waiting for it open.
+      return !!kept;
     }
     if (claimed) {
       const [body, tail] = room(side);
@@ -182,18 +189,21 @@ export class PlaceLabel {
     const cx = side.x * reach, cy = side.y * reach;
     const left = cx - width / 2, top = cy - half, flat = width / 2 - half;
     const head = { x: left + half, y: cy, r: Math.max(0, between((HEAD_RADIUS - CASING) * scale, size.height / 2 - 4)) };
-    const { textClip, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
+    const { textClip, casing, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
     // The tail runs from inside the body to the place, in the place's colour
     // like its pin; the body's dark fill is drawn over the outline, so only
-    // the outline's outer edge shows around it.
+    // the outline's outer edge shows around it. A dark casing goes around both,
+    // so the tail's point shows on any map.
     const base = reach - (side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
       : TAIL_WIDTH <= flat ? half : Math.sqrt(Math.max(0, half ** 2 - (TAIL_WIDTH - flat) ** 2)));
     const at = (across: number, along: number) =>
       `${(side.x * along - side.y * across).toFixed(2)} ${(side.y * along + side.x * across).toFixed(2)}`;
     const [l, r, t, b, h] = [left + half, left + width - half, top, top + half * 2, half].map(value => value.toFixed(2));
     const body = `M${l} ${b}A${h} ${h} 0 0 1 ${l} ${t}H${r}A${h} ${h} 0 0 1 ${r} ${b}Z`, w = TAIL_WIDTH;
-    set(outline, { d: `${body}M${at(w, reach)}L${at(w, base)}C${at(w * 0.85, base - 3)} ${at(2.5, 3)} 0 0` +
-      `C${at(-2.5, 3)} ${at(-w * 0.85, base - 3)} ${at(-w, base)}L${at(-w, reach)}Z` });
+    const shape = `${body}M${at(w, reach)}L${at(w, base)}C${at(w * 0.85, base - 3)} ${at(2.5, 3)} 0 0` +
+      `C${at(-2.5, 3)} ${at(-w * 0.85, base - 3)} ${at(-w, base)}L${at(-w, reach)}Z`;
+    set(casing, { d: shape });
+    set(outline, { d: shape });
     set(fill, { d: body });
     set(disc, { cx: head.x, cy: head.y, r: head.r });
     if (headClip) set(headClip, { cx: head.x, cy: head.y, r: head.r });
