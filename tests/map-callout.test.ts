@@ -220,6 +220,62 @@ test("an open balloon keeps its spot when another place's balloon opens next to 
   overlay.dispose();
 });
 
+test("a balloon waiting for a spot opens as soon as the balloon there has closed", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("waiting");
+  state.markers = [
+    { id: "waiting", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 400, y: 320 }, created: 0 },
+    { id: "leaving", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 1 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const frame = (ms: number, taken: CalloutBounds[]) => {
+    now += ms;
+    const layout = new CalloutLayout(viewport, taken);
+    overlay.reserve(camera, layout);
+    return overlay.draw(camera, viewport, layout);
+  };
+  const [waiting, leaving] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  for (let step = 0; step < 3; step++) frame(1000, [{ left: 320, right: 562, top: 290, bottom: 362 }]);
+  assert.ok(balloonBox(leaving!).bottom <= 300, "the newer place opens above");
+  // The older place can only open above, where the newer one's balloon is.
+  const others = { left: 320, right: 562, top: 325, bottom: 362 };
+  for (let step = 0; step < 3; step++) frame(1000, [others]);
+  assert.equal(waiting!.hasAttribute("hidden"), true);
+  // Something takes every side of the newer place: it closes, freeing the spot.
+  const taken = [others, { left: 230, right: 300, top: 260, bottom: 270 }, { left: 130, right: 280, top: 295, bottom: 305 }];
+  for (let step = 0; step < 200 && frame(16, taken); step++);
+  assert.equal(leaving!.hasAttribute("hidden"), true);
+  assert.ok(!waiting!.hasAttribute("hidden") && balloonBox(waiting!).bottom <= 320, "the older place opens above, without another touch");
+  overlay.dispose();
+});
+
+test("panning never moves an open balloon, even mostly off screen", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("pan");
+  state.markers = [{ id: "gate", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 0 }];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  const balloon = svg.querySelector<SVGGElement>(".place-label")!;
+  assert.ok(balloonBox(balloon).bottom <= 300, "it opens above");
+  // The place is now near the top: most of the balloon above it is off screen.
+  camera.y = -280;
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  assert.ok(!balloon.hasAttribute("hidden") && balloonBox(balloon).bottom <= 20, "it stays above");
+  overlay.dispose();
+});
+
 test("zoomed out, saved items show only pins, except the selected one", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);

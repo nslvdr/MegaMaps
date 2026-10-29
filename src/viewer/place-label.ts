@@ -132,14 +132,14 @@ export class PlaceLabel {
         Math.max(0, Math.min(body.bottom, viewport.height) - Math.max(body.top, 0));
       return seen * 2 >= (body.right - body.left) * (body.bottom - body.top);
     };
-    const fits = (side: Side) => showing(side) && layout.claim(room(side), own, false);
-    // A closed balloon opens on the first free side, fully on screen if it can.
-    // Open, it keeps that side, even when a better one frees up, and may run past
-    // the screen's edge. When the side is taken or mostly off screen, it shrinks
-    // back into its pin, still holding its spot, and then opens again.
+    // A closed balloon opens on the first free side, fully on screen if it can,
+    // else at least half on screen. Open, it keeps that side, even when a better
+    // one frees up or a pan takes it past the screen's edge. When the side is
+    // taken, it shrinks back into its pin, still holding its spot, and then opens again.
     const kept = this.open ? this.side : undefined;
-    this.side = kept ?? SIDES.find(side => layout.claim(room(side), own)) ?? SIDES.find(fits);
-    const claimed = !away && !!this.side && (!kept || fits(kept)), target = claimed ? 1 : 0;
+    this.side = kept ?? SIDES.find(side => layout.claim(room(side), own))
+      ?? SIDES.find(side => showing(side) && layout.claim(room(side), own, false));
+    const claimed = !away && !!this.side && (!kept || layout.claim(room(kept), own, false)), target = claimed ? 1 : 0;
     if (kept && !claimed && !away) for (const spot of room(kept)) layout.addObstacle(spot);
     const now = performance.now();
     // Small steps keep the spring steady through a slow frame; a long pause just settles it.
@@ -156,7 +156,8 @@ export class PlaceLabel {
     const side = this.side;
     if (this.open <= 0 || !side) {
       this.hide();
-      return false;
+      // Closing frees its spot: one more frame lets a balloon waiting for it open.
+      return !!kept;
     }
     if (claimed) {
       const [body, tail] = room(side);
