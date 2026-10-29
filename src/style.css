@@ -1658,6 +1658,7 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: #000;
 }
 .map-shade {
