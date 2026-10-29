@@ -126,8 +126,9 @@ export class CalloutLayout {
   }
 
   // Whether a pin or label overlaps, or a leader runs under, this rectangle.
-  private blocked(rect: CalloutBounds) {
-    for (const other of this.near(this.cells, rect)) if (boundsOverlap(rect, other)) return true;
+  private blocked(rect: CalloutBounds, own: CalloutBounds[] = []) {
+    for (const other of this.near(this.cells, rect))
+      if (!own.includes(other) && boundsOverlap(rect, other)) return true;
     for (const line of this.near(this.lines, rect))
       if (segmentCrossesBounds(line.from, line.to, rect)) return true;
     return false;
@@ -140,6 +141,16 @@ export class CalloutLayout {
     for (const other of this.near(this.cells, rect))
       if (segmentCrossesBounds(from, to, other)) return true;
     return false;
+  }
+
+  // A balloon takes its spots, its body and its tail, when they are free and,
+  // unless `onScreen` is false, on screen. It may cover its own symbols.
+  // Returns whether it took them.
+  claim(spots: readonly CalloutBounds[], own: CalloutBounds[] = [], onScreen = true) {
+    const free = spots.every(spot => !this.blocked(expand(spot, 1), own) && (!onScreen ||
+      spot.left >= 4 && spot.top >= 4 && spot.right <= this.viewport.width - 4 && spot.bottom <= this.viewport.height - 4));
+    if (free) for (const spot of spots) this.index(this.cells, spot, spot);
+    return free;
   }
 
   // A label sits at its normal spot above its target and turns to another

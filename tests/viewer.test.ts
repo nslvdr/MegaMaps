@@ -154,10 +154,7 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.deepEqual(pixel(195, 422), [0, 0, 0, 255], "white paper turns black");
     assert.equal(canvas.style.filter, "");
     assert.equal(overlay.querySelector("text")!.textContent, "<Entrance>");
-    assert.equal(
-      overlay.querySelector("text")!.parentElement!.classList.contains("overlay-label"),
-      true,
-    );
+    assert.ok(overlay.querySelector("text")!.closest(".overlay-label"));
     assert.match(
       overlay.querySelector('[data-layer="places"] > g')!.getAttribute("transform")!,
       /translate\(195(\.0)?,422(\.0)?\)/,

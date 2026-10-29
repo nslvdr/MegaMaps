@@ -12,7 +12,16 @@ import type { Point } from "../src/viewer/camera";
 
 const pinRoom = (tip: Point): CalloutBounds => ({ left: tip.x - 12, right: tip.x + 12, top: tip.y - 30, bottom: tip.y + 2 });
 
-test("saved places and routes have typed callouts that follow their anchors and retain layer/edit controls", (t) => {
+// A balloon's room on screen: its body, from the transform and its text clip, out to its tip.
+const balloonBox = (label: Element): CalloutBounds => {
+  const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+  const body = label.querySelector("clipPath rect")!;
+  const left = x! + Number(body.getAttribute("x")), top = y! + Number(body.getAttribute("y"));
+  const right = left + Number(body.getAttribute("width")), bottom = top + Number(body.getAttribute("height"));
+  return { left: Math.min(left, x!), right: Math.max(right, x!), top: Math.min(top, y!), bottom: Math.max(bottom, y!) };
+};
+
+test("saved places open into named balloons beside route callouts and retain layer/edit controls", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
@@ -24,61 +33,53 @@ test("saved places and routes have typed callouts that follow their anchors and 
     kind: kind as keyof typeof markerKinds,
     label: `<${kind}>`,
     description: "",
-    point: { x: 100 + index * 70, y: 120 + index * 70 },
+    point: { x: 100 + (index % 3) * 260, y: 120 + Math.floor(index / 3) * 120 },
     created: 0,
   }));
   state.routes = [{
     id: "exit-route", name: "<Exit route>", created: 0, draft: false,
-    points: [{ x: 40, y: 180 }, { x: 260, y: 240 }],
+    points: [{ x: 40, y: 700 }, { x: 260, y: 760 }],
   }];
   const overlay = new NavigationOverlay(svg);
   overlay.rebuild(state);
-  const viewport = { width: 600, height: 600 };
-  const camera = { x: 150, y: -50, scale: 0.5, rotation: Math.PI / 4 };
+  const viewport = { width: 700, height: 900 };
+  const camera = { x: 0, y: 0, scale: 1 };
   overlay.draw(camera, viewport);
-  const callouts = [...svg.querySelectorAll<SVGGElement>(".map-callout")];
-  assert.equal(callouts.length, state.markers.length + state.routes.length, "every saved item has a callout");
+  now += 1000;
+  overlay.draw(camera, viewport);
   const route = svg.querySelector<SVGGElement>('[data-layer="routes"] .map-callout')!;
   assert.equal(route.querySelector("text")!.textContent, "<Exit route>");
   assert.equal(route.style.getPropertyValue("--callout-color"), routeColor(state, "exit-route"));
-  const places = [...svg.querySelectorAll<SVGGElement>('[data-layer="places"] .map-callout')];
-  for (const [index, callout] of places.entries()) {
+  const balloons = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  assert.equal(balloons.length, state.markers.length, "every saved place has a balloon");
+  const pins = [...svg.querySelectorAll<SVGGElement>('[data-layer="places"]:not(.place-labels) .pin-body')];
+  for (const [index, balloon] of balloons.entries()) {
     const marker = state.markers[index]!;
-    assert.equal(callout.querySelector("text")!.textContent, marker.label);
+    assert.equal(balloon.hasAttribute("hidden"), false, "this map has space for every balloon");
+    assert.equal(balloon.querySelector("text")!.textContent, marker.label, "saved names remain literal text");
     const expectedIcon = document.createElement("div");
     expectedIcon.innerHTML = markerCalloutIcon(marker.kind);
-    assert.equal(callout.querySelector(".map-callout-icon")!.innerHTML, expectedIcon.firstElementChild!.innerHTML);
-    assert.equal(callout.style.getPropertyValue("--callout-color"), markerKinds[marker.kind].color);
-    const position = callout.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
-    const connector = callout.querySelector("line")!;
-    const anchor = worldToScreen(camera, marker.point);
-    const endpoint = { x: position[0]! + Number(connector.getAttribute("x2")),
-      y: position[1]! + Number(connector.getAttribute("y2")) };
-    // A teardrop pin rises from its tip on the place: 12px around its head, 18px above.
-    const pin = pinRoom(anchor);
-    const edges = [endpoint.x - pin.left, pin.right - endpoint.x, endpoint.y - pin.top, pin.bottom - endpoint.y];
-    assert.ok(edges.every(edge => edge >= -1e-9) && edges.some(edge => Math.abs(edge) < 1e-9),
-      "the leader reaches the pin's edge from whichever direction has space");
-    assert.ok(callout.classList.contains("overlay-label"), "Names controls the complete callout");
+    assert.equal(balloon.querySelector("svg")!.innerHTML, expectedIcon.firstElementChild!.innerHTML);
+    assert.equal(balloon.querySelector(".head")!.getAttribute("fill"), markerKinds[marker.kind].color);
+    assert.equal(balloon.getAttribute("transform"), `translate(${marker.point.x.toFixed(1)},${marker.point.y.toFixed(1)})`,
+      "its tail ends on the place");
+    assert.equal(pins[index]!.style.opacity, "0", "the open balloon takes the place of its pin");
+    assert.ok(balloon.classList.contains("overlay-label"), "Names controls the balloon");
   }
-  const boxes = callouts.map(callout => {
-    assert.equal(callout.hasAttribute("hidden"), false, "this cluster has space for every label");
-    const [x, y] = callout.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
-    return { left: x!, right: x! + Number(callout.querySelector("rect")!.getAttribute("width")),
-      top: y!, bottom: y! + 36 };
+  const boxes = [route, ...balloons].map((label, index) => {
+    if (index) return balloonBox(label);
+    const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+    return { left: x!, right: x! + Number(label.querySelector("rect")!.getAttribute("width")), top: y!, bottom: y! + 36 };
   });
   for (const [index, box] of boxes.entries()) {
     for (const other of boxes.slice(index + 1)) assert.equal(boundsOverlap(box, other), false);
-    for (const marker of state.markers) {
-      const p = worldToScreen(camera, marker.point);
-      assert.equal(boundsOverlap(box, pinRoom(p)), false, "labels never cover another saved pin");
-    }
+    for (const [other, marker] of state.markers.entries())
+      if (other !== index - 1) assert.equal(boundsOverlap(box, pinRoom(marker.point)), false, "labels never cover another saved pin");
   }
-  assert.ok(!svg.querySelector("landmark"), "saved names remain literal text");
   for (const [index, marker] of state.markers.entries()) {
-    const box = boxes[state.routes.length + index]!;
-    assert.equal(overlay.labelAt({ x: box.right - 2, y: box.bottom - 2 })?.markerId, marker.id,
-      "a place's label chip opens that place");
+    const box = boxes[index + 1]!;
+    assert.equal(overlay.labelAt({ x: box.right - 2, y: box.top + 2 })?.markerId, marker.id,
+      "a place's balloon opens that place");
   }
   assert.deepEqual(overlay.labelAt({ x: boxes[0]!.left + 2, y: boxes[0]!.top + 2 }),
     { markerId: undefined, routeId: "exit-route" }, "a route's label chip names the route");
@@ -90,16 +91,188 @@ test("saved places and routes have typed callouts that follow their anchors and 
   assert.equal(svg.classList.contains("hide-labels"), true);
   assert.equal(svg.classList.contains("hide-places"), true);
   assert.equal(svg.classList.contains("hide-routes"), true);
+  overlay.draw(camera, viewport);
+  assert.ok(pins.every(pin => pin.style.opacity === ""), "with names hidden, every pin shows again");
   overlay.setEditing("exit-route", "landmark");
   overlay.draw(camera, viewport);
   assert.ok(svg.querySelector(".route.editing"));
   assert.ok(svg.querySelector(".moving .pin-body"), "place anchors remain available while moving");
-  assert.equal(svg.querySelectorAll(".map-callout").length, state.markers.length + state.routes.length);
+  overlay.setLayers({ places: true, routes: true, labels: true });
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   now += 1000;
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
-  assert.ok([...svg.querySelectorAll(".map-callout")].every(callout => callout.hasAttribute("hidden")),
+  assert.ok([...svg.querySelectorAll(".place-label, .map-callout")].every(label => label.hasAttribute("hidden")),
     "offscreen saved items do not leave detached labels in view");
+  overlay.dispose();
+});
+
+test("a pin grows into its balloon, moves to a free side, and shrinks back into the pin when there is no room", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("balloon");
+  state.markers = [{ id: "gate", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 0 }];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const balloon = svg.querySelector<SVGGElement>(".place-label")!;
+  const pin = svg.querySelector<SVGGElement>(".pin-body")!;
+  const width = () => Number(balloon.querySelector("clipPath rect")!.getAttribute("width"));
+  const frame = (ms: number, layout?: CalloutLayout) => {
+    now += ms;
+    if (layout) overlay.reserve(camera, layout);
+    return overlay.draw(camera, viewport, layout);
+  };
+  assert.equal(frame(16), true, "it asks for frames while growing");
+  const first = width();
+  assert.ok(Number(pin.style.opacity) > 0, "the pin is still there as the balloon appears");
+  frame(100);
+  assert.ok(width() > first, "it widens");
+  assert.equal(pin.style.opacity, "0", "the pin has handed over");
+  assert.equal(frame(1000), false, "it settles open");
+  const open = width();
+  assert.ok(first < open / 2, "it starts from the pin's round head");
+  assert.ok(open > 100, "open, it fits the whole name");
+  assert.ok(balloonBox(balloon).bottom <= 300, "it opens above its place first");
+  // Something now covers the spot above the pin.
+  const above = { left: 200, right: 400, top: 240, bottom: 280 };
+  frame(16, new CalloutLayout(viewport, [above]));
+  assert.ok(width() < open, "it shrinks back toward the pin before moving");
+  assert.equal(overlay.labelAt({ x: 300, y: 270 }), undefined, "a closing balloon answers no taps");
+  // It closes, then opens on its new side.
+  const settle = (...taken: CalloutBounds[]) => {
+    for (let step = 0; step < 3; step++) frame(1000, new CalloutLayout(viewport, taken));
+  };
+  settle(above);
+  assert.equal(balloon.hasAttribute("hidden"), false);
+  assert.ok(balloonBox(balloon).top >= 300 && Math.abs(width() - open) < 1, "it opens below instead");
+  assert.equal(overlay.labelAt({ x: 300, y: 330 })?.markerId, "gate");
+  settle();
+  assert.ok(balloonBox(balloon).top >= 300, "it keeps its side when the spot above frees up");
+  const below = { left: 200, right: 400, top: 320, bottom: 360 };
+  settle(above, below);
+  assert.ok(balloonBox(balloon).left >= 300, "then to the right");
+  const right = { left: 310, right: 500, top: 290, bottom: 296 };
+  settle(above, below, right);
+  assert.ok(balloonBox(balloon).right <= 300, "then to the left");
+  const left = { left: 100, right: 290, top: 290, bottom: 296 };
+  settle(above, below, right, left);
+  assert.equal(balloon.hasAttribute("hidden"), true, "with no side free, it closes");
+  assert.equal(pin.style.opacity, "", "the pin is back");
+  settle();
+  assert.ok(balloonBox(balloon).bottom <= 300, "closed, it forgets its side and opens above again");
+  overlay.dispose();
+});
+
+test("a place on screen keeps its balloon at the screen's edge", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("edge");
+  state.markers = [
+    { id: "side", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 8, y: 300 }, created: 0 },
+    { id: "corner", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 592, y: 8 }, created: 0 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  const [side, corner] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  assert.ok(!side!.hasAttribute("hidden") && balloonBox(side!).left >= 8, "by the side, it opens away from the edge");
+  assert.equal(corner!.hasAttribute("hidden"), false, "in a corner, it runs past the edge rather than close");
+  overlay.dispose();
+});
+
+test("an open balloon keeps its spot when another place's balloon opens next to it", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("crowd");
+  // The older place's balloon would take the spot above the newer one's.
+  state.markers = [
+    { id: "older", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 400, y: 320 }, created: 0 },
+    { id: "newer", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 1 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const settle = (...taken: CalloutBounds[]) => {
+    for (let step = 0; step < 3; step++, now += 1000) {
+      const layout = new CalloutLayout(viewport, taken);
+      overlay.reserve(camera, layout);
+      overlay.draw(camera, viewport, layout);
+    }
+  };
+  const [older, newer] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  // At first, something leaves the older place no room.
+  settle({ left: 320, right: 562, top: 290, bottom: 362 });
+  assert.equal(older!.hasAttribute("hidden"), true);
+  assert.ok(balloonBox(newer!).bottom <= 300, "the newer place opens above");
+  settle();
+  assert.ok(balloonBox(newer!).bottom <= 300, "it stays above");
+  assert.ok(balloonBox(older!).top >= 320, "the older place goes around it, below");
+  overlay.dispose();
+});
+
+test("a balloon waiting for a spot opens as soon as the balloon there has closed", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("waiting");
+  state.markers = [
+    { id: "waiting", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 400, y: 320 }, created: 0 },
+    { id: "leaving", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 1 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const frame = (ms: number, taken: CalloutBounds[]) => {
+    now += ms;
+    const layout = new CalloutLayout(viewport, taken);
+    overlay.reserve(camera, layout);
+    return overlay.draw(camera, viewport, layout);
+  };
+  const [waiting, leaving] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  for (let step = 0; step < 3; step++) frame(1000, [{ left: 320, right: 562, top: 290, bottom: 362 }]);
+  assert.ok(balloonBox(leaving!).bottom <= 300, "the newer place opens above");
+  // The older place can only open above, where the newer one's balloon is.
+  const others = { left: 320, right: 562, top: 325, bottom: 362 };
+  for (let step = 0; step < 3; step++) frame(1000, [others]);
+  assert.equal(waiting!.hasAttribute("hidden"), true);
+  // Something takes every side of the newer place: it closes, freeing the spot.
+  const taken = [others, { left: 230, right: 300, top: 260, bottom: 270 }, { left: 130, right: 280, top: 295, bottom: 305 }];
+  for (let step = 0; step < 200 && frame(16, taken); step++);
+  assert.equal(leaving!.hasAttribute("hidden"), true);
+  assert.ok(!waiting!.hasAttribute("hidden") && balloonBox(waiting!).bottom <= 320, "the older place opens above, without another touch");
+  overlay.dispose();
+});
+
+test("panning never moves an open balloon, even mostly off screen", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("pan");
+  state.markers = [{ id: "gate", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 0 }];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  const balloon = svg.querySelector<SVGGElement>(".place-label")!;
+  assert.ok(balloonBox(balloon).bottom <= 300, "it opens above");
+  // The place is now near the top: most of the balloon above it is off screen.
+  camera.y = -280;
+  for (let step = 0; step < 3; step++, now += 1000) overlay.draw(camera, viewport);
+  assert.ok(!balloon.hasAttribute("hidden") && balloonBox(balloon).bottom <= 20, "it stays above");
   overlay.dispose();
 });
 
@@ -119,12 +292,12 @@ test("zoomed out, saved items show only pins, except the selected one", (t) => {
     overlay.draw(camera, viewport, undefined, named);
     now += 1000;
     overlay.draw(camera, viewport, undefined, named);
-    return [...svg.querySelectorAll(".map-callout")].filter(callout => !callout.hasAttribute("hidden"))
-      .map(callout => callout.querySelector("text")!.textContent);
+    return [...svg.querySelectorAll(".place-label")].filter(label => !label.hasAttribute("hidden"))
+      .map(label => label.querySelector("text")!.textContent);
   };
   assert.deepEqual(shown(true), ["gate", "well"]);
   assert.deepEqual(shown(false), []);
-  assert.equal(svg.querySelectorAll('[data-layer="places"] > g:not(.map-callout)').length, 2, "pins stay");
+  assert.equal(svg.querySelectorAll('[data-layer="places"]:not(.place-labels) > g').length, 2, "pins stay");
   overlay.setSelected("well");
   assert.deepEqual(shown(false), ["well"]);
   overlay.dispose();
@@ -187,10 +360,11 @@ test("search and saved labels share space, including routes starting on a saved 
   saved.reserve(camera, layout);
   search.draw(camera, viewport, layout);
   saved.draw(camera, viewport, layout);
-  const labels = [...document.querySelectorAll<SVGGElement>(".map-callout")];
+  const labels = [...document.querySelectorAll<SVGGElement>(".map-callout, .place-label")];
   assert.equal(labels.length, 3);
   const boxes = labels.map(label => {
     assert.equal(label.hasAttribute("hidden"), false);
+    if (label.classList.contains("place-label")) return balloonBox(label);
     const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
     return { left: x!, right: x! + Number(label.querySelector("rect")!.getAttribute("width")),
       top: y!, bottom: y! + 36 };
@@ -241,7 +415,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   const point = worldToScreen(camera, marker.point);
   assert.equal(Number(hole.getAttribute("cx")), point.x);
   assert.equal(Number(hole.getAttribute("cy")), point.y);
-  assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
+  assert.equal(savedSvg.querySelector(".place-label")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
   // A tap on a result's label answers with that result, and only on the label.
   const labelCenter = (label: SVGGElement) => {
     const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
@@ -256,7 +430,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   saved.setSearchMarkers([]);
   saved.setLayers({ places: true, labels: true, routes: true });
   draw();
-  assert.equal(savedSvg.querySelector(".map-callout")!.hasAttribute("hidden"), false);
+  assert.equal(savedSvg.querySelector(".place-label")!.hasAttribute("hidden"), false);
   assert.equal(searchSvg.hasAttribute("hidden"), true);
   assert.equal(search.labelAt(labelCenter(callouts[0]!)), undefined, "a closed search answers no taps");
   search.dispose();
