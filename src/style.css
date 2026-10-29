@@ -1669,6 +1669,13 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   stroke-width: 1px;
   opacity: 0.55;
 }
+.place-label {
+  pointer-events: none;
+}
+.place-label text {
+  fill: var(--text);
+  font-family: inherit;
+}
 .map-callout {
   color: var(--callout-color, var(--neon-saved));
 }
@@ -3620,11 +3627,13 @@ label.panel-row {
   display: inline;
 }
 .map-stage.spotlight .pin-body,
+.map-stage.spotlight .place-label-body,
 .map-stage.spotlight .route {
   animation: highlight-pulse 0.8s ease-in-out 0.35s 5;
 }
 /* Jumped to from Saved: two pulses once the glide has landed. */
 .found .pin-body,
+.found .place-label-body,
 .route.found {
   animation: highlight-pulse 0.7s ease-in-out 0.6s 2;
 }
