@@ -16,9 +16,18 @@ const CHIP = "#080c0c";
 /** How far the balloon's body stands off its place, along its tail, and
  * half the tail's width where it leaves the body. */
 const TAIL = 12, TAIL_WIDTH = 8;
-/** The sides a balloon can open to, in order of preference: unit steps from the place. */
-const SIDES = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: -1, y: 0 }] as const;
+/** The sides a balloon can open to, in order of preference: steps from the place. */
+const SIDES = [
+  { x: 0, y: -1 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: -1, y: 0 },
+  { x: 1, y: -1 }, { x: -1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 },
+] as const;
 type Side = (typeof SIDES)[number];
+/** The unit step toward a side. A diagonal tail points at the near end's
+ * round cap, so the body sits beside it, past the corner. */
+function toward(side: Side) {
+  const diagonal = !!side.x && !!side.y, unit = diagonal ? Math.SQRT1_2 : 1;
+  return { diagonal, x: side.x * unit, y: side.y * unit };
+}
 let clips = 0;
 
 let measurer: CanvasRenderingContext2D | null | undefined;
@@ -44,7 +53,7 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
 
 /** A place's name in a balloon that grows out of its pin: its tail ends on
  * the place and its head holds the symbol. It opens above or below its place,
- * or else to the right or the left. Names only ever use textContent. */
+ * or else to the right or the left, or else diagonally. Names only ever use textContent. */
 export class PlaceLabel {
   readonly element = document.createElementNS(NS, "g");
   private parts: Record<"textClip" | "casing" | "outline" | "fill" | "head" | "text", SVGElement> &
@@ -113,35 +122,32 @@ export class PlaceLabel {
   /** Draws the balloon at its pin's tip; returns whether it is still growing
    * or shrinking. `own` are the symbols at its tip, such as its pin, which it may cover. */
   draw(tip: Point, viewport: Size, layout: CalloutLayout, wanted: boolean, raised: boolean, own: CalloutBounds[]) {
-    const away = !wanted || tip.x < -40 || tip.y < -40 || tip.x > viewport.width + 40 || tip.y > viewport.height + 60;
-    if (away && !this.open) return false;
+    if (!wanted && !this.open) return false;
     const size = this.measure(raised, Math.max(60, Math.min(220, viewport.width - 120)));
-    // The body, and the tail's narrow strip between it and the place.
+    // The body, and the tail's line from the place to it.
     const room = (side: Side) => {
-      const x = tip.x + side.x * (TAIL + size.width / 2), y = tip.y + side.y * (TAIL + size.height / 2);
-      const across = side.x ? { x: 0, y: TAIL_WIDTH } : { x: TAIL_WIDTH, y: 0 }, end = { x: tip.x + side.x * TAIL, y: tip.y + side.y * TAIL };
-      return [
-        { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
-        { left: Math.min(tip.x, end.x) - across.x, right: Math.max(tip.x, end.x) + across.x,
-          top: Math.min(tip.y, end.y) - across.y, bottom: Math.max(tip.y, end.y) + across.y },
-      ] as const;
+      const u = toward(side), along = TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2;
+      const x = tip.x + u.x * along + (u.diagonal ? side.x * (size.width - size.height) / 2 : 0), y = tip.y + u.y * along;
+      return {
+        body: { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
+        tail: { from: tip, to: { x: tip.x + u.x * TAIL, y: tip.y + u.y * TAIL } },
+      };
     };
-    // Whether at least half the body is on screen.
-    const showing = (side: Side) => {
-      const [body] = room(side);
-      const seen = Math.max(0, Math.min(body.right, viewport.width) - Math.max(body.left, 0)) *
-        Math.max(0, Math.min(body.bottom, viewport.height) - Math.max(body.top, 0));
-      return seen * 2 >= (body.right - body.left) * (body.bottom - body.top);
+    const claim = (side: Side) => {
+      const { body, tail } = room(side);
+      return layout.claim(body, tail, own);
     };
-    // A closed balloon opens on the first free side, fully on screen if it can,
-    // else at least half on screen. Open, it keeps that side, even when a better
-    // one frees up or a pan takes it past the screen's edge. When the side is
-    // taken, it shrinks back into its pin, still holding its spot, and then opens again.
+    // A closed balloon opens on the first free side, on screen or not, so a pan
+    // never opens, closes or turns one. Open, it keeps that side, even when a
+    // better one frees up. When the side is taken, as zooming brings places
+    // closer, it shrinks back into its pin, still holding its spot, and then opens again.
     const kept = this.open ? this.side : undefined;
-    this.side = kept ?? SIDES.find(side => layout.claim(room(side), own))
-      ?? SIDES.find(side => showing(side) && layout.claim(room(side), own, false));
-    const claimed = !away && !!this.side && (!kept || layout.claim(room(kept), own, false)), target = claimed ? 1 : 0;
-    if (kept && !claimed && !away) for (const spot of room(kept)) layout.addObstacle(spot);
+    this.side = kept ?? SIDES.find(claim);
+    const claimed = wanted && !!this.side && (!kept || claim(kept)), target = claimed ? 1 : 0;
+    if (kept && !claimed && wanted) {
+      const { body, tail } = room(kept);
+      layout.hold(body, tail);
+    }
     const now = performance.now();
     // Small steps keep the spring steady through a slow frame; a long pause just settles it.
     for (let left = this.open || this.speed ? Math.min(0.5, (now - this.drawn) / 1000) : 1 / 60; left > 0; left -= 1 / 120) {
@@ -161,9 +167,9 @@ export class PlaceLabel {
       return !!kept;
     }
     if (claimed) {
-      const [body, tail] = room(side);
-      this.shown = { left: Math.min(body.left, tail.left), right: Math.max(body.right, tail.right),
-        top: Math.min(body.top, tail.top), bottom: Math.max(body.bottom, tail.bottom) };
+      const { body } = room(side);
+      this.shown = { left: Math.min(body.left, tip.x), right: Math.max(body.right, tip.x),
+        top: Math.min(body.top, tip.y), bottom: Math.max(body.bottom, tip.y) };
     } else this.shown = undefined;
     this.element.removeAttribute("hidden");
     this.element.setAttribute("transform", `translate(${tip.x.toFixed(1)},${tip.y.toFixed(1)})`);
@@ -183,21 +189,22 @@ export class PlaceLabel {
     this.rendered = key;
     const between = (from: number, to: number) => from + (to - from) * open;
     const start = (HEAD_RADIUS + CASING) * scale;
-    const half = between(start, size.height / 2), width = between(start * 2, size.width);
-    // How far the body's center is from the place, along the tail.
-    const reach = between(PLACE_PIN.head * scale, TAIL + (side.x ? size.width : size.height) / 2);
-    const cx = side.x * reach, cy = side.y * reach;
-    const left = cx - width / 2, top = cy - half, flat = width / 2 - half;
+    const half = between(start, size.height / 2), width = between(start * 2, size.width), flat = width / 2 - half;
+    // How far the body's center, or a diagonal tail's cap, is from the place, along the tail.
+    const u = toward(side), reach = between(PLACE_PIN.head * scale, TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2);
+    const cx = u.x * reach + (u.diagonal ? side.x * flat : 0), cy = u.y * reach;
+    const left = cx - width / 2, top = cy - half;
     const head = { x: left + half, y: cy, r: Math.max(0, between((HEAD_RADIUS - CASING) * scale, size.height / 2 - 4)) };
     const { textClip, casing, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
     // The tail runs from inside the body to the place, in the place's colour
     // like its pin; the body's dark fill is drawn over the outline, so only
     // the outline's outer edge shows around it. A dark casing goes around both,
     // so the tail's point shows on any map.
-    const base = reach - (side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
+    const base = reach - (u.diagonal ? Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
+      : side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
       : TAIL_WIDTH <= flat ? half : Math.sqrt(Math.max(0, half ** 2 - (TAIL_WIDTH - flat) ** 2)));
     const at = (across: number, along: number) =>
-      `${(side.x * along - side.y * across).toFixed(2)} ${(side.y * along + side.x * across).toFixed(2)}`;
+      `${(u.x * along - u.y * across).toFixed(2)} ${(u.y * along + u.x * across).toFixed(2)}`;
     const [l, r, t, b, h] = [left + half, left + width - half, top, top + half * 2, half].map(value => value.toFixed(2));
     const body = `M${l} ${b}A${h} ${h} 0 0 1 ${l} ${t}H${r}A${h} ${h} 0 0 1 ${r} ${b}Z`, w = TAIL_WIDTH;
     const shape = `${body}M${at(w, reach)}L${at(w, base)}C${at(w * 0.85, base - 3)} ${at(2.5, 3)} 0 0` +

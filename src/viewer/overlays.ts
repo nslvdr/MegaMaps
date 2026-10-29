@@ -354,7 +354,7 @@ export class NavigationOverlay {
     return !!this.svg.parentElement?.classList.contains("spotlight") ||
       !this.svg.classList.contains(`hide-${layer}`);
   }
-  // Reserve every visible pin and route vertex before placing any label.
+  // Reserve every pin and route vertex, on screen or not, before placing any label.
   reserve(camera: Camera, layout: CalloutLayout) {
     this.anchors = [];
     const reserve = (bounds: CalloutBounds) => {
@@ -431,11 +431,9 @@ export class NavigationOverlay {
       }
       const p = worldToScreen(camera, point);
       // A route can start on a place: a label may cover, or connect outside, all
-      // the symbols on its point. Anchors reach at most 45px above a pin's tip,
-      // so one this far out has none.
-      const own = p.x >= -40 && p.y >= -40 && p.x <= viewport.width + 40 && p.y <= viewport.height + 48
-        ? [...this.anchors, ...balloons].filter(anchor => p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom)
-        : [];
+      // the symbols on its point.
+      const own = [...this.anchors, ...balloons].filter(anchor =>
+        p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom);
       if (callout instanceof PlaceLabel) {
         if (callout.draw(p, viewport, labels, named || priority > 0, priority > 0, own)) gliding = true;
         if (callout.bounds) balloons.push(callout.bounds);

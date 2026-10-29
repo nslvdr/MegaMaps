@@ -127,25 +127,34 @@ test("a label still takes a spot whose margin just touches neighbouring pins", (
   assert.deepEqual(placement?.bounds, { left: 150, right: 250, top: 92, bottom: 128 });
 });
 
-test("a balloon may cover its own pin but not another pin, a taken spot or, unless allowed, the screen edge", () => {
+test("a balloon may cover its own pin but not another pin or a taken spot, on screen or not", () => {
   const own = { left: 88, right: 112, top: 70, bottom: 102 };
   const other = { left: 130, right: 154, top: 70, bottom: 102 };
   const layout = new CalloutLayout({ width: 400, height: 400 }, [own, other]);
-  const left = { left: 20, right: 110, top: 60, bottom: 102 };
-  assert.equal(layout.claim([{ left: 60, right: 140, top: 60, bottom: 102 }], [own]), false);
-  assert.equal(layout.claim([left], [own]), true);
-  assert.equal(layout.claim([left]), false);
-  const edge = { left: -40, right: 40, top: 200, bottom: 240 };
-  assert.equal(layout.claim([edge]), false);
-  assert.equal(layout.claim([edge], [], false), true);
+  const left = { left: 20, right: 110, top: 60, bottom: 102 }, tail = { from: { x: 100, y: 102 }, to: { x: 100, y: 102 } };
+  assert.equal(layout.claim({ left: 60, right: 140, top: 60, bottom: 102 }, tail, [own]), false);
+  assert.equal(layout.claim(left, tail, [own]), true);
+  assert.equal(layout.claim(left, tail), false);
+  const edge = { left: -40, right: 40, top: 200, bottom: 240 }, inside = { from: { x: 0, y: 220 }, to: { x: 0, y: 220 } };
+  assert.equal(layout.claim(edge, inside), true);
+  assert.equal(layout.claim({ ...edge, left: -30 }, inside), false, "past the edge, spots are still taken");
 });
 
 test("a balloon fits in a tight gap, beside its tail and close to other pins", () => {
-  // Above its place at (100, 100): the body, then the tail's strip down to the place.
-  const body = { left: 40, right: 160, top: 61, bottom: 91 }, tail = { left: 94, right: 106, top: 91, bottom: 100 };
+  // Above its place at (100, 100): the body, then the tail's line down to the place.
+  const body = { left: 40, right: 160, top: 61, bottom: 91 }, tail = { from: { x: 100, y: 100 }, to: { x: 100, y: 91 } };
   const beside = { left: 120, right: 144, top: 93, bottom: 125 }, above = { left: 60, right: 84, top: 27, bottom: 59 };
   const layout = new CalloutLayout({ width: 400, height: 400 }, [beside, above]);
-  assert.equal(layout.claim([body, tail]), true);
-  assert.equal(new CalloutLayout({ width: 400, height: 400 }, [{ ...beside, left: 100 }]).claim([body, tail]), false,
+  assert.equal(layout.claim(body, tail), true);
+  assert.equal(new CalloutLayout({ width: 400, height: 400 }, [{ ...beside, left: 95 }]).claim(body, tail), false,
     "a pin under the tail blocks it");
+  // Up and to the right of its place, past a pin whose box reaches under the tail's corner.
+  const corner = { left: 104, right: 128, top: 98, bottom: 130 };
+  const diagonal = { body: { left: 105, right: 175, top: 66, bottom: 96 }, tail: { from: { x: 100, y: 100 }, to: { x: 108.5, y: 91.5 } } };
+  assert.equal(new CalloutLayout({ width: 400, height: 400 }, [corner]).claim(diagonal.body, diagonal.tail), true,
+    "a diagonal tail passes beside a pin");
+  const line = new CalloutLayout({ width: 400, height: 400 });
+  line.claim(diagonal.body, diagonal.tail);
+  assert.equal(line.claim({ left: 90, right: 104, top: 92, bottom: 98 }, { from: { x: 0, y: 0 }, to: { x: 0, y: 0 } }), false,
+    "nothing covers a tail");
 });

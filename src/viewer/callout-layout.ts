@@ -26,6 +26,12 @@ export interface CalloutPlacement {
 }
 
 const CELL = 64, GAP = 22;
+type Line = { from: Point; to: Point };
+
+const span = (from: Point, to: Point) => ({
+  left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
+  top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y),
+});
 
 const center = (rect: CalloutBounds) => ({
   x: (rect.left + rect.right) / 2,
@@ -84,45 +90,41 @@ export function segmentCrossesBounds(from: Point, to: Point, rect: CalloutBounds
   return near < 1 - 1e-6 && far > 1e-6;
 }
 
-// One layout per frame coordinates labels around all anchors.
+// One layout per frame coordinates labels around all anchors, on screen or
+// not: a pan moves them all together, so it never changes where one goes.
 export class CalloutLayout {
   // Pins, labels and leaders by 64px screen cell: a spot only needs what is
   // in the few cells it covers.
-  private cells: CalloutBounds[][] = [];
-  private lines: { from: Point; to: Point }[][] = [];
-  private columns: number;
-  private rows: number;
+  private cells = new Map<number, CalloutBounds[]>();
+  private lines = new Map<number, Line[]>();
+  /** What the layout weighed, for the debug overlay; collected only when set. */
+  trace?: { pins: CalloutBounds[]; taken: CalloutBounds[]; lines: Line[]; refused: CalloutBounds[] };
 
   constructor(private viewport: Size, obstacles: CalloutBounds[] = []) {
-    this.columns = Math.max(1, Math.ceil(viewport.width / CELL));
-    this.rows = Math.max(1, Math.ceil(viewport.height / CELL));
     for (const obstacle of obstacles) this.addObstacle(obstacle);
   }
 
   addObstacle(rect: CalloutBounds) {
-    if (rect.right >= 0 && rect.bottom >= 0 &&
-        rect.left <= this.viewport.width && rect.top <= this.viewport.height)
-      this.index(this.cells, rect, rect);
+    this.trace?.pins.push(rect);
+    this.index(this.cells, rect, rect);
   }
 
-  private column(x: number) {
-    return Math.max(0, Math.min(this.columns - 1, Math.floor(x / CELL)));
+  private *keys(rect: CalloutBounds) {
+    for (let row = Math.floor(rect.top / CELL); row <= Math.floor(rect.bottom / CELL); row++)
+      for (let column = Math.floor(rect.left / CELL); column <= Math.floor(rect.right / CELL); column++)
+        yield row * 2 ** 20 + column;
   }
 
-  private row(y: number) {
-    return Math.max(0, Math.min(this.rows - 1, Math.floor(y / CELL)));
+  private index<T>(grid: Map<number, T[]>, rect: CalloutBounds, item: T) {
+    for (const key of this.keys(rect)) {
+      const cell = grid.get(key);
+      if (cell) cell.push(item);
+      else grid.set(key, [item]);
+    }
   }
 
-  private index<T>(grid: T[][], rect: CalloutBounds, item: T) {
-    for (let row = this.row(rect.top); row <= this.row(rect.bottom); row++)
-      for (let column = this.column(rect.left); column <= this.column(rect.right); column++)
-        (grid[row * this.columns + column] ??= []).push(item);
-  }
-
-  private *near<T>(grid: T[][], rect: CalloutBounds) {
-    for (let row = this.row(rect.top); row <= this.row(rect.bottom); row++)
-      for (let column = this.column(rect.left); column <= this.column(rect.right); column++)
-        yield* grid[row * this.columns + column] ?? [];
+  private *near<T>(grid: Map<number, T[]>, rect: CalloutBounds) {
+    for (const key of this.keys(rect)) yield* grid.get(key) ?? [];
   }
 
   // Whether a pin or label overlaps, or a leader runs under, this rectangle.
@@ -134,23 +136,29 @@ export class CalloutLayout {
     return false;
   }
 
-  // Whether a leader would run through a pin or label.
-  private crossed(from: Point, to: Point) {
-    const rect = { left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
-      top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) };
-    for (const other of this.near(this.cells, rect))
-      if (segmentCrossesBounds(from, to, other)) return true;
+  // Whether a leader or tail would run through a pin or label, other than its own.
+  private crossed(from: Point, to: Point, own: CalloutBounds[] = []) {
+    for (const other of this.near(this.cells, span(from, to)))
+      if (!own.includes(other) && segmentCrossesBounds(from, to, other)) return true;
     return false;
   }
 
-  // A balloon takes its spots, its body and its tail, when they are free and,
-  // unless `onScreen` is false, on screen. It may cover its own symbols.
-  // Returns whether it took them.
-  claim(spots: readonly CalloutBounds[], own: CalloutBounds[] = [], onScreen = true) {
-    const free = spots.every(spot => !this.blocked(expand(spot, 1), own) && (!onScreen ||
-      spot.left >= 4 && spot.top >= 4 && spot.right <= this.viewport.width - 4 && spot.bottom <= this.viewport.height - 4));
-    if (free) for (const spot of spots) this.index(this.cells, spot, spot);
+  // A balloon takes its body, and its tail's line from its place to the body,
+  // when they are free: a line, not a box, so a diagonal tail passes close to
+  // pins beside it. It may cover its own symbols. Returns whether it took them.
+  claim(body: CalloutBounds, tail: Line, own: CalloutBounds[] = []) {
+    const free = !this.blocked(expand(body, 1), own) && !this.crossed(tail.from, tail.to, own);
+    if (free) this.hold(body, tail);
+    else this.trace?.refused.push(body);
     return free;
+  }
+
+  // Keeps a balloon's spot taken, such as while it shrinks out of it.
+  hold(body: CalloutBounds, tail: Line) {
+    this.trace?.taken.push(body);
+    this.trace?.lines.push(tail);
+    this.index(this.cells, body, body);
+    this.index(this.lines, span(tail.from, tail.to), tail);
   }
 
   // A label sits at its normal spot above its target and turns to another
@@ -164,12 +172,15 @@ export class CalloutLayout {
       const top = direction.y < 0 ? target.top - GAP - size.height
         : direction.y > 0 ? target.bottom + GAP : anchor.y - size.height / 2;
       const bounds = { left, right: left + size.width, top, bottom: top + size.height };
-      if (this.blocked(expand(bounds, 5))) continue;
       const { from, to } = leader(bounds, target);
-      if (this.crossed(from, to)) continue;
+      if (this.blocked(expand(bounds, 5)) || this.crossed(from, to)) {
+        this.trace?.refused.push(bounds);
+        continue;
+      }
+      this.trace?.taken.push(bounds);
+      this.trace?.lines.push({ from, to });
       this.index(this.cells, bounds, bounds);
-      this.index(this.lines, { left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
-        top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) }, { from, to });
+      this.index(this.lines, span(from, to), { from, to });
       return { bounds, from, to, direction: direction.name };
     }
   }

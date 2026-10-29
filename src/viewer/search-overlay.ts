@@ -130,7 +130,7 @@ export class SearchOverlay {
         if (!shown) connector.setAttribute("hidden", "");
       }
       // A label leaving with its match fades out; one already hidden returns at once.
-      if (target && callout.draw(target.anchor, viewport, target.bounds, labels)) gliding = true;
+      if (target && callout.draw(target.anchor, viewport, target.bounds, labels, shown)) gliding = true;
       if (!shown) continue;
       for (const [polygonIndex, polygon] of target.polygons.entries())
         this.holes[index]![polygonIndex]!.setAttribute("points", polygon.map(p => `${p.x},${p.y}`).join(" "));
