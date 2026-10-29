@@ -34,7 +34,7 @@ import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
-import { failure, startStats, track } from "./stats";
+import { failure, setPerson, startStats, track } from "./stats";
 
 document.documentElement.lang = language;
 document.documentElement.dataset.labels = preference("label-size");
@@ -87,7 +87,10 @@ const settingsPage = element("settings");
 const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
 // The dev site (`npm run build:dev`) is for trying changes: it sends no stats.
 const released = import.meta.env.PROD && import.meta.env.MODE !== "dev";
-if (released) startStats(loadedVersion);
+if (released) {
+  // A browser tab only shows how to install, and sends nothing.
+  if (isInstalled()) startStats(loadedVersion);
+}
 const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
 const canUpdate = import.meta.env.PROD && "serviceWorker" in navigator;
 const settings = initSettingsPage(settingsPage, {
@@ -337,6 +340,7 @@ async function openMap(map: MapRecord) {
   viewerSection.hidden = false;
   home.hidden = true;
   document.body.classList.add("viewing");
+  const started = Date.now();
   try {
     // Reopening immediately must read the completed save, not the last throttle tick.
     await pendingViewSave;
@@ -358,10 +362,13 @@ async function openMap(map: MapRecord) {
       controls.options(),
     );
     controls.attach(viewer);
+    track("map_opened", { ok: true, megapixels: Math.round(map.width * map.height / 1e6),
+      places: state.markers.length, routes: state.routes.length, ms: Date.now() - started });
     void prepareMapSearch(map, version);
     await setLastMap(map.id);
   } catch (error) {
     if (version === openVersion) {
+      track("map_opened", { ok: false, error: failure(error) });
       closeViewer();
       showMessage(t("Could not open map"), String(error));
     }
@@ -833,7 +840,7 @@ async function runOcr(
     channel?.postMessage("changed");
     return index;
   } catch (error) {
-    if (!controller.signal.aborted) track("text_scanned", { ok: false });
+    track("text_scanned", { ok: false, ...controller.signal.aborted ? { stopped: true } : { error: failure(error) } });
     const message = controller.signal.aborted
       ? t("Text detection stopped. Rerun it in Advanced settings.")
       : t("Text detection failed. Rerun it in Advanced settings.");
@@ -915,7 +922,6 @@ void registerOfflineShell().then(refreshFooter);
 async function start() {
   // Maps imported in a browser tab stay there, so a tab only shows how to install.
   if (import.meta.env.PROD && !isInstalled()) {
-    track("app_opened", { installed: false });
     home.hidden = true;
     return initInstallPage(element("install"), element("install-dialog"));
   }
@@ -926,6 +932,7 @@ async function start() {
   await refresh();
   // Ask on every launch: Chrome may grant it later, once the app is installed or used more.
   if (maps.length) void protectStorage().then(showBackupReminder);
+  setPerson({ maps: maps.length, language });
   void storageProtected().then((kept) => track("app_opened", {
     installed: true, maps: maps.length, protected: kept ?? "unknown", language,
     "label-size": preference("label-size"), "update-install": preference("update-install"),

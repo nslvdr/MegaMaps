@@ -1,6 +1,6 @@
 # Mega Maps
 
-Mobile-first, offline PWA for exploring very large map images of quarries and man-made caves. Everything stays on the device: no accounts, backend, external fonts or runtime CDN. The only network traffic is app updates and PostHog usage counts (`src/stats.ts`), which carry the device type and the Settings nickname.
+Mobile-first, offline PWA for exploring very large map images of quarries and man-made caves. Everything stays on the device: no accounts, backend, external fonts or runtime CDN. The only network traffic is app updates and PostHog usage counts (`src/stats.ts`), sent only by the installed app, which carry the device type, the Settings nickname and uncaught errors.
 
 See [architecture.md](docs/architecture.md) for design decisions the code doesn't explain.
 

@@ -129,6 +129,8 @@ export class ViewerControls {
   private searchTimer?: ReturnType<typeof setTimeout>;
   private searchQuery = "";
   private controller = new AbortController();
+  /** What this stretch on the map did, sent as one event when it ends. */
+  private visit = ViewerControls.newVisit();
   private persistence: NavigationPersistence;
   private tool: Tool = "browse";
   private activeRoute?: string;
@@ -239,6 +241,19 @@ export class ViewerControls {
     this.render();
     if (state.rotationMode === "compass") this.resumeCompass();
   }
+  private static newVisit() {
+    return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false };
+  }
+  /** Leaving the app ends a visit as well as going back, since phones rarely go back. */
+  private endVisit() {
+    const { started, ...used } = this.visit;
+    track("map_viewed", { seconds: Math.round((Date.now() - started) / 1000), ...used });
+  }
+  private open(item: MapMarker | PlannedRoute, from: "map" | "saved") {
+    if ("label" in item) track("place_opened", { kind: item.kind, photos: item.photos?.length ?? 0, from });
+    else track("route_opened", { points: item.points.length, from });
+    this.showDetails(item);
+  }
   /** iOS forgets compass access when the app closes and only asks again from a tap,
    *  so a map reopened in Compass mode asks on the first tap anywhere. */
   private resumeCompass() {
@@ -290,8 +305,8 @@ export class ViewerControls {
         this.persistence.moved();
       },
       onTap: (point) => this.onTap(point),
-      onMarker: (marker) => this.showDetails(marker),
-      onRoute: (route) => this.showDetails(route),
+      onMarker: (marker) => this.open(marker, "map"),
+      onRoute: (route) => this.open(route, "map"),
       onEmptyTap: () => this.closePlaceDetails(),
       onDoubleTap: () => this.orientOnTap(),
       // A result's label flies to that result, like stepping to it.
@@ -460,6 +475,7 @@ export class ViewerControls {
     if (trip) {
       this.state.trips.push(trip);
       track("trip_ended", { minutes: Math.round((trip.ended - points[0]!.time) / 60_000), points: points.length });
+      this.visit.trip = true;
     }
     this.sheet(undefined);
     this.changed();
@@ -503,13 +519,16 @@ export class ViewerControls {
   private sheet(name: Sheet | undefined) {
     const previous = this.openSheet;
     if (previous === "search" && name !== "search") {
-      if (normalizeText(this.searchQuery))
+      if (normalizeText(this.searchQuery)) {
         track("search_used", { results: this.searchMatches.length, places: this.searchMatches.some((match) => match.marker) });
+        this.visit.searched = true;
+      }
       this.input("map-search").blur();
       this.input("map-search").value = "";
       this.renderSearch();
     }
     this.openSheet = name;
+    if (name && name !== previous) track("panel_opened", { panel: name });
     // A panel replaces the place being read.
     if (name) this.closePlaceDetails();
     // Row menus start closed each time a panel opens.
@@ -954,6 +973,7 @@ export class ViewerControls {
     this.measureHistory = [];
     this.mode("measure");
     track("measure_used");
+    this.visit.measured = true;
   }
   private closeMeasure() {
     this.measurePoints = [];
@@ -1014,6 +1034,7 @@ export class ViewerControls {
         route.draft = false;
         this.toast(t("{name} unchanged", { name: route.name }), "quiet");
       } else if (route.points.length >= 2) {
+        track("route_saved", { points: route.points.length, edited: !!before });
         route.draft = false;
         this.toast(t("{name} saved · {points}", { name: route.name, points: plural(route.points.length, "point") }), "done");
       } else {
@@ -1084,7 +1105,10 @@ export class ViewerControls {
     if (marker && from) {
       const moved = marker.point.x !== from.x || marker.point.y !== from.y;
       if (!keep) marker.point = from;
-      else if (moved) recordEdit(marker, [{ field: "point" }]);
+      else if (moved) {
+        recordEdit(marker, [{ field: "point" }]);
+        track("place_moved", { kind: marker.kind });
+      }
       if (moved) {
         this.toast(
           keep ? t("{name} moved", { name: marker.label }) : t("{name} not moved", { name: marker.label }),
@@ -1288,6 +1312,11 @@ export class ViewerControls {
     }, SPOTLIGHT_MS);
   }
   private bind() {
+    const page = this.root.ownerDocument;
+    this.on(page, "visibilitychange", () => {
+      if (page.hidden) this.endVisit();
+      else this.visit = ViewerControls.newVisit();
+    });
     // Exploring the map dismisses the keyboard but preserves the query and matches.
     this.on(this.el("map-canvas"), "pointerdown", () => {
       if (this.openSheet === "search") this.input("map-search").blur();
@@ -1592,7 +1621,10 @@ export class ViewerControls {
       this.dialog("marker-dialog").close();
       this.changed();
       this.mode("browse");
-      if (deleted) this.deleted(deleted.label, () => this.state.markers.splice(index, 0, deleted));
+      if (deleted) {
+        track("place_deleted", { kind: deleted.kind });
+        this.deleted(deleted.label, () => this.state.markers.splice(index, 0, deleted));
+      }
     });
     this.click("marker-kind-toggle", () => showDialog(this.dialog("kind-dialog")));
     this.click("kind-close", () => this.dialog("kind-dialog").close());
@@ -1672,9 +1704,12 @@ export class ViewerControls {
       if (!existing) {
         this.state.markers.push(marker);
         track("place_added", { kind: marker.kind, photos: this.formPhotos.length });
+        this.visit.place_added = true;
         this.newMarkerKind = marker.kind;
-      } else if (!unchanged)
+      } else if (!unchanged) {
         this.state.markers = this.state.markers.map((m) => m === existing ? marker : m);
+        track("place_edited", { kind: marker.kind, fields: changes.map((change) => change.field).join(",") });
+      }
       const returnToDetails = this.viewingMarker === marker.id && !this.moveAfterSave;
       if (!returnToDetails) this.dialog("marker-dialog").close();
       if (!unchanged) this.changed();
@@ -2239,7 +2274,7 @@ export class ViewerControls {
         description: marker.description,
         photos: marker.photos,
         icon: placeIcon(marker.kind, marker),
-        jump: () => this.showDetails(marker),
+        jump: () => this.open(marker, "saved"),
         actions: [
           {
             label: t("Edit"),
@@ -2263,6 +2298,7 @@ export class ViewerControls {
                 (m) => m.id !== marker.id,
               );
               this.changed();
+              track("place_deleted", { kind: marker.kind });
               this.deleted(marker.label, () => this.state.markers.splice(index, 0, marker));
             }),
           },
@@ -2277,7 +2313,7 @@ export class ViewerControls {
         meta: `${travelSummary(route.points, this.state.metresPerPixel) ?? plural(route.points.length, "point")}${route.draft ? " · unfinished" : ""}`,
         photos: route.photos,
         icon: this.routeIcon(route),
-        jump: () => this.showDetails(route),
+        jump: () => this.open(route, "saved"),
         actions: [
           {
             label: t("Edit"),
@@ -2461,6 +2497,7 @@ export class ViewerControls {
     // Leaving mid-route keeps a usable route rather than an orphan draft.
     if (this.tool === "route") this.finishRoute();
     this.sheet(undefined);
+    if (!this.root.ownerDocument.hidden) this.endVisit();
     clearTimeout(this.searchTimer);
     clearTimeout(this.toastTimer);
     clearTimeout(this.spotlightTimer);
