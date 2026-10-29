@@ -10,7 +10,9 @@ export { plural } from "../i18n";
 export function formatBytes(bytes: number) {
   if (bytes < 1024) return t("<1 KB");
   if (bytes < 1024 * 1024) return t("{size} KB", { size: Math.round(bytes / 1024) });
-  return t("{size} MB", { size: (bytes / (1024 * 1024)).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+  const size = (unit: number) => (bytes / unit).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  if (bytes < 1024 ** 3) return t("{size} MB", { size: size(1024 ** 2) });
+  return t("{size} GB", { size: size(1024 ** 3) });
 }
 
 /** Map names keep their file name in storage; the list hides the extension. */

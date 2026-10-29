@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import { DEBUG_HOLD, ERASE_STEP_PAUSE, eraseDialogMarkup, initSettingsPage, restoreDialogMarkup, settingsMarkup } from "../src/ui/settings-page";
 import { saveMap } from "../src/storage/database";
+import { payloadStore } from "../src/storage/payloads";
+import { deleteMapPhotos, savePhoto } from "../src/storage/photos";
 import type { MapRecord } from "../src/types";
 import { preference } from "../src/preferences";
 
@@ -61,6 +63,34 @@ test("Settings warns and says so beside the storage size when the browser may cl
     await page.refresh();
     assert.match(document.querySelector("#settings-storage-status")!.textContent!, /· Not protected$/);
     assert.match(document.querySelector("#backup-note")!.textContent!, /^This browser may clear your maps when the device runs low on space\. /);
+  } finally {
+    if (storage) Object.defineProperty(navigator, "storage", storage);
+    else delete (navigator as { storage?: unknown }).storage;
+  }
+});
+
+test("the storage size follows what is stored, not the browser's lagging estimate", async () => {
+  const { document } = parseHTML(`<html><body>${settingsMarkup}${restoreDialogMarkup}${eraseDialogMarkup}</body></html>`);
+  const storage = Object.getOwnPropertyDescriptor(navigator, "storage");
+  Object.defineProperty(navigator, "storage", { configurable: true, value: {
+    estimate: async () => ({ usage: 50 * 1024 * 1024, quota: 1e9 }),
+  } });
+  try {
+    const page = initSettingsPage(document.querySelector("#settings")!, {
+      restore: document.querySelector("#restore-dialog")!, erase: document.querySelector("#erase-dialog")!,
+    }, { back() {}, checkUpdates() {}, restore() {}, setLabelSize() {}, setTiling() {}, erase() {} });
+    const size = () => document.querySelector("#settings-storage-status")!.textContent;
+    await page.refresh();
+    const before = size();
+    assert.equal(before, "<1 KB");
+    await payloadStore("indexeddb").put("usage", "tile", new Blob([new Uint8Array(300 * 1024)]));
+    await savePhoto("usage", new Blob([new Uint8Array(200 * 1024)]));
+    await page.refresh();
+    assert.equal(size(), "500 KB");
+    await payloadStore("indexeddb").deleteMap("usage");
+    await deleteMapPhotos("usage");
+    await page.refresh();
+    assert.equal(size(), before);
   } finally {
     if (storage) Object.defineProperty(navigator, "storage", storage);
     else delete (navigator as { storage?: unknown }).storage;
