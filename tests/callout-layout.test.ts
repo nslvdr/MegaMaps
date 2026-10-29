@@ -126,3 +126,14 @@ test("a label still takes a spot whose margin just touches neighbouring pins", (
   assert.equal(placement?.direction, "above");
   assert.deepEqual(placement?.bounds, { left: 150, right: 250, top: 92, bottom: 128 });
 });
+
+test("a balloon may cover its own pin but not another pin, a taken spot or the screen edge", () => {
+  const own = { left: 88, right: 112, top: 70, bottom: 102 };
+  const other = { left: 130, right: 154, top: 70, bottom: 102 };
+  const layout = new CalloutLayout({ width: 400, height: 400 }, [own, other]);
+  const left = { left: 20, right: 110, top: 60, bottom: 102 };
+  assert.equal(layout.claim({ left: 60, right: 140, top: 60, bottom: 102 }, [own]), false);
+  assert.equal(layout.claim(left, [own]), true);
+  assert.equal(layout.claim(left), false);
+  assert.equal(layout.claim({ left: -40, right: 40, top: 200, bottom: 240 }), false);
+});
