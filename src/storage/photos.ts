@@ -43,6 +43,22 @@ export function putPhotos(tx: IDBTransaction, mapId: string, photos: Map<string,
   for (const [id, blob] of photos) store.put({ blob, created } satisfies StoredPhoto, key(mapId, id));
 }
 
+/** What a map's photos take on this device, kept ones and any not yet pruned. */
+export async function photoBytes(mapId: string) {
+  const db = await database();
+  return new Promise<number>((resolve, reject) => {
+    let total = 0;
+    const cursor = db.transaction("photos").objectStore("photos").openCursor(range(mapId));
+    cursor.onsuccess = () => {
+      const entry = cursor.result;
+      if (!entry) return resolve(total);
+      total += (entry.value as StoredPhoto).blob.size;
+      entry.continue();
+    };
+    cursor.onerror = () => reject(cursor.error);
+  });
+}
+
 export const deleteMapPhotos = (mapId: string) =>
   transact("photos", "readwrite", (s) => s.delete(range(mapId)));
 

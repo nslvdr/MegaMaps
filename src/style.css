@@ -178,64 +178,51 @@ svg {
 }
 .settings-open {
   position: relative;
-  font-size: var(--font-size-small);
-  font-weight: 650;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-8);
-  white-space: nowrap;
-  min-height: 44px;
-  padding: var(--control-padding);
-  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  border-radius: var(--radius-round);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-view) 40%, transparent);
+  color: var(--neon-view);
 }
 .settings-open svg {
-  width: 18px;
-  height: 18px;
-  color: var(--neon-view);
+  width: 20px;
+  height: 20px;
 }
 .settings-open:active:not(:disabled) {
   background: color-mix(in srgb, var(--neon-view) 18%, #000);
 }
-.library-actions {
-  display: grid;
-  margin: var(--space-24) 0;
-}
-.library-action {
-  --c: var(--neon-saved);
+/* Import sits on the list's heading, beside what it adds to. */
+.import-trigger {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-12);
-  padding: var(--control-padding);
-  min-height: 64px;
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  border-radius: var(--radius-md);
-  background: #000;
+  gap: var(--space-4);
+  min-height: 40px;
+  padding: 0 var(--space-16) 0 var(--space-12);
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--neon-add) 40%, transparent);
+  background: color-mix(in srgb, var(--neon-add) 10%, #000);
   font-size: var(--font-size-small);
   font-weight: 650;
 }
-.library-action.import-trigger {
-  --c: var(--neon-add);
-  background: color-mix(in srgb, var(--c) 10%, #000);
+.import-trigger svg {
+  width: 18px;
+  height: 18px;
+  color: var(--neon-add);
 }
-.library-action svg {
-  color: var(--c);
-}
-.library-action:active:not(:disabled),
+.import-trigger:active:not(:disabled),
 .dropping .import-trigger {
-  background: color-mix(in srgb, var(--c) 18%, #000);
+  background: color-mix(in srgb, var(--neon-add) 18%, #000);
 }
 /* A file dragged over the library lights Import, where it will go. */
 .dropping .import-trigger {
-  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  border-color: color-mix(in srgb, var(--neon-add) 70%, transparent);
 }
 @media (hover: hover) {
-  .library-action:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  .import-trigger:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--neon-add) 70%, transparent);
   }
   .settings-open:hover:not(:disabled) {
     background: color-mix(in srgb, var(--neon-view) 12%, #000);
@@ -243,8 +230,13 @@ svg {
 }
 .library {
   flex: 1;
+  margin-top: var(--space-24);
 }
 .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
   margin-bottom: var(--space-12);
 }
 h2 {
@@ -278,11 +270,13 @@ small {
   display: grid;
   gap: var(--space-12);
 }
+/* The preview runs edge to edge down the card's left side. */
 .map-card {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-4);
-  padding-right: var(--space-8);
+  min-height: 96px;
+  padding-right: var(--space-4);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
   border-radius: var(--radius-lg);
@@ -290,33 +284,32 @@ small {
 }
 .map-open {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-12);
   flex: 1;
   min-width: 0;
   background: none;
   text-align: left;
-  padding: var(--row-padding);
+  padding: 0;
 }
 .map-open:active:not(:disabled) {
   transform: none;
   background: #ffffff08;
 }
 .thumbnail {
-  width: 72px;
-  height: 72px;
+  width: 104px;
   flex-shrink: 0;
   position: relative;
   background: #0d0e11;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-right: 1px solid var(--line);
   overflow: hidden;
 }
 .thumbnail > img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  position: relative;
   z-index: 1;
 }
 .thumbnail-placeholder {
@@ -334,6 +327,10 @@ small {
 }
 .map-details {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-12) 0;
 }
 .map-details h3 {
   font-size: var(--font-size-body);
@@ -356,6 +353,28 @@ small {
 .map-saved.none {
   color: var(--muted);
 }
+/* Places and routes lead with their map colors. */
+.map-saved:not(.none) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-12);
+}
+.map-saved span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+.map-saved svg {
+  width: 14px;
+  height: 14px;
+}
+.saved-places svg {
+  color: var(--kind-place);
+}
+.saved-routes svg {
+  color: var(--kind-route);
+}
 .map-meta {
   margin-top: var(--space-4);
   font-size: var(--font-size-small);
@@ -364,10 +383,21 @@ small {
 .map-meta span {
   white-space: nowrap;
 }
+.map-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  vertical-align: top;
+}
+.map-size svg {
+  width: 14px;
+  height: 14px;
+}
 .map-more {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  align-self: center;
   background: none;
   color: var(--muted);
   border-radius: var(--radius-round);
@@ -424,13 +454,16 @@ small {
 }
 .library-footer {
   margin-top: var(--space-24);
-  padding-top: var(--space-16);
-  border-top: 1px solid var(--line);
+  min-height: var(--icon-button-size);
+  padding: var(--space-8) var(--space-16);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
+  gap: var(--space-4) var(--space-12);
   font-size: var(--font-size-small);
-  line-height: 1.45;
   color: var(--muted);
 }
 /* Online is lime, offline stays neutral: no signal underground is normal.
@@ -439,7 +472,7 @@ small {
   --c: var(--muted);
   display: flex;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--space-8);
   min-width: 0;
 }
 .footer-side[data-state="available"] {
@@ -449,32 +482,28 @@ small {
   --c: var(--neon-view);
 }
 .footer-side:last-child {
-  flex-direction: row-reverse;
-  text-align: right;
+  margin-left: auto;
 }
 .footer-icon {
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-round);
-  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  background: color-mix(in srgb, var(--c) 10%, #000);
   color: var(--c);
 }
 .footer-icon svg {
-  width: 18px;
-  height: 18px;
-}
-.footer-side strong,
-.footer-side small {
-  display: block;
+  width: 16px;
+  height: 16px;
 }
 .footer-side strong {
-  color: var(--text);
-  font-weight: 600;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+#offline-availability::before {
+  content: " · ";
+}
+/* The icon says "last update"; a ready update says so itself. */
+#update-hint {
+  display: none;
 }
 #offline-availability[data-state="unavailable"] {
   color: var(--danger);
@@ -682,13 +711,6 @@ small {
 }
 #settings-name::placeholder {
   color: var(--muted);
-}
-@media (max-width: 360px) {
-  .library-action {
-    flex-direction: column;
-    gap: var(--space-8);
-    font-size: var(--font-size-small);
-  }
 }
 
 /* ---------- Landing ---------- */
@@ -3826,7 +3848,6 @@ label.panel-row {
 }
 
 /* Sharing stays in menus and dialogs, leaving the map controls compact. */
-.library-actions { gap: var(--space-12); flex-wrap: wrap; }
 .sharing-dialog {
   --accent: var(--neon-view);
   --c: var(--accent);
