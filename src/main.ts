@@ -721,8 +721,9 @@ async function restore(backup: Backup) {
     progressDialog.close();
     importing = undefined;
     channel?.postMessage("changed");
-    await refresh().catch(() => {});
-    if (!settingsPage.hidden) void settings.refresh();
+    // The app starts again so every screen loads the restored maps, once the outcome is read.
+    if (messageDialog.open) messageDialog.addEventListener("close", () => location.reload(), { once: true });
+    else location.reload();
   }
 }
 // Settings' Delete everything, once its three steps are confirmed.
