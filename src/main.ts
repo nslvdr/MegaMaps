@@ -13,7 +13,7 @@ import { displayName, formatBytes, lastUsed, plural } from "./ui/format";
 import { viewerMarkup } from "./ui/viewer-markup";
 import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
-import { prunePhotos } from "./storage/photos";
+import { photoBytes, prunePhotos } from "./storage/photos";
 import { darkMode, measureTone } from "./viewer/appearance";
 import { initLibraryFooter, libraryFooterMarkup } from "./ui/library-footer";
 import { initKeyboardInset, initTapAway } from "./ui/keyboard-inset";
@@ -42,9 +42,8 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="home" id="home">
     <div class="top-edge" aria-hidden="true"></div>
-    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps${import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>'}</h1></div><button class="settings-open" id="settings-open">${icons.settings}<span class="update-dot" aria-hidden="true"></span><span>${t("Settings")}</span></button></header>
-    <div class="library-actions"><button class="library-action import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div>
-    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
+    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps${import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>'}</h1></div><button class="settings-open" id="settings-open" aria-label="${t("Settings")}" title="${t("Settings")}">${icons.settings}<span class="update-dot" aria-hidden="true"></span></button></header>
+    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2><button class="import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
     ${libraryFooterMarkup}
   </main>
   ${settingsMarkup}
@@ -103,7 +102,6 @@ const settings = initSettingsPage(settingsPage, {
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
-  setTiling: () => void stopRetiling().then(retileMaps),
 });
 // Versions installed automatically this session, so a failed one waits for a tap instead of retrying.
 const autoInstalled = new Set<string>();
@@ -272,11 +270,10 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 let retiling: ReturnType<typeof startRetiling> | undefined;
-// Maps quietly follow the tiling mode; the open map and its text scan are left alone.
+// Maps in older tile formats are quietly recut; the open map and its text scan are left alone.
 function retileMaps() {
   if (retiling || !navigator.locks) return;
   const job = startRetiling(
-    preference("tiling"),
     (id) => id === currentMap?.id || id === ocrJob?.mapId,
     (id) => {
       const url = thumbnails.get(id);
@@ -454,12 +451,25 @@ async function refresh() {
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="dialog">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
     // What's on a map is what tells two maps apart; when it was last used
-    // (which is also the list's order) and its size follow. On narrow
-    // screens it breaks between the two parts, not inside one.
-    card.querySelector(".map-meta")!.append(
-      ...[`${lastUsed(map)} · `, formatBytes(map.bytes)]
-        .map((part) => Object.assign(document.createElement("span"), { textContent: part })),
-    );
+    // (which is also the list's order) follows, with what it takes on the
+    // device on the right.
+    const size = Object.assign(document.createElement("span"), { className: "map-size", innerHTML: icons.storage });
+    const sizeText = size.appendChild(document.createTextNode(""));
+    card.querySelector(".map-meta")!.append(Object.assign(document.createElement("span"), { textContent: lastUsed(map) }), size);
+    // The original is only part of it: tiles cut from it and photos weigh too.
+    const tiles = map.tileBytes ?? 0;
+    let storage = [t("Image {size}", { size: formatBytes(map.bytes) }), t("Tiles {size}", { size: formatBytes(tiles) })];
+    const showSize = (photos: number) => {
+      sizeText.data = formatBytes(map.bytes + tiles + photos);
+    };
+    showSize(0);
+    void photoBytes(map.id)
+      .then((photos) => {
+        if (version !== renderVersion || !photos) return;
+        showSize(photos);
+        storage = [...storage, t("Photos {size}", { size: formatBytes(photos) })];
+      })
+      .catch(() => {});
     const saved = card.querySelector(".map-saved")!;
     // Leaving a map may still be writing its last edits.
     const navigation = pendingViewSave
@@ -468,12 +478,22 @@ async function refresh() {
     void navigation
       .then(({ markers, routes }) => {
         if (version !== renderVersion) return;
-        const items = [
-          markers.length && plural(markers.length, "place"),
-          routes.length && plural(routes.length, "route"),
-        ].filter(Boolean);
-        saved.textContent = items.join(" · ") || t("Nothing saved yet");
-        saved.classList.toggle("none", !items.length);
+        const counts = [
+          [markers.length, "place", icons.pin, "saved-places"],
+          [routes.length, "route", icons.route, "saved-routes"],
+        ] as const;
+        const shown = counts.filter(([count]) => count);
+        // Places and routes carry their map colors and icons, so the number
+        // alone reads; "nothing" stays plain text.
+        saved.replaceChildren(...shown.map(([count, word, icon, className]) => {
+          const label = plural(count, word);
+          const part = Object.assign(document.createElement("span"), { className, innerHTML: icon, title: label });
+          part.setAttribute("aria-label", label);
+          part.append(count.toLocaleString(locale));
+          return part;
+        }));
+        if (!shown.length) saved.textContent = t("Nothing saved yet");
+        saved.classList.toggle("none", !shown.length);
       })
       .catch(() => {});
     const more = card.querySelector<HTMLButtonElement>(".map-more")!;
@@ -487,7 +507,7 @@ async function refresh() {
     more.addEventListener("click", () =>
       showActionSheet(document.body, {
         title: name,
-        detail: saved.textContent?.trim() || undefined,
+        detail: storage.join(" · "),
         icon: card.querySelector(".thumbnail img")?.cloneNode() ?? icons.map,
         actions: [
           { label: t("Share"), icon: icons.share, action: () => { void shareMap(map); } },

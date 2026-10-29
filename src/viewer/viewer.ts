@@ -50,8 +50,6 @@ export interface ViewerOptions {
   navigation: NavigationState;
   overlay: SVGSVGElement;
   searchOverlay?: SVGSVGElement;
-  /** Visible controls/panels that map labels must not sit underneath. */
-  labelObstacles?(): CalloutBounds[];
   onView(): void;
   onTap(point: Point): void;
   onMarker(marker: MapMarker): void;
@@ -131,8 +129,12 @@ export class Viewer {
   private controller = new AbortController();
   /** The hidden debug overlay's stats panel, turned on from Settings. */
   private debug?: HTMLElement;
+  /** Its outlines of what the label layout weighed, above the labels. */
+  private debugLayout?: SVGSVGElement;
   /** The last paint's tiles, for the stats panel. */
   private painted = { level: 0, drawn: 0, missing: 0 };
+  /** The last label layout's counts, on screen or not. */
+  private laidOut = { pins: 0, taken: 0, refused: 0 };
   constructor(
     private canvas: HTMLCanvasElement,
     private map: MapRecord,
@@ -200,6 +202,9 @@ export class Viewer {
     if (preference("debug") === "on") {
       this.debug = Object.assign(document.createElement("pre"), { className: "map-debug" });
       canvas.after(this.debug);
+      this.debugLayout = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      this.debugLayout.setAttribute("class", "map-debug-layout");
+      canvas.parentElement!.append(this.debugLayout);
     }
     const saved = this.navigation.view;
     this.resize();
@@ -799,7 +804,8 @@ export class Viewer {
       this.stale = false;
       this.paint(viewport);
     }
-    const labels = new CalloutLayout(viewport, this.options?.labelObstacles?.() ?? []);
+    const labels = new CalloutLayout(viewport);
+    if (this.debugLayout) labels.trace = { pins: [], taken: [], lines: [], refused: [] };
     this.searchOverlay?.reserve(this.camera, labels);
     this.overlay?.reserve(this.camera, labels);
     // The current search result gets space first, then saved items share it.
@@ -815,7 +821,22 @@ export class Viewer {
     }
     this.lastFrame = now;
     this.frames++;
+    if (labels.trace) this.paintLayout(labels.trace);
     if (this.debug) this.debug.textContent = this.stats();
+  }
+  /** Pin rooms, the spots labels took and their tails or leaders, and the
+   * spots they tried and found taken, as the layout weighed them this frame. */
+  private paintLayout({ pins, taken, lines, refused }: NonNullable<CalloutLayout["trace"]>) {
+    const { width, height } = this.viewport();
+    const shown = (rect: CalloutBounds) => rect.right >= 0 && rect.bottom >= 0 && rect.left <= width && rect.top <= height;
+    const rects = (kind: string, list: CalloutBounds[]) => list.filter(shown).map(({ left, right, top, bottom }) =>
+      `<rect class="${kind}" x="${left.toFixed(1)}" y="${top.toFixed(1)}" width="${(right - left).toFixed(1)}" height="${(bottom - top).toFixed(1)}"/>`);
+    const segments = lines.filter(({ from, to }) => shown({
+      left: Math.min(from.x, to.x), right: Math.max(from.x, to.x), top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y),
+    })).map(({ from, to }) =>
+      `<line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}"/>`);
+    this.debugLayout!.innerHTML = [...rects("refused", refused), ...rects("pin", pins), ...rects("taken", taken), ...segments].join("");
+    this.laidOut = { pins: pins.length, taken: taken.length, refused: refused.length };
   }
   private paint(viewport: Size) {
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
@@ -968,6 +989,8 @@ export class Viewer {
       `fps ${fps ? Math.round(fps) : "–"} · ${this.frames} frames`,
       `canvas ${this.canvas.width}×${this.canvas.height} @${this.dpr.toFixed(2)}x`,
       `map ${this.map.width}×${this.map.height} · ${mb(this.map.bytes)}`,
+      `labels ${this.laidOut.taken} placed · ${this.laidOut.refused} spots refused · ${this.laidOut.pins} pins`,
+      `boxes: pins cyan · labels green · tails yellow · refused red`,
       `look ${this.dark.kind}${this.navigation.inverted ? " · inverted" : ""}`,
       ...(heap ? [`heap ${mb(heap)}`] : []),
     ].join("\n");
@@ -1005,6 +1028,7 @@ export class Viewer {
     this.overlay?.dispose();
     this.searchOverlay?.dispose();
     this.debug?.remove();
+    this.debugLayout?.remove();
     this.canvas.width = this.canvas.height = 1;
   }
 }

@@ -34,8 +34,8 @@ ${heading(t("Map"))}<div class="share-summary">${choice("label-size", icons.labe
   ...(["100", "200", "500", "1000"] as const).map((metres): [Preferences["label-distance"], string] => [metres, formatDistance(Number(metres))]),
   ["always", t("Always")]], t("Keeps pins clear from afar"))}${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]), t("For route travel times"))}</div>
 ${heading(t("You"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}<label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span>${label(t("Nickname"), t("On maps you send"))}<input id="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
-${heading(t("Your data"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps, keeps the ones here"))}${choice("tiling", icons.tiles, t("Map tiles"), [["compact", t("Compact")], ["sharp", t("Sharp")]], t("Sharp takes about twice the space"))}<div class="share-row" id="settings-storage"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
-${heading(t("Updates"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.rotateRight, t("Check for updates"))}</div>
+${heading(t("Your data"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps, keeps the ones here"))}<div class="share-row" id="settings-storage"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
+${heading(t("Updates"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.update, t("Check for updates"))}</div>
 <button type="button" class="settings-erase" id="settings-erase">${icons.trash}<span>${t("Delete everything")}</span></button>
 <p class="settings-foot">${t("No accounts: your maps, places and photos stay on this device.")}</p>
 </section>`;
@@ -53,8 +53,6 @@ interface SettingsOptions {
   restore(backup: Backup): void;
   /** Remove every map and setting once all three steps are confirmed; reports its own outcome. */
   erase(): void;
-  /** Recut saved maps in the new tiling mode, quietly in the background. */
-  setTiling(): void;
   /** Apply a new label size to the maps shown from now on. */
   setLabelSize(size: Preferences["label-size"]): void;
 }
@@ -157,9 +155,6 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
       setPreference("label-distance", select.value as Preferences["label-distance"]);
     } else if (select.name === "update-install") {
       setPreference("update-install", select.value as Preferences["update-install"]);
-    } else if (select.name === "tiling") {
-      setPreference("tiling", select.value as Preferences["tiling"]);
-      options.setTiling();
     }
   });
 

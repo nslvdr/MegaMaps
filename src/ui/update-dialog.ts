@@ -4,7 +4,7 @@ import { formatBytes } from "./format";
 import { icons } from "./icons";
 import { locale, t } from "../i18n";
 
-export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body">${dialogHeader("update-title", "", icons.rotateRight, "update-dismiss")}<p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button></div></dialog>`;
+export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body">${dialogHeader("update-title", "", icons.update, "update-dismiss")}<p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button></div></dialog>`;
 
 /** What the app is doing once the user has agreed to update. */
 export type UpdateStep =
@@ -139,7 +139,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     const current = ++attempt;
     busy = false;
     view("checking", {
-      icon: icons.rotateRight,
+      icon: icons.update,
       title: t("Checking for updates"),
       body: t("Looking for a newer version of Mega Maps…"),
       dismiss: t("Cancel"),
@@ -163,7 +163,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     const order = ["download", "install", "save"];
     let fraction = 0, stage = 0;
     view("installing", {
-      icon: found.downloaded ? icons.rotateRight : icons.download,
+      icon: found.downloaded ? icons.update : icons.download,
       title: found.downloaded ? t("Finishing the update") : t("Updating Mega Maps"),
       body: t("Your maps, places and routes stay on this device."),
       note: t("Keep Mega Maps open. It restarts by itself when the update is ready."),
@@ -229,7 +229,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     /** Explain why updating isn't possible right now. */
     explain(heading: string, message: string) {
       if (busy) return;
-      view("info", { icon: icons.rotateRight, title: heading, body: message, confirm: [icons.check, t("Got it"), () => dialog.close()] });
+      view("info", { icon: icons.update, title: heading, body: message, confirm: [icons.check, t("Got it"), () => dialog.close()] });
       if (!dialog.open) showDialog(dialog);
     },
     get busy() { return busy; },

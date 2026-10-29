@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { payloadStore, deleteStoredMap } from "../src/storage/payloads";
 import { listMaps, saveMap, renameMap, removeRecord, markOpened } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
+import { photoBytes, savePhoto } from "../src/storage/photos";
 import { defaultNavigation } from "../src/viewer/navigation";
 import type { MapRecord } from "../src/types";
 test("fallback payloads persist and deleting one map preserves its neighbour", async () => {
@@ -76,4 +77,12 @@ test("renaming cannot recreate a deleted map or change an unavailable map", asyn
   await assert.rejects(markOpened(map.id), /no longer available/);
   assert.deepEqual((await listMaps()).find((record) => record.id === map.id), map);
   await removeRecord(map.id);
+});
+
+test("a map's photo storage counts only its own photos", async () => {
+  await savePhoto("cave", new Blob(["12345"]));
+  await savePhoto("cave", new Blob(["123"]));
+  await savePhoto("caves", new Blob(["neighbour"]));
+  assert.equal(await photoBytes("cave"), 8);
+  assert.equal(await photoBytes("empty"), 0);
 });

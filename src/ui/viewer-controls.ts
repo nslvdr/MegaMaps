@@ -289,18 +289,6 @@ export class ViewerControls {
       navigation: this.state,
       overlay: this.root.querySelector<SVGSVGElement>("#map-overlay")!,
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
-      labelObstacles: () => {
-        const stage = this.el("map-stage").getBoundingClientRect();
-        return ["back", "display-chips", "dock", "search-count", "sheet", "tool-bar", "marker-dialog"].flatMap(id => {
-          const element = this.el(id);
-          if (element.hidden) return [];
-          const rect = element.getBoundingClientRect();
-          return rect.width && rect.height ? [{
-            left: rect.left - stage.left, right: rect.right - stage.left,
-            top: rect.top - stage.top, bottom: rect.bottom - stage.top,
-          }] : [];
-        });
-      },
       onView: () => {
         this.persistence.moved();
       },
