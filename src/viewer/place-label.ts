@@ -51,6 +51,9 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
     element.setAttribute(name, typeof value === "number" ? value.toFixed(2) : value);
 };
 
+/** A moving place's balloon is raised, larger than the others; the selected one opens over the pins beside it. */
+export type Lift = "" | "raised" | "selected";
+
 /** A place's name in a balloon that grows out of its pin: its tail ends on
  * the place and its head holds the symbol. It opens above or below its place,
  * or else to the right or the left, or else diagonally. Names only ever use textContent. */
@@ -66,6 +69,7 @@ export class PlaceLabel {
   private side?: Side;
   private speed = 0;
   private drawn = 0;
+  private lift: Lift = "";
   private rendered = "";
 
   /** `pin` is the place's pin, which the balloon takes the place of while open. */
@@ -105,6 +109,7 @@ export class PlaceLabel {
     this.side = previous.side;
     this.speed = previous.speed;
     this.drawn = previous.drawn;
+    this.lift = previous.lift;
   }
 
   setText(text: string) {
@@ -112,18 +117,23 @@ export class PlaceLabel {
     this.size = undefined;
   }
 
-  hide() {
+  /** `covered` hides its pin too, under the selected place's balloon. */
+  hide(covered = false) {
     this.element.setAttribute("hidden", "");
     this.open = this.speed = 0;
     this.side = this.shown = undefined;
-    if (this.pin) this.pin.style.opacity = "";
+    if (this.pin) this.pin.style.opacity = covered ? "0" : "";
   }
 
   /** Draws the balloon at its pin's tip; returns whether it is still growing
    * or shrinking. `own` are the symbols at its tip, such as its pin, which it may cover. */
-  draw(tip: Point, viewport: Size, layout: CalloutLayout, wanted: boolean, raised: boolean, own: CalloutBounds[]) {
-    if (!wanted && !this.open) return false;
-    const size = this.measure(raised, Math.max(60, Math.min(220, viewport.width - 120)));
+  draw(tip: Point, viewport: Size, layout: CalloutLayout, wanted: boolean, lift: Lift, own: CalloutBounds[]) {
+    if (!wanted && !this.open) {
+      // A pin that was under the selected place's balloon shows again.
+      if (this.pin?.style.opacity === "0") this.pin.style.opacity = "";
+      return false;
+    }
+    const size = this.measure(lift === "raised", Math.max(60, Math.min(220, viewport.width - 120)));
     // The body, and the tail's line from the place to it.
     const room = (side: Side) => {
       const u = toward(side), along = TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2;
@@ -141,8 +151,12 @@ export class PlaceLabel {
     // never opens, closes or turns one. Open, it keeps that side, even when a
     // better one frees up. When the side is taken, as zooming brings places
     // closer, it shrinks back into its pin, still holding its spot, and then opens again.
-    const kept = this.open ? this.side : undefined;
+    // Lifted or let down, it looks for its side again, and regrows there if it turns.
+    const relift = lift !== this.lift, was = this.side;
+    this.lift = lift;
+    const kept = this.open && !relift ? this.side : undefined;
     this.side = kept ?? SIDES.find(claim);
+    if (relift && this.side !== was) this.open = this.speed = 0;
     const claimed = wanted && !!this.side && (!kept || claim(kept)), target = claimed ? 1 : 0;
     if (kept && !claimed && wanted) {
       const { body, tail } = room(kept);
@@ -177,7 +191,7 @@ export class PlaceLabel {
     const handover = Math.min(1, this.open * 4);
     this.element.style.opacity = handover < 1 ? String(handover) : "";
     if (this.pin) this.pin.style.opacity = handover > 0 ? String(1 - handover) : "";
-    this.render(this.open, side, raised ? 1.5 : 1, size);
+    this.render(this.open, side, lift ? 1.5 : 1, size);
     return this.open !== target;
   }
 

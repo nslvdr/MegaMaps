@@ -3,7 +3,7 @@ import { icons } from "../ui/icons";
 import { PIN_CASING, PLACE_PIN, placeIcon } from "../ui/place-icon";
 import { MapCallout } from "./map-callout";
 import { PlaceLabel } from "./place-label";
-import { CalloutLayout, type CalloutBounds } from "./callout-layout";
+import { boundsOverlap, CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
   routeColor,
   type Layers,
@@ -424,19 +424,31 @@ export class NavigationOverlay {
     // The selected place and balloons already open claim their spots first, so
     // one coming into view goes around them instead of pushing them aside.
     const leads = ({ callout, priority }: OverlayCallout) => callout instanceof PlaceLabel && (priority > 0 || callout.opened);
+    // With a place selected, the other labels close to their pins. Its balloon
+    // opens over the pins beside it, which hide, so no other place peeks out from under it.
+    const focused = this.callouts.some(item => item.markerId && item.markerId === this.selected);
+    const wanted = (priority: number) => (named && !focused) || priority > 0;
+    let cover: CalloutBounds | undefined;
     for (const { callout, point, padding, layer, priority, markerId } of [...this.callouts.filter(leads), ...this.callouts.filter(item => !leads(item))]) {
+      const p = worldToScreen(camera, point);
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.hide();
         continue;
       }
-      const p = worldToScreen(camera, point);
+      if (callout instanceof PlaceLabel && cover && boundsOverlap(cover, pinBounds(p, 4, false))) {
+        callout.hide(true);
+        continue;
+      }
+      const selected = !!markerId && markerId === this.selected;
       // A route can start on a place: a label may cover, or connect outside, all
       // the symbols on its point.
-      const own = [...this.anchors, ...balloons].filter(anchor =>
+      const own = selected ? this.anchors : [...this.anchors, ...balloons].filter(anchor =>
         p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom);
       if (callout instanceof PlaceLabel) {
-        if (callout.draw(p, viewport, labels, named || priority > 0, priority > 0, own)) gliding = true;
+        const lift = selected ? "selected" : priority > 0 ? "raised" : "";
+        if (callout.draw(p, viewport, labels, wanted(priority), lift, own)) gliding = true;
         if (callout.bounds) balloons.push(callout.bounds);
+        if (selected) cover = callout.bounds;
         continue;
       }
       let bounds = { left: p.x - padding, right: p.x + padding, top: p.y - padding, bottom: p.y + padding };
@@ -444,7 +456,7 @@ export class NavigationOverlay {
         bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
           top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
       // The selected, moving or edited item keeps its label when zoomed out.
-      if (callout.draw(p, viewport, bounds, labels, named || priority > 0)) gliding = true;
+      if (callout.draw(p, viewport, bounds, labels, wanted(priority))) gliding = true;
     }
     return gliding;
   }
