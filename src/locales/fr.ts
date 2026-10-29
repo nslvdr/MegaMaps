@@ -299,7 +299,7 @@ export const fr = {
   "Off: original colors": "Désactivé : couleurs d’origine",
   "Offline": "Hors ligne",
   "Offline check stopped. Try again with Mega Maps in the foreground.": "Vérification hors ligne interrompue. Réessayez avec Mega Maps au premier plan.",
-  "Offline ready": "Mode hors ligne prêt",
+  "Offline ready": "Hors ligne prêt",
   "Offline startup needs a browser with service-worker support.": "Le démarrage hors ligne nécessite un navigateur prenant en charge les service workers.",
   "Offline use": "Utilisation hors ligne",
   "Oldest": "Plus anciens",
