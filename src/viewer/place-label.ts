@@ -47,7 +47,7 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
  * or else to the right or the left. Names only ever use textContent. */
 export class PlaceLabel {
   readonly element = document.createElementNS(NS, "g");
-  private parts: Record<"textClip" | "casing" | "outline" | "fill" | "head" | "text" | "tip", SVGElement> &
+  private parts: Record<"textClip" | "casing" | "outline" | "fill" | "head" | "text", SVGElement> &
     Partial<Record<"headClip" | "water" | "icon", SVGElement>>;
   private name = "";
   private size?: { raised: boolean; max: number; text: string; textSize: number; width: number; height: number };
@@ -67,11 +67,11 @@ export class PlaceLabel {
       : "";
     this.element.setAttribute("class", "place-label");
     // The body pulses with its pin when the place is found (see .found in style.css).
-    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="casing" fill="${PIN_CASING}" stroke="${PIN_CASING}" stroke-width="7" stroke-linejoin="round"/><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/><circle class="tip" fill="${color}" stroke="${PIN_CASING}" stroke-width="2"/></g>`;
+    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="casing" fill="${PIN_CASING}" stroke="${PIN_CASING}" stroke-width="7" stroke-linejoin="round"/><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/></g>`;
     const part = (selector: string) => this.element.querySelector<SVGElement>(selector) ?? undefined;
     this.parts = {
       textClip: part("clipPath rect")!, casing: part(".casing")!, outline: part(".outline")!, fill: part(".fill")!,
-      head: part(".head")!, text: part("text")!, tip: part(".tip")!,
+      head: part(".head")!, text: part("text")!,
       headClip: part("clipPath circle"), water: part(".water"), icon: part("svg"),
     };
     this.parts.icon?.style.setProperty("color", PIN_CASING);
@@ -189,11 +189,11 @@ export class PlaceLabel {
     const cx = side.x * reach, cy = side.y * reach;
     const left = cx - width / 2, top = cy - half, flat = width / 2 - half;
     const head = { x: left + half, y: cy, r: Math.max(0, between((HEAD_RADIUS - CASING) * scale, size.height / 2 - 4)) };
-    const { textClip, casing, outline, fill, head: disc, text, tip, headClip, water, icon } = this.parts;
+    const { textClip, casing, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
     // The tail runs from inside the body to the place, in the place's colour
     // like its pin; the body's dark fill is drawn over the outline, so only
     // the outline's outer edge shows around it. A dark casing goes around both,
-    // and a dot marks the place, so the tail's point shows on any map.
+    // so the tail's point shows on any map.
     const base = reach - (side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
       : TAIL_WIDTH <= flat ? half : Math.sqrt(Math.max(0, half ** 2 - (TAIL_WIDTH - flat) ** 2)));
     const at = (across: number, along: number) =>
@@ -205,7 +205,6 @@ export class PlaceLabel {
     set(casing, { d: shape });
     set(outline, { d: shape });
     set(fill, { d: body });
-    set(tip, { r: 4 * scale * Math.min(1, open) });
     set(disc, { cx: head.x, cy: head.y, r: head.r });
     if (headClip) set(headClip, { cx: head.x, cy: head.y, r: head.r });
     if (water && this.place.water) {
