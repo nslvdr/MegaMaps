@@ -421,7 +421,10 @@ export class NavigationOverlay {
     }
     // Open balloons, which a route's chip on the same point goes around like a pin.
     const balloons: CalloutBounds[] = [];
-    for (const { callout, point, padding, layer, priority, markerId } of this.callouts) {
+    // The selected place and balloons already open claim their spots first, so
+    // one coming into view goes around them instead of pushing them aside.
+    const leads = ({ callout, priority }: OverlayCallout) => callout instanceof PlaceLabel && (priority > 0 || callout.opened);
+    for (const { callout, point, padding, layer, priority, markerId } of [...this.callouts.filter(leads), ...this.callouts.filter(item => !leads(item))]) {
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.hide();
         continue;

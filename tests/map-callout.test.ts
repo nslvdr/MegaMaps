@@ -147,22 +147,22 @@ test("a pin grows into its balloon, moves to a free side, and shrinks back into 
   };
   settle(above);
   assert.equal(balloon.hasAttribute("hidden"), false);
-  assert.ok(balloonBox(balloon).left >= 300 && Math.abs(width() - open) < 1, "it opens to the right instead");
-  assert.equal(overlay.labelAt({ x: 380, y: 300 })?.markerId, "gate");
+  assert.ok(balloonBox(balloon).top >= 300 && Math.abs(width() - open) < 1, "it opens below instead");
+  assert.equal(overlay.labelAt({ x: 300, y: 330 })?.markerId, "gate");
   settle();
-  assert.ok(balloonBox(balloon).left >= 300, "it keeps its side when the spot above frees up");
+  assert.ok(balloonBox(balloon).top >= 300, "it keeps its side when the spot above frees up");
+  const below = { left: 200, right: 400, top: 320, bottom: 360 };
+  settle(above, below);
+  assert.ok(balloonBox(balloon).left >= 300, "then to the right");
   const right = { left: 310, right: 500, top: 290, bottom: 296 };
-  settle(above, right);
+  settle(above, below, right);
   assert.ok(balloonBox(balloon).right <= 300, "then to the left");
   const left = { left: 100, right: 290, top: 290, bottom: 296 };
-  settle(above, right, left);
-  assert.ok(balloonBox(balloon).top >= 300, "then below");
-  const below = { left: 200, right: 400, top: 320, bottom: 360 };
-  settle(above, right, left, below);
+  settle(above, below, right, left);
   assert.equal(balloon.hasAttribute("hidden"), true, "with no side free, it closes");
   assert.equal(pin.style.opacity, "", "the pin is back");
   settle();
-  assert.ok(balloonBox(balloon).top >= 300, "it opens again on the side it last took");
+  assert.ok(balloonBox(balloon).bottom <= 300, "closed, it forgets its side and opens above again");
   overlay.dispose();
 });
 
@@ -184,6 +184,39 @@ test("a place on screen keeps its balloon at the screen's edge", (t) => {
   const [side, corner] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
   assert.ok(!side!.hasAttribute("hidden") && balloonBox(side!).left >= 8, "by the side, it opens away from the edge");
   assert.equal(corner!.hasAttribute("hidden"), false, "in a corner, it runs past the edge rather than close");
+  overlay.dispose();
+});
+
+test("an open balloon keeps its spot when another place's balloon opens next to it", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("crowd");
+  // The older place's balloon would take the spot above the newer one's.
+  state.markers = [
+    { id: "older", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 400, y: 320 }, created: 0 },
+    { id: "newer", kind: "entrance", label: "Old quarry gate", description: "", point: { x: 300, y: 300 }, created: 1 },
+  ];
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const settle = (...taken: CalloutBounds[]) => {
+    for (let step = 0; step < 3; step++, now += 1000) {
+      const layout = new CalloutLayout(viewport, taken);
+      overlay.reserve(camera, layout);
+      overlay.draw(camera, viewport, layout);
+    }
+  };
+  const [older, newer] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  // At first, something leaves the older place no room.
+  settle({ left: 320, right: 562, top: 290, bottom: 362 });
+  assert.equal(older!.hasAttribute("hidden"), true);
+  assert.ok(balloonBox(newer!).bottom <= 300, "the newer place opens above");
+  settle();
+  assert.ok(balloonBox(newer!).bottom <= 300, "it stays above");
+  assert.ok(balloonBox(older!).top >= 320, "the older place goes around it, below");
   overlay.dispose();
 });
 

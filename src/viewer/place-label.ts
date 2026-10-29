@@ -17,7 +17,7 @@ const CHIP = "#080c0c";
  * half the tail's width where it leaves the body. */
 const TAIL = 12, TAIL_WIDTH = 8;
 /** The sides a balloon can open to, in order of preference: unit steps from the place. */
-const SIDES = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }] as const;
+const SIDES = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: -1, y: 0 }] as const;
 type Side = (typeof SIDES)[number];
 let clips = 0;
 
@@ -53,7 +53,7 @@ export class PlaceLabel {
   private size?: { raised: boolean; max: number; text: string; textSize: number; width: number; height: number };
   private shown?: CalloutBounds;
   private open = 0;
-  /** The side it took, once it first opened. */
+  /** The side it took, while open. */
   private side?: Side;
   private speed = 0;
   private drawn = 0;
@@ -83,6 +83,11 @@ export class PlaceLabel {
     return this.shown;
   }
 
+  /** Whether it is open, or growing or shrinking. */
+  get opened() {
+    return this.open > 0;
+  }
+
   /** Takes over a balloon for the same place, when overlays rebuild. */
   follow(previous: unknown) {
     if (!(previous instanceof PlaceLabel)) return;
@@ -100,7 +105,7 @@ export class PlaceLabel {
   hide() {
     this.element.setAttribute("hidden", "");
     this.open = this.speed = 0;
-    this.shown = undefined;
+    this.side = this.shown = undefined;
     if (this.pin) this.pin.style.opacity = "";
   }
 
@@ -127,15 +132,15 @@ export class PlaceLabel {
         Math.max(0, Math.min(body.bottom, viewport.height) - Math.max(body.top, 0));
       return seen * 2 >= (body.right - body.left) * (body.bottom - body.top);
     };
-    // A balloon keeps the side it took, even when a better one frees up. It moves
-    // only when that side is taken or mostly off screen: it shrinks back into its
-    // pin and grows out again on the side it took. While its place is on screen,
-    // the screen's edge alone never closes it: it may run past it.
-    const kept = this.side, sides = kept ? [kept, ...SIDES.filter(side => side !== kept)] : SIDES;
-    const free = away ? undefined : kept && showing(kept) && layout.claim(room(kept), own, false) ? kept
-      : sides.find(side => layout.claim(room(side), own)) ?? sides.find(side => layout.claim(room(side), own, false));
-    if (free && !this.open) this.side = free;
-    const claimed = !!free && free === this.side, target = claimed ? 1 : 0;
+    const fits = (side: Side) => showing(side) && layout.claim(room(side), own, false);
+    // A closed balloon opens on the first free side, fully on screen if it can.
+    // Open, it keeps that side, even when a better one frees up, and may run past
+    // the screen's edge. When the side is taken or mostly off screen, it shrinks
+    // back into its pin, still holding its spot, and then opens again.
+    const kept = this.open ? this.side : undefined;
+    this.side = kept ?? SIDES.find(side => layout.claim(room(side), own)) ?? SIDES.find(fits);
+    const claimed = !away && !!this.side && (!kept || fits(kept)), target = claimed ? 1 : 0;
+    if (kept && !claimed && !away) for (const spot of room(kept)) layout.addObstacle(spot);
     const now = performance.now();
     // Small steps keep the spring steady through a slow frame; a long pause just settles it.
     for (let left = this.open || this.speed ? Math.min(0.5, (now - this.drawn) / 1000) : 1 / 60; left > 0; left -= 1 / 120) {
