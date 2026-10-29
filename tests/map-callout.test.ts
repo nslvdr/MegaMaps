@@ -325,6 +325,46 @@ test("zoomed out, saved items show only pins, except the selected one", (t) => {
   overlay.dispose();
 });
 
+test("the selected place's balloon closes the others and hides the pins under it", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("selected-balloon");
+  // The spray can sits just above the well, where its balloon opens.
+  state.markers = [["gate", 100, 300], ["well", 400, 300], ["spray", 404, 270]].map(([id, x, y]) =>
+    ({ id: id as string, kind: "landmark" as const, label: id as string, description: "", point: { x: x as number, y: y as number }, created: 0 }));
+  const overlay = new NavigationOverlay(svg);
+  overlay.rebuild(state);
+  const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
+  const [gate, well, spray] = [...svg.querySelectorAll<SVGGElement>(".pin-body")];
+  const labels = () => [...svg.querySelectorAll(".place-label")];
+  const shown = () => {
+    overlay.draw(camera, viewport);
+    now += 1000;
+    overlay.draw(camera, viewport);
+    return labels().filter(label => !label.hasAttribute("hidden")).map(label => label.querySelector("text")!.textContent);
+  };
+  assert.deepEqual(shown().sort(), ["gate", "spray", "well"]);
+  overlay.setSelected("well");
+  assert.deepEqual(shown(), ["well"], "the other names close");
+  assert.equal(gate!.style.opacity, "", "the gate's pin shows");
+  assert.equal(spray!.style.opacity, "0", "the spray can's pin, under the well's balloon, does not");
+  assert.equal(well!.style.opacity, "0", "the well's balloon takes its pin's place");
+  const body = labels()[1]!.querySelector("clipPath rect")!;
+  assert.ok(Number(body.getAttribute("y")) + Number(body.getAttribute("height")) < 0, "it opens above");
+  assert.equal(Number(body.getAttribute("height")), 30, "at the size of any other");
+  overlay.setSelected();
+  assert.deepEqual(shown().sort(), ["gate", "spray", "well"]);
+  assert.equal(spray!.style.opacity, "0", "the spray can's balloon is back in its pin's place");
+  overlay.draw(camera, viewport, undefined, false);
+  now += 1000;
+  overlay.draw(camera, viewport, undefined, false);
+  assert.equal(spray!.style.opacity, "", "zoomed out, its pin shows again");
+  overlay.dispose();
+});
+
 test("route outlines and pins follow the camera and drop out while off screen", () => {
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
