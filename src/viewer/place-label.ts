@@ -108,17 +108,22 @@ export class PlaceLabel {
     const away = !wanted || tip.x < -40 || tip.y < -40 || tip.x > viewport.width + 40 || tip.y > viewport.height + 60;
     if (away && !this.open) return false;
     const size = this.measure(raised, Math.max(60, Math.min(220, viewport.width - 120)));
+    // The body, and the tail's narrow strip between it and the place.
     const room = (side: Side) => {
       const x = tip.x + side.x * (TAIL + size.width / 2), y = tip.y + side.y * (TAIL + size.height / 2);
-      return {
-        left: Math.min(tip.x, x - size.width / 2), right: Math.max(tip.x, x + size.width / 2),
-        top: Math.min(tip.y, y - size.height / 2), bottom: Math.max(tip.y, y + size.height / 2),
-      };
+      const across = side.x ? { x: 0, y: 6 } : { x: 6, y: 0 }, end = { x: tip.x + side.x * TAIL, y: tip.y + side.y * TAIL };
+      return [
+        { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
+        { left: Math.min(tip.x, end.x) - across.x, right: Math.max(tip.x, end.x) + across.x,
+          top: Math.min(tip.y, end.y) - across.y, bottom: Math.max(tip.y, end.y) + across.y },
+      ] as const;
     };
     // An open balloon keeps its side while it can. When it must move, it shrinks
-    // back into its pin and grows out again on the side it took.
+    // back into its pin and grows out again on the side it took. While its place
+    // is on screen, the screen's edge alone never closes it: it may run past it.
     const sides = this.open ? [this.side, ...SIDES.filter(side => side !== this.side)] : SIDES;
-    const free = away ? undefined : sides.find(side => layout.claim(room(side), own));
+    const free = away ? undefined : sides.find(side => layout.claim(room(side), own)) ??
+      sides.find(side => layout.claim(room(side), own, false));
     if (free && !this.open) this.side = free;
     const claimed = free === this.side, target = claimed ? 1 : 0;
     const now = performance.now();
@@ -137,7 +142,11 @@ export class PlaceLabel {
       this.hide();
       return false;
     }
-    this.shown = claimed ? room(this.side) : undefined;
+    if (claimed) {
+      const [body, tail] = room(this.side);
+      this.shown = { left: Math.min(body.left, tail.left), right: Math.max(body.right, tail.right),
+        top: Math.min(body.top, tail.top), bottom: Math.max(body.bottom, tail.bottom) };
+    } else this.shown = undefined;
     this.element.removeAttribute("hidden");
     this.element.setAttribute("transform", `translate(${tip.x.toFixed(1)},${tip.y.toFixed(1)})`);
     // The pin hands over to the balloon early, while both are still the same shape.

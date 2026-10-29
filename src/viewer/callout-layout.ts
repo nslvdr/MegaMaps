@@ -143,12 +143,13 @@ export class CalloutLayout {
     return false;
   }
 
-  // A balloon takes its spot over its pin when the spot is on screen and free;
-  // it may cover its own symbols. Returns whether it took it.
-  claim(spot: CalloutBounds, own: CalloutBounds[] = []) {
-    const free = spot.left >= 4 && spot.top >= 4 && spot.right <= this.viewport.width - 4 &&
-      spot.bottom <= this.viewport.height - 4 && !this.blocked(expand(spot, 3), own);
-    if (free) this.index(this.cells, spot, spot);
+  // A balloon takes its spots, its body and its tail, when they are free and,
+  // unless `onScreen` is false, on screen. It may cover its own symbols.
+  // Returns whether it took them.
+  claim(spots: readonly CalloutBounds[], own: CalloutBounds[] = [], onScreen = true) {
+    const free = spots.every(spot => !this.blocked(expand(spot, 1), own) && (!onScreen ||
+      spot.left >= 4 && spot.top >= 4 && spot.right <= this.viewport.width - 4 && spot.bottom <= this.viewport.height - 4));
+    if (free) for (const spot of spots) this.index(this.cells, spot, spot);
     return free;
   }
 
