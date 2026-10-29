@@ -3,6 +3,11 @@ import type { MapRecord } from "../types";
 let opening: Promise<IDBDatabase> | undefined;
 export function database() {
   return (opening ??= new Promise<IDBDatabase>((resolve, reject) => {
+    // Lockdown Mode removes IndexedDB entirely, so explain instead of "Can't find variable".
+    if (typeof indexedDB === "undefined") {
+      reject(new Error(t("This browser blocks the storage Mega Maps needs to keep maps. On iPhone, Lockdown Mode does this: turn it off, then reopen Mega Maps.")));
+      return;
+    }
     // Keep the original database name so existing Mega Maps libraries stay accessible.
     const request = indexedDB.open("map-viewer", 4);
     request.onupgradeneeded = () => {

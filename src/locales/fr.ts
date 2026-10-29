@@ -458,6 +458,7 @@ export const fr = {
   "This backup is damaged or wasn’t made by Mega Maps.": "Cette sauvegarde est endommagée ou n’a pas été créée par Mega Maps.",
   "This backup is incomplete. Save it again and retry.": "Cette sauvegarde est incomplète. Enregistrez-la à nouveau et réessayez.",
   "This backup was made by a newer Mega Maps. Update the app and try again.": "Cette sauvegarde vient d’une version plus récente de Mega Maps. Mettez l’app à jour et réessayez.",
+  "This browser blocks the storage Mega Maps needs to keep maps. On iPhone, Lockdown Mode does this: turn it off, then reopen Mega Maps.": "Ce navigateur bloque le stockage dont Mega Maps a besoin pour garder les cartes. Sur iPhone, c’est le mode Isolement : désactivez-le, puis rouvrez Mega Maps.",
   "This browser may clear your maps when the device runs low on space.": "Ce navigateur peut effacer vos cartes quand l’appareil manque d’espace.",
   "This map doesn’t use the same image as the shared map.": "Cette carte n’utilise pas la même image que la carte partagée.",
   "This map has no prepared tiles.": "Cette carte n’a aucune tuile préparée.",
