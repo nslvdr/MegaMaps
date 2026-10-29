@@ -149,6 +149,8 @@ test("a pin grows into its balloon, moves to a free side, and shrinks back into 
   assert.equal(balloon.hasAttribute("hidden"), false);
   assert.ok(balloonBox(balloon).left >= 300 && Math.abs(width() - open) < 1, "it opens to the right instead");
   assert.equal(overlay.labelAt({ x: 380, y: 300 })?.markerId, "gate");
+  settle();
+  assert.ok(balloonBox(balloon).left >= 300, "it keeps its side when the spot above frees up");
   const right = { left: 310, right: 500, top: 290, bottom: 296 };
   settle(above, right);
   assert.ok(balloonBox(balloon).right <= 300, "then to the left");
@@ -159,6 +161,8 @@ test("a pin grows into its balloon, moves to a free side, and shrinks back into 
   settle(above, right, left, below);
   assert.equal(balloon.hasAttribute("hidden"), true, "with no side free, it closes");
   assert.equal(pin.style.opacity, "", "the pin is back");
+  settle();
+  assert.ok(balloonBox(balloon).top >= 300, "it opens again on the side it last took");
   overlay.dispose();
 });
 
