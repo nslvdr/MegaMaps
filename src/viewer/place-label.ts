@@ -13,8 +13,9 @@ const HEAD_RADIUS = 10.5, CASING = 1.15;
 /** As `body` in style.css: labels are measured before they're on screen. */
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const CHIP = "#080c0c";
-/** How far the balloon's body stands off its place, along its tail. */
-const TAIL = 9;
+/** How far the balloon's body stands off its place, along its tail, and
+ * half the tail's width where it leaves the body. */
+const TAIL = 12, TAIL_WIDTH = 8;
 /** The sides a balloon can open to, in order of preference: unit steps from the place. */
 const SIDES = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }] as const;
 type Side = (typeof SIDES)[number];
@@ -46,13 +47,14 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
  * to the right, the left or below. Names only ever use textContent. */
 export class PlaceLabel {
   readonly element = document.createElementNS(NS, "g");
-  private parts: Record<"textClip" | "outline" | "fill" | "head" | "text" | "tip", SVGElement> &
+  private parts: Record<"textClip" | "outline" | "fill" | "head" | "text", SVGElement> &
     Partial<Record<"headClip" | "water" | "icon", SVGElement>>;
   private name = "";
   private size?: { raised: boolean; max: number; text: string; textSize: number; width: number; height: number };
   private shown?: CalloutBounds;
   private open = 0;
-  private side: Side = SIDES[0];
+  /** The side it took, once it first opened. */
+  private side?: Side;
   private speed = 0;
   private drawn = 0;
   private rendered = "";
@@ -65,11 +67,11 @@ export class PlaceLabel {
       : "";
     this.element.setAttribute("class", "place-label");
     // The body pulses with its pin when the place is found (see .found in style.css).
-    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="outline" fill="${CHIP}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/><circle class="tip" fill="${color}" stroke="${PIN_CASING}"/></g>`;
+    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/></g>`;
     const part = (selector: string) => this.element.querySelector<SVGElement>(selector) ?? undefined;
     this.parts = {
       textClip: part("clipPath rect")!, outline: part(".outline")!, fill: part(".fill")!, head: part(".head")!, text: part("text")!,
-      tip: part(".tip")!, headClip: part("clipPath circle"), water: part(".water"), icon: part("svg"),
+      headClip: part("clipPath circle"), water: part(".water"), icon: part("svg"),
     };
     this.parts.icon?.style.setProperty("color", PIN_CASING);
     this.parts.icon?.setAttribute("stroke-width", "2.5");
@@ -111,21 +113,29 @@ export class PlaceLabel {
     // The body, and the tail's narrow strip between it and the place.
     const room = (side: Side) => {
       const x = tip.x + side.x * (TAIL + size.width / 2), y = tip.y + side.y * (TAIL + size.height / 2);
-      const across = side.x ? { x: 0, y: 6 } : { x: 6, y: 0 }, end = { x: tip.x + side.x * TAIL, y: tip.y + side.y * TAIL };
+      const across = side.x ? { x: 0, y: TAIL_WIDTH } : { x: TAIL_WIDTH, y: 0 }, end = { x: tip.x + side.x * TAIL, y: tip.y + side.y * TAIL };
       return [
         { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
         { left: Math.min(tip.x, end.x) - across.x, right: Math.max(tip.x, end.x) + across.x,
           top: Math.min(tip.y, end.y) - across.y, bottom: Math.max(tip.y, end.y) + across.y },
       ] as const;
     };
-    // An open balloon keeps its side while it can. When it must move, it shrinks
-    // back into its pin and grows out again on the side it took. While its place
-    // is on screen, the screen's edge alone never closes it: it may run past it.
-    const sides = this.open ? [this.side, ...SIDES.filter(side => side !== this.side)] : SIDES;
-    const free = away ? undefined : sides.find(side => layout.claim(room(side), own)) ??
-      sides.find(side => layout.claim(room(side), own, false));
+    // Whether at least half the body is on screen.
+    const showing = (side: Side) => {
+      const [body] = room(side);
+      const seen = Math.max(0, Math.min(body.right, viewport.width) - Math.max(body.left, 0)) *
+        Math.max(0, Math.min(body.bottom, viewport.height) - Math.max(body.top, 0));
+      return seen * 2 >= (body.right - body.left) * (body.bottom - body.top);
+    };
+    // A balloon keeps the side it took, even when a better one frees up. It moves
+    // only when that side is taken or mostly off screen: it shrinks back into its
+    // pin and grows out again on the side it took. While its place is on screen,
+    // the screen's edge alone never closes it: it may run past it.
+    const kept = this.side, sides = kept ? [kept, ...SIDES.filter(side => side !== kept)] : SIDES;
+    const free = away ? undefined : kept && showing(kept) && layout.claim(room(kept), own, false) ? kept
+      : sides.find(side => layout.claim(room(side), own)) ?? sides.find(side => layout.claim(room(side), own, false));
     if (free && !this.open) this.side = free;
-    const claimed = free === this.side, target = claimed ? 1 : 0;
+    const claimed = !!free && free === this.side, target = claimed ? 1 : 0;
     const now = performance.now();
     // Small steps keep the spring steady through a slow frame; a long pause just settles it.
     for (let left = this.open || this.speed ? Math.min(0.5, (now - this.drawn) / 1000) : 1 / 60; left > 0; left -= 1 / 120) {
@@ -138,12 +148,13 @@ export class PlaceLabel {
       this.open = target;
       this.speed = 0;
     }
-    if (this.open <= 0) {
+    const side = this.side;
+    if (this.open <= 0 || !side) {
       this.hide();
       return false;
     }
     if (claimed) {
-      const [body, tail] = room(this.side);
+      const [body, tail] = room(side);
       this.shown = { left: Math.min(body.left, tail.left), right: Math.max(body.right, tail.right),
         top: Math.min(body.top, tail.top), bottom: Math.max(body.bottom, tail.bottom) };
     } else this.shown = undefined;
@@ -153,7 +164,7 @@ export class PlaceLabel {
     const handover = Math.min(1, this.open * 4);
     this.element.style.opacity = handover < 1 ? String(handover) : "";
     if (this.pin) this.pin.style.opacity = handover > 0 ? String(1 - handover) : "";
-    this.render(this.open, this.side, raised ? 1.5 : 1, size);
+    this.render(this.open, side, raised ? 1.5 : 1, size);
     return this.open !== target;
   }
 
@@ -171,18 +182,19 @@ export class PlaceLabel {
     const cx = side.x * reach, cy = side.y * reach;
     const left = cx - width / 2, top = cy - half, flat = width / 2 - half;
     const head = { x: left + half, y: cy, r: Math.max(0, between((HEAD_RADIUS - CASING) * scale, size.height / 2 - 4)) };
-    const { textClip, outline, fill, head: disc, text, tip, headClip, water, icon } = this.parts;
-    // The tail runs from inside the body to the place; the outline is drawn
-    // under the fill, so only its outer edge shows around both.
-    const base = reach - (side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - 36))
-      : 6 <= flat ? half : Math.sqrt(Math.max(0, half ** 2 - (6 - flat) ** 2)));
+    const { textClip, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
+    // The tail runs from inside the body to the place, in the place's colour
+    // like its pin; the body's dark fill is drawn over the outline, so only
+    // the outline's outer edge shows around it.
+    const base = reach - (side.x ? flat + Math.sqrt(Math.max(0, half ** 2 - TAIL_WIDTH ** 2))
+      : TAIL_WIDTH <= flat ? half : Math.sqrt(Math.max(0, half ** 2 - (TAIL_WIDTH - flat) ** 2)));
     const at = (across: number, along: number) =>
       `${(side.x * along - side.y * across).toFixed(2)} ${(side.y * along + side.x * across).toFixed(2)}`;
     const [l, r, t, b, h] = [left + half, left + width - half, top, top + half * 2, half].map(value => value.toFixed(2));
-    const d = `M${l} ${b}A${h} ${h} 0 0 1 ${l} ${t}H${r}A${h} ${h} 0 0 1 ${r} ${b}Z` +
-      `M${at(6, reach)}L${at(6, base)}C${at(3, base - 1)} ${at(1, 4)} 0 0C${at(-1, 4)} ${at(-3, base - 1)} ${at(-6, base)}L${at(-6, reach)}Z`;
-    set(outline, { d });
-    set(fill, { d });
+    const body = `M${l} ${b}A${h} ${h} 0 0 1 ${l} ${t}H${r}A${h} ${h} 0 0 1 ${r} ${b}Z`, w = TAIL_WIDTH;
+    set(outline, { d: `${body}M${at(w, reach)}L${at(w, base)}C${at(w * 0.85, base - 3)} ${at(2.5, 3)} 0 0` +
+      `C${at(-2.5, 3)} ${at(-w * 0.85, base - 3)} ${at(-w, base)}L${at(-w, reach)}Z` });
+    set(fill, { d: body });
     set(disc, { cx: head.x, cy: head.y, r: head.r });
     if (headClip) set(headClip, { cx: head.x, cy: head.y, r: head.r });
     if (water && this.place.water) {
@@ -194,7 +206,6 @@ export class PlaceLabel {
     text.textContent = size.text;
     // The name shows as the balloon opens past it, inside its edge.
     text.style.opacity = String(Math.max(0, Math.min(1, (open - 0.3) / 0.6)));
-    set(tip, { r: 2.5 * Math.max(0, Math.min(1, open)) });
     set(textClip, { x: left, y: top, width, height: half * 2 });
   }
 
