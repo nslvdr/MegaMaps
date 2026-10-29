@@ -118,7 +118,9 @@ svg {
   width: var(--surface-width);
   /* Center in the usable area, including asymmetric landscape safe areas. */
   margin: 0 auto 0 var(--surface-left);
-  padding: var(--home-top) 0 calc(var(--space-16) + env(safe-area-inset-bottom));
+  /* The footer pill sits just above the home indicator, like the map's dock,
+     so its corners follow the screen's rounded ones instead of floating. */
+  padding: var(--home-top) 0 max(var(--space-12), calc(env(safe-area-inset-bottom) - var(--space-12)));
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -503,14 +505,23 @@ small {
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-#offline-availability::before {
-  content: " · ";
+/* A plane marks the offline line, in its color. */
+.footer-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: var(--space-8);
+  vertical-align: bottom;
+}
+.footer-offline svg {
+  width: 14px;
+  height: 14px;
 }
 /* The icon says "last update"; a ready update says so itself. */
 #update-hint {
   display: none;
 }
-#offline-availability[data-state="unavailable"] {
+.footer-offline:has([data-state="unavailable"]) {
   color: var(--danger);
 }
 .footer-updated {
