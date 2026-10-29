@@ -4,7 +4,6 @@ import { readHeader } from "./headers";
 import { chooseBackend, deleteStoredMap } from "../storage/payloads";
 import { saveMap } from "../storage/database";
 import { protectStorage } from "../storage/protection";
-import { preference } from "../preferences";
 export async function importMap(
   file: File,
   onProgress: (p: ImportProgress) => void,
@@ -74,7 +73,7 @@ export async function importMap(
         abort();
         return;
       }
-      worker.postMessage({ file, record, tiling: preference("tiling") });
+      worker.postMessage({ file, record });
     });
   } catch (error) {
     worker.terminate();

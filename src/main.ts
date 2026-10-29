@@ -102,7 +102,6 @@ const settings = initSettingsPage(settingsPage, {
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
-  setTiling: () => void stopRetiling().then(retileMaps),
 });
 // Versions installed automatically this session, so a failed one waits for a tap instead of retrying.
 const autoInstalled = new Set<string>();
@@ -271,11 +270,10 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 let retiling: ReturnType<typeof startRetiling> | undefined;
-// Maps quietly follow the tiling mode; the open map and its text scan are left alone.
+// Maps in older tile formats are quietly recut; the open map and its text scan are left alone.
 function retileMaps() {
   if (retiling || !navigator.locks) return;
   const job = startRetiling(
-    preference("tiling"),
     (id) => id === currentMap?.id || id === ocrJob?.mapId,
     (id) => {
       const url = thumbnails.get(id);

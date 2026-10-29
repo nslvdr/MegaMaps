@@ -11,15 +11,14 @@ import { inMemory, saveMap } from "../storage/database";
 import { readHeader } from "./headers";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
-import { CUT, DECODED, UNCUT, cropJPEG, decodeJPEG } from "./jpeg";
+import { DECODED, decodeJPEG } from "./jpeg";
 import { tileBand, buildParents } from "./tiles";
-import type { Preferences } from "../preferences";
 const reply = (message: WorkerReply) => postMessage(message);
 // A failed promise nothing waits on would otherwise leave the import waiting forever.
 onunhandledrejection = ({ reason }) =>
   reply({ type: "error", message: reason instanceof Error ? reason.message : String(reason) });
-onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: Preferences["tiling"] }>) => {
-  const { file, record, tiling } = event.data;
+onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
+  const { file, record } = event.data;
   const start = performance.now();
   try {
     if (
@@ -39,7 +38,6 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: 
     const store = payloadStore(record.backend);
     let done = 0,
       last = 0;
-    // By key: zoomed-out tiles of a JPEG are written twice, PNG then JPEG.
     const tileSizes = new Map<string, number>();
     const measuredStore = {
       ...store,
@@ -113,24 +111,9 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: 
         bitmap.close();
       }
     }
-    const compact = header.format === "jpeg" && tiling === "compact";
-    if (header.format === "jpeg") {
-      // Sharp maps are always decoded; compact ones only when the JPEG can't be cut.
-      const cropped =
-        compact &&
-        record.backend === "opfs" &&
-        (await cropJPEG(file, header, record.id, async (x, y, tile) => {
-          await measuredStore.put(record.id, tileKey(0, x, y), tile);
-          progress();
-        }));
-      if (cropped) decoder = CUT;
-      else {
-        if (compact) decoder = UNCUT;
-        // Restart the count: the decode rewrites every level-0 tile.
-        done = 0;
-        await decodeJPEG(file, header, record.id, record.backend, consume);
-      }
-    } else if (header.format === "png") {
+    if (header.format === "jpeg")
+      await decodeJPEG(file, header, record.id, record.backend, consume);
+    else if (header.format === "png") {
       try {
         await decodePNG(file, header, consume);
       } catch (error) {
@@ -138,14 +121,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord; tiling: 
         else throw error;
       }
     } else await native();
-    await buildParents(
-      levels,
-      canvas,
-      measuredStore,
-      record.id,
-      progress,
-      compact ? "image/jpeg" : "image/png",
-    );
+    await buildParents(levels, canvas, measuredStore, record.id, progress);
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {
       ...record,

@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { TILE_SIZE, type Backend, type ImageHeader } from "../types";
+import type { Backend, ImageHeader } from "../types";
 import type { RowConsumer } from "./png";
 interface SyncFile {
   read(buffer: ArrayBufferView, options: { at: number }): number;
@@ -18,8 +18,6 @@ export interface JPEGModule {
   _decoder_finish(): number;
   _decoder_close(): void;
   _decoder_error(): number;
-  _cropper_open(): number;
-  _cropper_row(row: number): number;
   UTF8ToString(pointer: number): string;
   ioError?: string;
 }
@@ -33,19 +31,18 @@ export interface JPEGOptions {
     offset: number,
     count: number,
   ) => number;
-  writeTile?: (x: number, y: number, bytes: Uint8Array<ArrayBuffer>) => void;
   wasmBinary?: Uint8Array;
 }
 export type JPEGFactory = (options: JPEGOptions) => Promise<JPEGModule>;
-/** Map record notes. Maps not in the chosen tiling mode are recut in the background. */
-/** Sharp: decoded into PNG at every level. */
+/** Map record notes. Maps in an older tile format are recut in the background. */
+/** Decoded into PNG at every level. */
 export const DECODED = "libjpeg scanlines / OPFS coefficient spill",
   /** Zoomed-out levels were JPEG made from JPEG, so loss added up. */
   CHAINED_JPEG_PARENTS = "libjpeg lossless DCT crops / OPFS coefficient spill",
   PNG_PARENTS = "libjpeg lossless DCT crops, PNG parents / OPFS coefficient spill",
-  /** Compact: the JPEG's own blocks, with zoomed-out JPEG levels saved once from sharp PNG. */
+  /** The removed compact mode: the JPEG's own blocks, with zoomed-out JPEG levels saved once from PNG. */
   CUT = "libjpeg lossless DCT crops, JPEG parents from PNG / OPFS coefficient spill",
-  /** Could not be cut, or failed to change mode: left as it is. */
+  /** Could not be cut in compact mode, or failed to recut: left as it is. */
   UNCUT = "libjpeg scanlines / could not cut DCT crops";
 export async function loadJPEG(): Promise<JPEGFactory> {
   const url = new URL("/codecs/jpeg.js", location.origin).href;
@@ -61,7 +58,6 @@ async function runCodec<T>(
   spill: boolean,
   createDecoder: () => Promise<JPEGFactory>,
   work: (module: JPEGModule) => Promise<T>,
-  writeTile?: JPEGOptions["writeTile"],
 ) {
   const handles: SyncFile[] = [];
   let input: SyncFile | undefined, compressed: Uint8Array | undefined;
@@ -115,7 +111,6 @@ async function runCodec<T>(
         if (operation === 2) return handle.write(bytes, { at: offset });
         return 0;
       },
-      writeTile,
     });
     return await work(module);
   } finally {
@@ -171,46 +166,6 @@ export function decodeJPEG(
       } finally {
         module._decoder_close();
       }
-    },
-  );
-}
-/**
- * Cuts level-0 tiles from the original's DCT blocks without re-encoding.
- * Resolves false when this JPEG cannot be cut; the caller then decodes it.
- */
-export function cropJPEG(
-  file: Blob,
-  header: ImageHeader,
-  id: string,
-  put: (x: number, y: number, tile: Blob) => Promise<void>,
-  createDecoder: () => Promise<JPEGFactory> = loadJPEG,
-) {
-  let row: Blob[] = [];
-  return runCodec(
-    file,
-    header,
-    id,
-    "opfs",
-    true,
-    createDecoder,
-    async (module) => {
-      try {
-        if (module._cropper_open() !== header.width) return false;
-        for (let y = 0; y * TILE_SIZE < header.height; y++) {
-          if (!module._cropper_row(y)) return false;
-          const tiles = row;
-          row = [];
-          for (const [x, tile] of tiles.entries()) await put(x, y, tile);
-        }
-        return true;
-      } finally {
-        module._decoder_close();
-      }
-    },
-    (x, _y, bytes) => {
-      row[x] = new Blob([bytes], {
-        type: "image/jpeg",
-      });
     },
   );
 }
