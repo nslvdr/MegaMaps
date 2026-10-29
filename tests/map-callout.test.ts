@@ -12,12 +12,13 @@ import type { Point } from "../src/viewer/camera";
 
 const pinRoom = (tip: Point): CalloutBounds => ({ left: tip.x - 12, right: tip.x + 12, top: tip.y - 30, bottom: tip.y + 2 });
 
-// A balloon's room on screen: its body, from the transform and its text clip, down to its tip.
+// A balloon's room on screen: its body, from the transform and its text clip, out to its tip.
 const balloonBox = (label: Element): CalloutBounds => {
   const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
   const body = label.querySelector("clipPath rect")!;
   const left = x! + Number(body.getAttribute("x")), top = y! + Number(body.getAttribute("y"));
-  return { left, right: left + Number(body.getAttribute("width")), top, bottom: y! };
+  const right = left + Number(body.getAttribute("width")), bottom = top + Number(body.getAttribute("height"));
+  return { left: Math.min(left, x!), right: Math.max(right, x!), top: Math.min(top, y!), bottom: Math.max(bottom, y!) };
 };
 
 test("saved places open into named balloons beside route callouts and retain layer/edit controls", (t) => {
@@ -105,7 +106,7 @@ test("saved places open into named balloons beside route callouts and retain lay
   overlay.dispose();
 });
 
-test("a pin grows into its balloon, then shrinks back into the pin when there is no room", (t) => {
+test("a pin grows into its balloon, moves to a free side, and shrinks back into the pin when there is no room", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
@@ -118,7 +119,7 @@ test("a pin grows into its balloon, then shrinks back into the pin when there is
   const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
   const balloon = svg.querySelector<SVGGElement>(".place-label")!;
   const pin = svg.querySelector<SVGGElement>(".pin-body")!;
-  const width = () => balloonBox(balloon).right - balloonBox(balloon).left;
+  const width = () => Number(balloon.querySelector("clipPath rect")!.getAttribute("width"));
   const frame = (ms: number, layout?: CalloutLayout) => {
     now += ms;
     if (layout) overlay.reserve(camera, layout);
@@ -134,12 +135,29 @@ test("a pin grows into its balloon, then shrinks back into the pin when there is
   const open = width();
   assert.ok(first < open / 2, "it starts from the pin's round head");
   assert.ok(open > 100, "open, it fits the whole name");
+  assert.ok(balloonBox(balloon).bottom <= 300, "it opens above its place first");
   // Something now covers the spot above the pin.
-  frame(16, new CalloutLayout(viewport, [{ left: 200, right: 400, top: 240, bottom: 280 }]));
-  assert.ok(width() < open, "it shrinks back toward the pin");
+  const above = { left: 200, right: 400, top: 240, bottom: 280 };
+  frame(16, new CalloutLayout(viewport, [above]));
+  assert.ok(width() < open, "it shrinks back toward the pin before moving");
   assert.equal(overlay.labelAt({ x: 300, y: 270 }), undefined, "a closing balloon answers no taps");
-  frame(1000, new CalloutLayout(viewport, [{ left: 200, right: 400, top: 240, bottom: 280 }]));
-  assert.equal(balloon.hasAttribute("hidden"), true);
+  // It closes, then opens on its new side.
+  const settle = (...taken: CalloutBounds[]) => {
+    for (let step = 0; step < 3; step++) frame(1000, new CalloutLayout(viewport, taken));
+  };
+  settle(above);
+  assert.equal(balloon.hasAttribute("hidden"), false);
+  assert.ok(balloonBox(balloon).left >= 300 && Math.abs(width() - open) < 1, "it opens to the right instead");
+  assert.equal(overlay.labelAt({ x: 380, y: 300 })?.markerId, "gate");
+  const right = { left: 310, right: 500, top: 290, bottom: 296 };
+  settle(above, right);
+  assert.ok(balloonBox(balloon).right <= 300, "then to the left");
+  const left = { left: 100, right: 290, top: 290, bottom: 296 };
+  settle(above, right, left);
+  assert.ok(balloonBox(balloon).top >= 300, "then below");
+  const below = { left: 200, right: 400, top: 320, bottom: 360 };
+  settle(above, right, left, below);
+  assert.equal(balloon.hasAttribute("hidden"), true, "with no side free, it closes");
   assert.equal(pin.style.opacity, "", "the pin is back");
   overlay.dispose();
 });
