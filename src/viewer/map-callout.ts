@@ -99,17 +99,15 @@ export class MapCallout {
   }
 
   // One straight segment ends at the target's nearest edge, without a dot.
-  // Labels fade out when they leave the screen or lose their spot, following
-  // their anchor meanwhile, and fade in where they arrive. Returns whether the
-  // label is still moving or fading and needs another frame. One not `wanted`
-  // fades out the same way.
+  // Labels fade out when they lose their spot, following their anchor
+  // meanwhile, and fade in where they arrive. Returns whether the label is
+  // still moving or fading and needs another frame. One not `wanted`, such as
+  // a search result off screen, fades out the same way.
   draw(anchor: Point, viewport: Viewport, bounds: CalloutBounds = {
     left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y,
   }, layout = new CalloutLayout(viewport), wanted = true): boolean {
-    const away = !wanted || bounds.right < 0 || bounds.bottom < 0 ||
-      bounds.left > viewport.width || bounds.top > viewport.height;
-    if (away && !this.opacity) return false;
-    const placement = away ? undefined : layout.place(this.measure(viewport), bounds, anchor);
+    if (!wanted && !this.opacity) return false;
+    const placement = wanted ? layout.place(this.measure(viewport), bounds, anchor) : undefined;
     const now = performance.now(), elapsed = now - this.drawn;
     const decay = Math.exp(-elapsed / 90);
     let dx = this.drift.x * decay, dy = this.drift.y * decay;

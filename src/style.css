@@ -1693,6 +1693,33 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   white-space: pre;
   pointer-events: none;
 }
+/* The debug overlay's outlines of what each label's spot was weighed against. */
+.map-debug-layout {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  fill: none;
+  stroke-width: 1;
+}
+.map-debug-layout .pin {
+  stroke: var(--neon-saved);
+}
+.map-debug-layout .taken {
+  stroke: var(--neon-add);
+}
+.map-debug-layout .refused {
+  stroke: var(--neon-trail);
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+.map-debug-layout line {
+  stroke: var(--neon-measure);
+  stroke-width: 2;
+}
 .search-overlay {
   position: absolute;
   inset: 0;
