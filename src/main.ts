@@ -452,12 +452,12 @@ async function refresh() {
     card.dataset.map = map.id;
     card.innerHTML = `<button class="map-open"><div class="thumbnail"><span class="thumbnail-placeholder">${icons.map}</span></div><div class="map-details"><h3></h3><p class="map-saved">\u00a0</p><p class="map-meta"></p></div></button><button class="map-more" aria-haspopup="dialog">${icons.more}</button>`;
     card.querySelector("h3")!.textContent = displayName(map.name);
-    // What's on a map is what tells two maps apart; what it takes on the
-    // device and when it was last used (which is also the list's order)
-    // follow. On narrow screens it breaks between the two parts, not inside one.
+    // What's on a map is what tells two maps apart; when it was last used
+    // (which is also the list's order) follows, with what it takes on the
+    // device on the right.
     const size = Object.assign(document.createElement("span"), { className: "map-size", innerHTML: icons.storage });
     const sizeText = size.appendChild(document.createTextNode(""));
-    card.querySelector(".map-meta")!.append(size, Object.assign(document.createElement("span"), { textContent: ` · ${lastUsed(map)}` }));
+    card.querySelector(".map-meta")!.append(Object.assign(document.createElement("span"), { textContent: lastUsed(map) }), size);
     // The original is only part of it: tiles cut from it and photos weigh too.
     const tiles = map.tileBytes ?? 0;
     let storage = [t("Image {size}", { size: formatBytes(map.bytes) }), t("Tiles {size}", { size: formatBytes(tiles) })];

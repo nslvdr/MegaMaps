@@ -326,6 +326,7 @@ small {
   width: 28px;
 }
 .map-details {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -375,7 +376,11 @@ small {
 .saved-routes svg {
   color: var(--kind-route);
 }
+/* On narrow screens the size wraps under the date, still on the right. */
 .map-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-8);
   margin-top: var(--space-4);
   font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
@@ -384,10 +389,10 @@ small {
   white-space: nowrap;
 }
 .map-size {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-4);
-  vertical-align: top;
+  margin-left: auto;
 }
 .map-size svg {
   width: 14px;
