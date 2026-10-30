@@ -13,7 +13,7 @@ async function files(dir) {
 }
 // The footer shows the release date of the loaded build, including offline.
 const builtAt = new Date().toISOString();
-// A readable name for people and stats, e.g. 2026.10.30-1432-13c17c2 (UTC time and
+// A readable name for people and stats, e.g. 2026.10.30-14.32-13c17c2 (Paris time and
 // commit); the content hash below stays the identity that updates compare.
 const git = (...args) => {
   try {
@@ -21,8 +21,14 @@ const git = (...args) => {
   } catch {}
 };
 const commit = git("rev-parse", "--short", "HEAD");
+const paris = Object.fromEntries(
+  new Intl.DateTimeFormat("en", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(builtAt)).map(({ type, value }) => [type, value]),
+);
 const release = [
-  `${builtAt.slice(0, 10).replaceAll("-", ".")}-${builtAt.slice(11, 13)}${builtAt.slice(14, 16)}`,
+  `${paris.year}.${paris.month}.${paris.day}-${paris.hour}.${paris.minute}`,
   ...(commit ? [commit] : []),
   ...(commit && git("status", "--porcelain") ? ["dirty"] : []),
 ].join("-");
