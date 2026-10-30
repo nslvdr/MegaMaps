@@ -10,10 +10,7 @@
     "build:dev": "tsc --noEmit && vite build --mode dev && node scripts/build-sw.mjs",
     "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "tsx --import ./tests/setup.ts --test tests/*.test.ts",
-    "fixtures": "python3 scripts/generate-fixtures.py",
-    "benchmark": "tsx scripts/benchmark.ts",
-    "benchmark:ocr": "tsx scripts/benchmark-ocr.ts"
+    "test": "tsx --import ./tests/setup.ts --test tests/*.test.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

@@ -1,32 +1,66 @@
 # Mega Maps
 
-Mobile-first, offline PWA for exploring very large map images of quarries and man-made caves. Everything stays on the device: no accounts, backend, external fonts or runtime CDN. The only network traffic is app updates and PostHog usage counts (`src/stats.ts`), sent only by the installed app, which carry the device type, the Settings nickname and uncaught errors.
+Mega Maps est une visionneuse de cartes hors ligne pour téléphone, conçue pour l’exploration des carrières et des cavités artificielles à partir de grands plans scannés.
 
-See [architecture.md](docs/architecture.md) for design decisions the code doesn't explain.
+Une carte est importée une seule fois et reste ensuite sur l’appareil. Les images jusqu’à 300 mégapixels s’affichent et se zooment sans connexion. L’app permet d’y placer des lieux et des itinéraires, de garder la trace d’un parcours, de rechercher le texte imprimé sur le plan et de partager ces données dans un seul fichier.
 
-## Commands
+L’app publiée est disponible sur [app.mega-maps.fr](https://app.mega-maps.fr) et s’utilise une fois ajoutée à l’écran d’accueil.
+
+<p align="center">
+  <img src="docs/images/carte.png" width="260" alt="Plan en carte sombre avec des lieux, un itinéraire en bleu et un parcours en pointillés">
+  <img src="docs/images/lieu.png" width="260" alt="Fiche d’un lieu avec sa description et son historique">
+  <img src="docs/images/recherche.png" width="260" alt="Recherche « Puits » : inscriptions du plan et lieu enregistré trouvés">
+</p>
+
+<p align="center"><sub>Captures réalisées sur un plan fictif de démonstration.</sub></p>
+
+## Fonctionnalités
+
+- **Grandes cartes.** Les images JPEG, PNG et WebP jusqu’à 300 mégapixels (32 768 px de côté, 256 Mo par fichier) sont découpées en tuiles à l’import. La visionneuse ne garde jamais une carte entière en mémoire.
+- **Hors ligne.** Une fois installée, l’app démarre et fonctionne sans connexion. Les cartes ne passent par aucun serveur.
+- **Lieux.** 12 types de repères : entrée, puits, passage, salle, danger, inondé, ossuaire, sculpture, graffiti, outils, squat et point d’intérêt. Chaque lieu peut avoir une description, des photos, une hauteur d’eau ou un niveau de danger, et un historique des visites, notes et modifications.
+- **Itinéraires.** Un itinéraire tracé sur la carte indique sa longueur et un temps de marche estimé, une fois l’échelle réglée.
+- **Parcours.** Des points marqués pendant la marche enregistrent le chemin parcouru. Un appui long sur la carte ouvre une roue : en haut à gauche pour ajouter un lieu, vers le bas pour marquer la position, en haut à droite pour revenir au dernier point.
+- **Recherche de texte.** La reconnaissance de texte, faite sur l’appareil, lit les inscriptions du plan. La recherche porte sur ces inscriptions et sur les lieux enregistrés. Deux termes séparés par un point-virgule, comme `Allée 25; Allée 55`, désignent l’endroit où ils se croisent.
+- **Mesures.** L’échelle se règle une fois à partir d’une longueur connue, puis les distances se mesurent directement sur la carte.
+- **Rotation.** La carte peut tourner librement, rester verrouillée ou suivre la boussole du téléphone, une fois le nord indiqué.
+- **Carte sombre.** Un plan sur fond blanc peut s’afficher en sombre, avec une luminosité réglable, pour ménager les yeux et la batterie sous terre.
+- **Partage.** Un fichier `.megamap` contient les lieux, itinéraires, photos et textes détectés choisis, avec ou sans l’image de la carte. Chez un destinataire qui possède déjà la carte, les ajouts se fusionnent avec les siens, et chaque élément garde le pseudo de son auteur.
+- **Sauvegardes.** Toute la bibliothèque tient dans un fichier `.megabackup`, restaurable sur un autre appareil.
+- **Langues.** Français et anglais.
+
+## Vie privée
+
+Mega Maps n’a ni compte ni serveur. Les cartes, lieux, itinéraires, photos et parcours sont enregistrés dans le stockage du navigateur, sur l’appareil. Ils n’en sortent que dans les fichiers de partage ou de sauvegarde créés par l’utilisateur.
+
+L’app installée envoie des statistiques d’utilisation anonymes à [PostHog](https://posthog.com) (serveurs européens) : les fonctionnalités utilisées, le type d’appareil, la version de l’app, les plantages, et le pseudo défini dans les Réglages s’il existe. Elle n’envoie jamais d’images de cartes, de noms de lieux, de notes ni de positions. L’onglet du navigateur et les versions de développement n’envoient rien. Le détail est dans [`src/stats.ts`](src/stats.ts).
+
+## Appareils pris en charge
+
+Safari sur iOS 17 ou plus récent, et Chrome à jour sur Android. Les apps Chrome installées sur ordinateur fonctionnent aussi, mais l’interface est pensée pour le tactile.
+
+Dans un onglet du navigateur, le site affiche seulement la marche à suivre pour installer l’app. Sur iPhone et iPad, Safari et l’app de l’écran d’accueil ont des stockages séparés : des cartes importées dans un onglet y resteraient bloquées.
+
+## Documentation
+
+- [Fonctionnement](docs/fonctionnement.md) : l’import, le stockage, la visionneuse, la recherche de texte, le partage, l’usage hors ligne et les mises à jour.
+- [Développement](docs/developpement.md) : installation, commandes, tests, site de dev et déploiement.
+- [Choix techniques](docs/choix-techniques.md) : les contraintes qui ont guidé le code, en version courte.
+
+## Démarrage rapide
+
+Node 20.19+ ou 22.12+.
 
 ```sh
-npm run dev          # http://localhost:5173, no service worker
-npm run build && npm run preview   # http://localhost:4173, production shell with offline support
+npm install
+npm run dev     # http://localhost:5173
 npm test
-npm run deploy       # Cloudflare Worker serving dist/ (needs `npx wrangler login` once)
-npm run build:dev    # the dev site: "Mega Maps Dev", orange icons, no stats
-npm run fixtures     # 1k–15k PNG fixtures (Python stdlib); large fixtures are git-ignored
-npm run benchmark -- fixtures/map-9000.png   # one file per process for comparable memory numbers
-npm run benchmark:ocr -- [workers]           # OCR recall on a synthetic 170-label sheet
 ```
 
-JPEG and dense fixtures need Pillow in a throwaway venv (`scripts/generate-fixtures.py --jpeg`, `scripts/generate-detail-fixture.py`). Never add Pillow or host-side image allocation to app code.
+La suite est dans [Développement](docs/developpement.md).
 
-## Dev site
+## Technologies
 
-Cloudflare builds `main` into the released app at `app.mega-maps.fr`, and the `dev` branch into a second Worker, `mega-maps-dev`, at `dev.mega-maps.fr` (`npm run build:dev`, then `npx wrangler deploy --env dev`). It is another origin, so it installs as a separate app with its own maps, and a broken build there can't reach the released app. Run `npm run icons` after changing `public/icons/icon.svg` or `assets/dev-icons/icon.svg`.
+TypeScript et Vite, sans framework d’interface. Les JPEG sont décodés par [libjpeg-turbo](https://libjpeg-turbo.org) compilé en WebAssembly. La reconnaissance de texte utilise les modèles [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) dans [ONNX Runtime Web](https://onnxruntime.ai). Les icônes viennent de [Lucide](https://lucide.dev). L’app est servie en fichiers statiques par Cloudflare Workers. Les licences tierces accompagnent les fichiers qu’elles couvrent, dans `public/codecs/` et `assets/ocr/`.
 
-## Dev gotchas
-
-- Browser storage belongs to the origin, so every port or worktree starts with an empty library. A dev server restores the `.megabackup` files in `~/.megamaps-dev/` (or `MEGAMAPS_DEV_DATA`) that its origin is missing.
-- A phone on a LAN `http://` address is not a secure context, so service workers and OPFS don't work. Use `MAP_VIEWER_HTTPS_CERT` and `MAP_VIEWER_HTTPS_KEY` with `npm run preview`, with a certificate the phone trusts.
-- Targets: Safari/iOS 17+ and current Android Chrome. Deployment assumes the origin root, not a subdirectory.
-- The JPEG codec in `public/codecs/` is generated. Rebuilding it with `scripts/build-codec.sh` needs Emscripten 4.0.16 and CMake, and pins libjpeg-turbo 3.1.2.
-- Automated tests run in Node with DOM and canvas adapters. They don't measure Safari memory, GPU use, FPS, installation or touch behaviour; those still need a real device.
+Créé par Nytro.
