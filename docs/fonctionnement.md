@@ -72,13 +72,13 @@ Plusieurs fenêtres peuvent ouvrir la même bibliothèque. Elles se préviennent
 
 ## Recherche de texte (OCR)
 
-À la première ouverture d’une carte, l’app lit le texte imprimé dessus, entièrement sur l’appareil (`src/ocr/`).
+Après l’import d’une carte, l’app propose de lire le texte imprimé dessus, entièrement sur l’appareil (`src/ocr/`). Aucune lecture ne démarre sans un oui : la détection peut aussi être lancée plus tard depuis les paramètres avancés de la carte.
 
 1. **La détection** repère les zones de texte avec le modèle PaddleOCR `PP-OCRv5_mobile_det`. Elle travaille à la pleine résolution de la carte, par sections de 1 024 px qui se chevauchent, car réduire la carte d’abord ferait disparaître les petits caractères. Chaque inscription appartient à la seule section qui contient son centre, pour n’être lue qu’une fois.
 2. **L’orientation.** Un petit classifieur indique si chaque ligne est à l’envers. Quand il hésite, la ligne est lue dans les deux sens et la lecture la plus sûre l’emporte. Les inscriptions sont lues quel que soit leur angle.
 3. **La reconnaissance** lit chaque ligne avec le modèle latin `PP-OCRv5`.
 
-Les modèles tournent dans le backend WebAssembly d’ONNX Runtime Web, dans un à trois workers selon la mémoire de l’appareil. Les modèles et le moteur sont livrés avec l’app, donc la détection de texte marche hors ligne. Le résultat est enregistré dans un index de texte par carte (`src/storage/ocr.ts`). L’index porte une version : les cartes lues par une ancienne version de la détection sont relues à leur prochaine ouverture.
+Les modèles tournent dans le backend WebAssembly d’ONNX Runtime Web, dans un à trois workers selon la mémoire de l’appareil. Les modèles et le moteur sont livrés avec l’app, donc la détection de texte marche hors ligne. Le résultat est enregistré dans un index de texte par carte (`src/storage/ocr.ts`). L’index porte une version : à l’ouverture d’une carte lue par une ancienne version de la détection, l’app propose de la relire. L’ancien index sert à la recherche en attendant.
 
 La recherche (`src/viewer/map-search.ts`) regarde dans les lieux enregistrés et dans l’index de texte, sans tenir compte des accents ni des majuscules. Deux termes séparés par un point-virgule, comme `Allée 25; Allée 55`, trouvent les endroits où les deux apparaissent côte à côte, comme un carrefour.
 

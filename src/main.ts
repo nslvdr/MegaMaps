@@ -62,6 +62,7 @@ app.innerHTML = `
   ${restoreDialogMarkup}
   ${eraseDialogMarkup}
   <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title">${dialogHeader("advanced-map-title", t("Advanced settings"), icons.tools, "advanced-map-close")}<p id="advanced-map-name"></p><h3>${t("Text detection")}</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">${t("Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.")}</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>${t("Rerun text detection")}</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>${t("Stop detection")}</span></button></div></dialog>
+  <dialog id="ocr-offer-dialog" aria-labelledby="ocr-offer-title">${dialogHeader("ocr-offer-title", "", icons.scanText, "ocr-offer-close")}<p id="ocr-offer-body"></p><p class="dialog-note">${t("You can run it later from the map’s Advanced settings.")}</p><div class="dialog-actions"><button type="button" id="ocr-offer-start" class="primary">${icons.scanText}<span>${t("Detect text")}</span></button><button type="button" id="ocr-offer-later" class="quiet">${t("Not now")}</button></div></dialog>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -230,7 +231,14 @@ const sharing = initSharing(app, {
     track("share_imported", { ok: true, into: destination.mapId ? destination.mode : "new", items: result.added });
     await refresh();
     await openMap(result.map);
-    if (!destination.mapId) showMessage(t("Share imported"), t("{items} added to a new map.", { items: plural(result.added, "item") }));
+    if (!destination.mapId) {
+      showMessage(t("Share imported"), t("{items} added to a new map.", { items: plural(result.added, "item") }));
+      // A share without its text scan asks once its summary is read.
+      if (needsOcr(await loadOcr(result.map.id).catch(() => undefined)))
+        messageDialog.addEventListener("close", () => {
+          if (currentMap?.id === result.map.id) offerTextDetection(result.map);
+        }, { once: true });
+    }
     else if (destination.mode === "replace")
       showMessage(t("Share imported"), t("{removed} removed · {added} added.", { removed: plural(result.removed ?? 0, "item"), added: plural(result.added, "shared item") }));
     else if (result.updated)
@@ -647,7 +655,7 @@ function importImage(file: File) {
   showProgress(0, t("Reading image metadata…"));
   showDialog(progressDialog);
   const started = Date.now();
-  // The map opens once its tiles are saved; text detection follows in the background.
+  // The map opens once its tiles are saved; text detection waits for a yes.
   void mutate(() =>
     importMap(
       file,
@@ -662,6 +670,7 @@ function importImage(file: File) {
       importing = undefined;
       await refresh();
       await openMap(map);
+      if (currentMap?.id === map.id) offerTextDetection(map);
     })
     .catch((error) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -876,26 +885,55 @@ async function runOcr(
     ocrJob = undefined;
     release();
     if (selectedMap?.id === map.id) void renderOcrSettings();
-    if (currentMap && currentMap.id !== map.id)
-      void prepareMapSearch(currentMap, openVersion);
   }
 }
 
-const OCR_START_DELAY_MS = 3000;
-// Old libraries need no reimport. Opening a map without an index starts a scan.
+// Scanning is slow and heavy, so it never starts without a yes: a new map asks,
+// and so does a map scanned before detection improved. A no leaves it to
+// Advanced settings; each map asks once per session.
+const ocrOfferDialog = element<HTMLDialogElement>("ocr-offer-dialog");
+const offeredMaps = new Set<string>();
+let offeredMap: MapRecord | undefined;
+let offerAccepted = false;
+let offerUpdate = false;
+function offerTextDetection(map: MapRecord, update = false) {
+  if (offeredMaps.has(map.id) || ocrOfferDialog.open) return;
+  offeredMaps.add(map.id);
+  offeredMap = map;
+  offerAccepted = false;
+  offerUpdate = update;
+  element("ocr-offer-title").textContent = update ? t("Update this map’s text search?") : t("Search this map’s text?");
+  element("ocr-offer-body").textContent = update
+    ? t("Text detection has improved since this map was scanned. Scanning again runs on this device and can take a while on large maps.")
+    : t("Text detection reads the labels printed on the map so search can find them. It runs on this device and can take a while on large maps.");
+  showDialog(ocrOfferDialog);
+}
+element("ocr-offer-start").addEventListener("click", () => {
+  offerAccepted = true;
+  ocrOfferDialog.close();
+});
+for (const id of ["ocr-offer-close", "ocr-offer-later"])
+  element(id).addEventListener("click", () => ocrOfferDialog.close());
+ocrOfferDialog.addEventListener("close", () => {
+  const map = offeredMap;
+  offeredMap = undefined;
+  if (!map) return;
+  track("text_scan_offered", { accepted: offerAccepted, update: offerUpdate });
+  if (offerAccepted)
+    void runOcr(map, new AbortController()).catch((error) => {
+      if (!ocrErrors.has(map.id))
+        showMessage(t("Couldn’t start text detection"), String(error));
+    });
+});
+
+// Search uses whatever scan the map has; an outdated one offers a rescan.
 async function prepareMapSearch(map: MapRecord, version: number) {
   try {
     const index = await loadOcr(map.id);
     if (version !== openVersion) return;
     const job = ocrJob?.mapId === map.id ? ocrJob : undefined;
-    const waiting = !ocrJob && needsOcr(index);
-    controls?.updateOcr(index, job?.message ?? (waiting ? t("Preparing text detection…") : undefined), job?.fraction);
-    // Another map's scan restarts this one when it ends.
-    if (!waiting) return;
-    // The map's first tiles decode before the models load and compete with them.
-    await new Promise((resolve) => setTimeout(resolve, OCR_START_DELAY_MS));
-    if (version !== openVersion || ocrJob) return;
-    await runOcr(map, new AbortController());
+    controls?.updateOcr(index, job?.message ?? ocrErrors.get(map.id), job?.fraction);
+    if (index && needsOcr(index) && !job) offerTextDetection(map, true);
   } catch (error) {
     if (version === openVersion && !ocrErrors.has(map.id))
       controls?.updateOcr(
@@ -920,6 +958,7 @@ async function renderOcrSettings() {
       (index
         ? `${plural(index.lines.length, "detected label")}\n${t("Last scanned {date}", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(index.completedAt) })}`
         : t("Text detection has not run yet.")));
+  element("rerun-ocr").querySelector("span")!.textContent = index ? t("Rerun text detection") : t("Run text detection");
   element<HTMLButtonElement>("rerun-ocr").disabled = !!ocrJob || !!importing;
   element("stop-ocr").hidden = !running;
 }
