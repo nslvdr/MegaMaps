@@ -46,8 +46,8 @@ export const restoreDialogMarkup = `<dialog id="restore-dialog" aria-labelledby=
 export const eraseDialogMarkup = `<dialog id="erase-dialog" aria-labelledby="erase-title" aria-describedby="erase-summary">${dialogHeader("erase-title", t("Delete everything"), icons.trash, "erase-cancel")}<p id="erase-summary"></p><p class="dialog-note" id="erase-step"></p><div class="dialog-actions"><button class="danger" id="erase-confirm">${icons.trash}<span></span></button><button class="secondary" id="erase-backup" hidden>${icons.backup}<span>${t("Save a backup first")}</span></button></div></dialog>`;
 
 interface SettingsOptions {
-  /** Release date of the loaded version, when known. */
-  release?: Date;
+  /** Name of the loaded version, such as 2026.10.30-1432-13c17c2, when known. */
+  release?: string;
   back(): void;
   checkUpdates(): void;
   /** Rebuild the backup's missing maps; reports its own progress and outcome. */
@@ -299,7 +299,7 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
     updateRow.dataset.state = ready ? "ready" : "";
     status("settings-update", ready
       ? t("Update ready to install")
-      : options.release ? t("Version from {date}", { date: day(options.release) }) : t("See if a newer version is out"));
+      : options.release ? t("Version {name}", { name: options.release }) : t("See if a newer version is out"));
   };
   setUpdateReady(false);
 

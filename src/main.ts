@@ -87,19 +87,23 @@ let ocrJob:
 const ocrErrors = new Map<string, string>();
 const settingsPage = element("settings");
 const loadedVersion = document.querySelector<HTMLMetaElement>('meta[name="app-build"]')?.content ?? "";
+const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
+// Stamped together with the date, so a known date means a real name, not the placeholder.
+const releaseName = Number.isFinite(loadedRelease.getTime())
+  ? document.querySelector<HTMLMetaElement>('meta[name="app-release"]')?.content
+  : undefined;
 // The dev site (`npm run build:dev`) is for trying changes: it sends no stats.
 const released = import.meta.env.PROD && import.meta.env.MODE !== "dev";
 if (released) {
   // A browser tab only shows how to install, and sends nothing.
-  if (isInstalled()) startStats(loadedVersion);
+  if (isInstalled()) startStats(releaseName ?? loadedVersion);
 }
-const loadedRelease = new Date(document.querySelector<HTMLMetaElement>('meta[name="app-built-at"]')?.content ?? "");
 const canUpdate = import.meta.env.PROD && "serviceWorker" in navigator;
 const settings = initSettingsPage(settingsPage, {
   restore: element<HTMLDialogElement>("restore-dialog"),
   erase: element<HTMLDialogElement>("erase-dialog"),
 }, {
-  release: Number.isFinite(loadedRelease.getTime()) ? loadedRelease : undefined,
+  release: releaseName,
   back: hideSettings,
   checkUpdates: openUpdates,
   restore: (backup) => void restore(backup),

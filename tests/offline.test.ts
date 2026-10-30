@@ -14,7 +14,7 @@ test("generated service worker serves cold offline navigation, worker JS, and co
     await mkdir(path.join(root, "dist/codecs"));
     await mkdir(path.join(root, "dist/ocr"));
     const assets = {
-      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__">offline</html>',
+      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__"><meta name="app-release" content="__APP_RELEASE__">offline</html>',
       "/assets/import.worker.js": "worker",
       "/codecs/jpeg.js": "decoder",
       "/codecs/jpeg.wasm": "wasm",
@@ -44,6 +44,12 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       /name="app-built-at" content="([^"]+)"/,
     )?.[1];
     assert.ok(builtAt && Number.isFinite(new Date(builtAt).getTime()));
+    // Named by its UTC build time; the temporary folder has no commit to add.
+    const release = assets["/index.html"].match(/name="app-release" content="([^"]+)"/)?.[1];
+    assert.equal(
+      release,
+      `${builtAt.slice(0, 10).replaceAll("-", ".")}-${builtAt.slice(11, 13)}${builtAt.slice(14, 16)}`,
+    );
     const listeners = new Map<string, (event: unknown) => void>();
     const stores = new Map<string, Map<string, Response>>();
     let network = 0,
