@@ -174,7 +174,7 @@ export const fr = {
   "History": "Historique",
   "Icon and type": "Icône et type",
   "Image {size}": "Image {size}",
-  "Image exceeds the 300 megapixel / 32,768 pixel per side limit.": "L’image dépasse la limite de 300 mégapixels / 32 768 pixels par côté.",
+  "Image exceeds the 600 megapixel / 32,768 pixel per side limit.": "L’image dépasse la limite de 600 mégapixels / 32 768 pixels par côté.",
   "Image metadata does not match decoded dimensions.": "Les métadonnées de l’image ne correspondent pas aux dimensions décodées.",
   "Image processing stopped. Try again with a smaller file or a baseline JPEG.": "Traitement de l’image interrompu. Réessayez avec un fichier plus petit ou un JPEG standard.",
   "Import": "Importer",

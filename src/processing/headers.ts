@@ -121,7 +121,7 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
     Math.max(header.width, header.height) > 32768
   )
     throw new Error(
-      t("Image exceeds the 300 megapixel / 32,768 pixel per side limit."),
+      t("Image exceeds the 600 megapixel / 32,768 pixel per side limit."),
     );
   return header;
 }
