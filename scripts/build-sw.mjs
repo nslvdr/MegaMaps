@@ -1,5 +1,6 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   return (
@@ -12,8 +13,21 @@ async function files(dir) {
 }
 // The footer shows the release date of the loaded build, including offline.
 const builtAt = new Date().toISOString();
+// A readable name for people and stats, e.g. 2026.10.30-1432-13c17c2 (UTC time and
+// commit); the content hash below stays the identity that updates compare.
+const git = (...args) => {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {}
+};
+const commit = git("rev-parse", "--short", "HEAD");
+const release = [
+  `${builtAt.slice(0, 10).replaceAll("-", ".")}-${builtAt.slice(11, 13)}${builtAt.slice(14, 16)}`,
+  ...(commit ? [commit] : []),
+  ...(commit && git("status", "--porcelain") ? ["dirty"] : []),
+].join("-");
 const html = await readFile("dist/index.html", "utf8");
-await writeFile("dist/index.html", html.replace("__APP_BUILT_AT__", builtAt));
+await writeFile("dist/index.html", html.replace("__APP_BUILT_AT__", builtAt).replace("__APP_RELEASE__", release));
 const paths = (await files("dist")).filter((p) => !p.endsWith("/sw.js"));
 // The availability and version probes must always reach the host, never the offline cache.
 const live = ["/app-status.json", "/app-version.json"];
@@ -196,4 +210,4 @@ const FILES = ${JSON.stringify(shellFiles)};${worker}`,
 // Lets the app describe an available update before downloading it.
 // Files list each hash, so the app can tell how much an update really downloads.
 await writeFile("dist/app-version.json", JSON.stringify({ version: cacheName, size, builtAt, files: shellFiles }));
-console.log(`Offline shell: ${urls.length} assets, ${(size / 1048576).toFixed(1)} MB, ${cacheName}`);
+console.log(`Offline shell: ${urls.length} assets, ${(size / 1048576).toFixed(1)} MB, ${release} (${cacheName})`);

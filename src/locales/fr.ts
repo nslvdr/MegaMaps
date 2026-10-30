@@ -522,7 +522,7 @@ export const fr = {
   "Use the production build over HTTPS (or localhost) and wait for the app to finish its offline setup.": "Utilisez la version de production en HTTPS (ou localhost) et attendez que l’app termine sa préparation hors ligne.",
   "Uses only the shared places and routes. This map has none of its own yet.": "Utilise uniquement les lieux et itinéraires partagés. Cette carte n’en a pas encore.",
   "Uses the image in the file": "Utilise l’image du fichier",
-  "Version from {date}": "Version du {date}",
+  "Version {name}": "Version {name}",
   "Very hungry for battery.": "Très gourmand en batterie.",
   "View": "Affichage",
   "View full screen": "Voir en plein écran",
