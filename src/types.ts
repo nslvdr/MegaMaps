@@ -1,5 +1,5 @@
 export const TILE_SIZE = 512;
-export const MAX_PIXELS = 300_000_000;
+export const MAX_PIXELS = 600_000_000;
 export const MAX_FILE_BYTES = 256 * 1024 * 1024;
 export const NATIVE_PIXEL_LIMIT = 16_000_000;
 export type Backend = "opfs" | "indexeddb";

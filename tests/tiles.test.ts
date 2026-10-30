@@ -281,6 +281,38 @@ test("shipped decoder is small and the app does not depend on a remote codec", a
   assert.ok(binary.byteLength < 300000);
 });
 
+test("JPEG maps up to 600 megapixels pass the header and decoder checks", async () => {
+  const small = new Uint8Array(await createCanvas(8, 8).encode("jpeg"));
+  // Rewrite the frame size; nothing past the header is decoded.
+  const sized = (width: number, height: number) => {
+    const bytes = small.slice(),
+      view = new DataView(bytes.buffer);
+    let p = 2;
+    while (bytes[p + 1] !== 0xc0) p += 2 + view.getUint16(p + 2);
+    view.setUint16(p + 5, height);
+    view.setUint16(p + 7, width);
+    return bytes;
+  };
+  const open = async (bytes: Uint8Array) => {
+    const module = await (await jpegFactory())({
+      locateFile: (file) => file,
+      readInput(offset, destination) {
+        const count = Math.min(destination.length, bytes.length - offset);
+        destination.set(bytes.subarray(offset, offset + count));
+        return count;
+      },
+    });
+    const width = module._decoder_open();
+    return width ? width : module.UTF8ToString(module._decoder_error());
+  };
+  const large = sized(32000, 18000);
+  assert.equal((await readHeader(new Blob([large]))).width, 32000);
+  assert.equal(await open(large), 32000);
+  const tooLarge = sized(32000, 19000);
+  await assert.rejects(readHeader(new Blob([tooLarge])), /600 megapixel/);
+  assert.match(String(await open(tooLarge)), /exceeds supported dimensions/);
+});
+
 test("CMYK JPEG scanlines convert Adobe ink channels to display RGBA", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "map-viewer-cmyk-"));
   await installPlatform(root);
