@@ -123,7 +123,7 @@ export class ViewerControls {
   > &
     Partial<Pick<Viewer, "setMeasure" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
   private ocr?: OcrIndex;
-  private ocrMessage = t("Preparing text detection…");
+  private ocrMessage = "";
   private searchMatches: MapSearchMatch[] = [];
   private searchPosition = -1;
   private searchTimer?: ReturnType<typeof setTimeout>;
@@ -2432,7 +2432,7 @@ export class ViewerControls {
         : count ? plural(count, "match")
         : this.ocr ? t("No matching text or saved places found.") : t("No matching saved places yet.")
       : t("Search map text and saved places. Drag and zoom to explore.");
-    const progress = this.ocrMessage || (!this.ocr ? t("Text detection is not ready. Open the map’s Advanced settings to retry.") : "");
+    const progress = this.ocrMessage || (!this.ocr ? t("Map text isn’t searchable yet. Run text detection in the map’s Advanced settings.") : "");
     this.el("search-status").textContent = progress ? `${message} · ${progress}` : message;
     // The count doubles as Next, so a touch screen can step through matches
     // once Enter has put the keyboard away; it then shows where you are.
