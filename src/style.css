@@ -684,6 +684,12 @@ small {
   line-height: 1.5;
   color: var(--muted);
 }
+.settings-credit {
+  margin-top: var(--space-16);
+}
+.settings-credit strong {
+  color: var(--accent);
+}
 [data-state="ready"] > .settings-icon {
   --k: var(--neon-add);
 }
