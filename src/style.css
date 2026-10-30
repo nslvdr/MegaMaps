@@ -272,12 +272,13 @@ small {
   display: grid;
   gap: var(--space-12);
 }
-/* The preview runs edge to edge down the card's left side. */
+/* The preview runs edge to edge down the card's left side, as tall as it is
+   wide, so it stays square. */
 .map-card {
   display: flex;
   align-items: stretch;
   gap: var(--space-4);
-  min-height: 96px;
+  min-height: 104px;
   padding-right: var(--space-4);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
