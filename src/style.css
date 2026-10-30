@@ -460,8 +460,29 @@ small {
   color: var(--muted);
   margin: 0;
 }
-.library-footer {
+/* Always shown just above the footer pill, however long the list. */
+.help-open {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
   margin-top: var(--space-24);
+  padding: var(--space-8) var(--space-12);
+  background: none;
+  font-size: var(--font-size-small);
+  color: var(--muted);
+}
+.help-open svg {
+  width: 16px;
+  height: 16px;
+  color: var(--neon-saved);
+}
+.help-open strong {
+  font-weight: 600;
+  color: var(--neon-saved);
+}
+.library-footer {
+  margin-top: var(--space-4);
   min-height: var(--icon-button-size);
   padding: var(--space-8) var(--space-16);
   border: 1px solid var(--line);
@@ -1382,8 +1403,12 @@ dialog .dialog-error {
   background: var(--danger);
   color: #1a0703;
 }
-dialog > button {
+dialog > button,
+dialog > a.primary {
   width: 100%;
+}
+dialog > a.primary {
+  text-decoration: none;
 }
 
 /* ⋯ actions: what they act on, then the actions, then Delete apart. */
