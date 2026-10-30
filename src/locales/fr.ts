@@ -228,6 +228,7 @@ export const fr = {
   "Looking for a matching map…": "Recherche d’une carte correspondante…",
   "Looking for a newer version of Mega Maps…": "Recherche d’une version plus récente de Mega Maps…",
   "Looking for the compass…": "Recherche de la boussole…",
+  "Made by {name}": "Créé par {name}",
   "Manual": "Manuelle",
   "Map": "Carte",
   "Map brightness": "Luminosité de la carte",
