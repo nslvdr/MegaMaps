@@ -38,6 +38,7 @@ ${heading(t("Your data"))}<div class="share-summary">${row("settings-backup", ic
 ${heading(t("Updates"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.update, t("Check for updates"))}</div>
 <button type="button" class="settings-erase" id="settings-erase">${icons.trash}<span>${t("Delete everything")}</span></button>
 <p class="settings-foot">${t("No accounts: your maps, places and photos stay on this device.")}</p>
+<p class="settings-foot settings-credit">${t("Made by {name}", { name: `<strong>Nytro</strong>` })}</p>
 </section>`;
 
 export const restoreDialogMarkup = `<dialog id="restore-dialog" aria-labelledby="restore-title" aria-describedby="restore-summary">${dialogHeader("restore-title", t("Restore backup"), icons.restore, "restore-cancel")}<p id="restore-summary"></p><p class="dialog-note" id="restore-note"></p><div class="dialog-actions" id="restore-actions"><button class="primary" id="restore-confirm">${icons.restore}<span>${t("Restore")}</span></button></div></dialog>`;
