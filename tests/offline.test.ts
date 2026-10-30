@@ -44,12 +44,13 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       /name="app-built-at" content="([^"]+)"/,
     )?.[1];
     assert.ok(builtAt && Number.isFinite(new Date(builtAt).getTime()));
-    // Named by its UTC build time; the temporary folder has no commit to add.
+    // Named by its Paris build time; the temporary folder has no commit to add.
     const release = assets["/index.html"].match(/name="app-release" content="([^"]+)"/)?.[1];
-    assert.equal(
-      release,
-      `${builtAt.slice(0, 10).replaceAll("-", ".")}-${builtAt.slice(11, 13)}${builtAt.slice(14, 16)}`,
-    );
+    const paris = new Intl.DateTimeFormat("fr-FR", {
+      timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short",
+    }).format(new Date(builtAt));
+    const [, day, month, year, hour, minute] = paris.match(/(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/)!;
+    assert.equal(release, `${year}.${month}.${day}-${hour}.${minute}`);
     const listeners = new Map<string, (event: unknown) => void>();
     const stores = new Map<string, Map<string, Response>>();
     let network = 0,
