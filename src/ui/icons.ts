@@ -28,6 +28,7 @@ import {
   Download,
   Ellipsis,
   EllipsisVertical,
+  ExternalLink,
   Flag,
   Folder,
   Footprints,
@@ -38,6 +39,7 @@ import {
   Landmark,
   Languages,
   Layers,
+  LifeBuoy,
   ListFilter,
   LocateFixed,
   LockKeyhole,
@@ -217,4 +219,6 @@ export const icons = {
   browserMenu: svg(EllipsisVertical),
   phone: svg(Smartphone),
   copy: svg(Copy),
+  help: svg(LifeBuoy),
+  externalLink: svg(ExternalLink),
 };

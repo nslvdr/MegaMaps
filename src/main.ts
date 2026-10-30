@@ -44,6 +44,7 @@ app.innerHTML = `
     <div class="top-edge" aria-hidden="true"></div>
     <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps${import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>'}</h1></div><button class="settings-open" id="settings-open" aria-label="${t("Settings")}" title="${t("Settings")}">${icons.settings}<span class="update-dot" aria-hidden="true"></span></button></header>
     <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2><button class="import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
+    <button type="button" class="help-open" id="help-open">${icons.help}<span>${t("Need help?")} <strong>${t("Tap here")}</strong></span></button>
     ${libraryFooterMarkup}
   </main>
   ${settingsMarkup}
@@ -53,6 +54,7 @@ app.innerHTML = `
   <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", t("Import"), icons.download, "import-cancel")}<p>${t("What would you like to add?")}</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">${t("New map")}<small>${t("JPEG, PNG or WebP image")}</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">${t("Shared file")}<small>${t(".megamap with places and routes")}</small></span>${icons.arrow}</button></div></dialog>
   <dialog id="progress-dialog" aria-labelledby="progress-title">${dialogHeader("progress-title", t("Preparing map"), icons.map, "cancel-import", t("Cancel import"))}<p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">${t("Reading image…")}</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">${t("Keep Mega Maps open while your map is prepared.")}</p></dialog>
   <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>${t("Got it")}</span></button></dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title">${dialogHeader("help-title", t("Need help?"), icons.help, "help-close")}<p>${t("Found a problem or have a question? Open an issue on GitHub: say what you did, what you expected and what happened. A screenshot helps.")}</p><p class="dialog-note">${t("A free GitHub account is needed to submit an issue.")}</p><a class="primary" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener">${icons.externalLink}<span>${t("Open an issue on GitHub")}</span></a></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", t("Delete this map?"), icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>${t("Delete map")}</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
@@ -692,6 +694,9 @@ progressDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   importing?.abort();
 });
+const helpDialog = element<HTMLDialogElement>("help-dialog");
+element("help-open").addEventListener("click", () => showDialog(helpDialog));
+element("help-close").addEventListener("click", () => helpDialog.close());
 for (const id of ["message-close", "message-dismiss"])
   element(id).addEventListener("click", () => messageDialog.close());
 function openUpdates() {
