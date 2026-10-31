@@ -132,6 +132,8 @@ let viewer: Viewer | undefined,
 let importing: AbortController | undefined,
   deleting: MapRecord | undefined,
   renderVersion = 0;
+/** While the example map is being added; a map picked meanwhile waits for it. */
+let preparingExample: Promise<void> | undefined;
 // Library previews by map id. A map's tiles never change, so returning home
 // reuses them instead of reading storage and flashing placeholders again.
 const thumbnails = new Map<string, string>();
@@ -600,6 +602,7 @@ fileInput.addEventListener("change", () => {
   if (file) void importFile(file);
 });
 async function importFile(file: File) {
+  await preparingExample;
   if (importing) return;
   if (await isShareFile(file).catch(() => false)) void sharing.openImport(file);
   else if (await isBackupFile(file).catch(() => false))
@@ -1011,7 +1014,25 @@ async function start() {
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
   retileMaps();
+  const newcomer = !maps.length && preference("tour") !== "seen";
   tutorials.atLaunch(maps.length > 0);
+  if (newcomer) preparingExample = addExample().finally(() => (preparingExample = undefined));
+}
+// New users get the example map to try things on, made while Getting started plays.
+async function addExample() {
+  const controller = new AbortController();
+  importing = controller;
+  try {
+    const { addExampleMap } = await import("./example/example-map");
+    await mutate(() => addExampleMap(controller.signal));
+    track("example_map_added", { ok: true });
+    channel?.postMessage("changed");
+  } catch (error) {
+    track("example_map_added", { ok: false, error: failure(error) });
+  } finally {
+    importing = undefined;
+  }
+  await refresh().catch(() => {});
 }
 // A dev server on a new port starts empty; it brings back the shared dev maps.
 async function restoreDevData() {

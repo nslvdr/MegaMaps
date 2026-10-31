@@ -84,11 +84,14 @@ test("a tutorial lists its steps and plays them on the map in turn", (t) => {
   const sheet = screen.querySelector<HTMLElement>('[data-id="sheet"]')!;
   assert.ok(sheet.hidden);
 
+  // The step holds still before its finger moves, so the gesture is seen from its start.
   t.mock.timers.tick(1000);
+  assert.equal(screen.dataset.show, "");
+  t.mock.timers.tick(600);
   assert.equal(screen.dataset.show, "rotation");
   assert.ok(!sheet.hidden && sheet.dataset.panel === "rotation", "the tap opens the app's own Rotation sheet");
-  t.mock.timers.tick(2200);
-  t.mock.timers.tick(1000);
+  t.mock.timers.tick(2600);
+  t.mock.timers.tick(1600);
   assert.equal(screen.dataset.show, "rotation manual");
   assert.ok(steps[1]!.hasAttribute("aria-current"));
 

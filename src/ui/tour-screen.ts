@@ -1,9 +1,9 @@
+import { PLAN_DARK, planMarkup } from "../example/plan";
 import { locale, plural, t } from "../i18n";
 import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, brightnessPercent, markerKinds, placeColor, routeColors, type MapMarker } from "../viewer/navigation";
 import { formatDistance, formatWalk } from "../viewer/measure";
 import { formatBytes, lastUsed, updatedAgo } from "./format";
 import { icons } from "./icons";
-import { planScan } from "./landing-map";
 import { homeMarkup, importDialogsMarkup, mapDialogsMarkup } from "./library-markup";
 import { placeIcon } from "./place-icon";
 import { settingsMarkup } from "./settings-page";
@@ -15,12 +15,13 @@ import { viewerMarkup } from "./viewer-markup";
 // real ones, and filled the way the app fills them for each moment.
 const copy = (markup: string) => markup.replace(/ id="/g, ' data-id="').replace(/ name="/g, ' name="tour-');
 
-const MAP_NAME = "Réseau Sud";
+const MAP_NAME = "Val Moulin";
 const TEAMMATE = "Lucie";
 const DAY = 86_400_000;
 const now = Date.now();
 const mapBytes = { image: 18_400_000, tiles: 24_100_000 };
-const thumbnail = `<svg class="tour-thumb" viewBox="120 120 300 300">${planScan}</svg>`;
+// The library's thumbnail: the example map's overview, darkened like the app's.
+const thumbnail = `<img src="data:image/svg+xml,${encodeURIComponent(planMarkup(240, "300 250 640 640"))}" alt="" style="filter:${PLAN_DARK}">`;
 
 // Places and routes on the made-up map, newest first like Saved, and the
 // show names that put each one there.
@@ -122,7 +123,7 @@ export function showScene(screen: HTMLElement, show: string, jump = false) {
   internet.querySelector("strong")!.textContent = t("Offline");
   $("offline-availability").dataset.state = "available";
   text("offline-availability", t("Offline ready"));
-  text("import-name", "plan-reseau-sud.jpg");
+  text("import-name", "val-moulin.jpg");
   text("progress-percent", "64%");
   text("ocr-offer-title", t("Search this map’s text?"));
   text("ocr-offer-body", t("Text detection reads the labels printed on the map so search can find them. It runs on this device and can take a while on large maps."));
