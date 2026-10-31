@@ -1,19 +1,16 @@
-import { crossing, features, galleryNames, PLAN_DARK, PLAN_HEIGHT, PLAN_WIDTH, planMarkup, scaleBar, textWidth, type PlanText } from "../example/plan";
 import { t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { track } from "../stats";
-import { markerKinds, routeColors, type MapMarker } from "../viewer/navigation";
 import { dialogHeader, showDialog } from "./dialog";
-import { icons, markerCalloutIcon } from "./icons";
-import { callout, placed, route } from "./landing-map";
-import { PLACE_PIN, placeIcon } from "./place-icon";
+import { icons } from "./icons";
+import { measureEnds, on, pinOnScreen, routePoints, scaleEnds, spot, TourMap, type Move } from "./tour-map";
 import { showScene, tapTarget, tourScreenMarkup } from "./tour-screen";
 import type { WheelChoice } from "./hold-wheel";
 
 // Getting started and the tutorials act features out on a phone that runs the
-// app's own screens over the example map. Each step starts from where the
-// last one ended (or from its own `from`), a finger acts, and the phone then
-// shows `show`: the space-separated parts, map layers and map states.
+// app's own screens and viewer over the example map. Each step starts from
+// where the last one ended (or from its own `from`), a finger acts, and the
+// phone then shows `show`: the space-separated parts and map states.
 type Point = { x: number; y: number };
 type Touch =
   | { move: "tap"; at: Point[] }
@@ -40,67 +37,8 @@ const MOVE_TIME = 900;
 const WHEEL = 700;
 const CHOICE = 1300;
 const LIFT = 2300;
-
-/** The phone's screen is a 375×667 viewer over the example plan, which sits this far up and left. */
-const PLAN_OFFSET = { x: 380, y: 330 };
-const on = (x: number, y: number): Point => ({ x, y });
-/** Where a point of the plan shows on the screen, with the map at rest. */
-const seen = ({ x, y }: Point) => on(Math.round(x - PLAN_OFFSET.x), Math.round(y - PLAN_OFFSET.y));
-/** A crossing of the plan's galleries: routes and trails keep to them. */
-const at = (i: number, j: number) => seen(crossing(i, j));
-
-// Map spots, in screen pixels with the map at rest.
-const spot = {
-  chatiere: seen(features.chatiere),
-  gardien: seen(features.sculpture),
-  puits: seen(features.airShaft),
-  shared: seen(features.salleZ),
-  mark: at(1, -3),
-};
-const trailPoints = [at(-1, -8), at(-1, -5), at(1, -5)];
-const routePoints = [at(-4, -9), at(-1, -9), at(-1, -4), at(2, -4)];
-const scaleEnds = scaleBar.map(seen);
-const measureEnds = [at(-1, -8), at(-1, -2.5)];
-
-const toPlan = (point: Point) => ({ x: point.x + PLAN_OFFSET.x, y: point.y + PLAN_OFFSET.y });
-const pin = (kind: MapMarker["kind"], at: Point) => placed(placeIcon(kind), toPlan(at), PLACE_PIN.size, "", PLACE_PIN.tip);
-const place = (kind: MapMarker["kind"], name: string, at: Point, left: number, top: number) =>
-  callout(name, markerCalloutIcon(kind), markerKinds[kind].color, toPlan(at), left + PLAN_OFFSET.x, top + PLAN_OFFSET.y) + pin(kind, at);
-const line = (points: Point[]) => `M${points.map((p) => { const { x, y } = toPlan(p); return `${x} ${y}`; }).join("L")}`;
-const dots = (points: Point[], extra = (_: number) => "") =>
-  points.map((p, i) => { const { x, y } = toPlan(p); return `<circle cx="${x}" cy="${y}" r="4"${extra(i)}/>`; }).join("");
-// The boxes text search draws round the gallery names it finds: both Allée 25
-// for one name, and the Allée 25 and 55 that meet for a pair.
-const [north, south, allee55] = galleryNames;
-const found = (layer: string) => ({ at, angle, ...text }: PlanText) =>
-  `<rect class="tour-found" data-layer="${layer}" transform="translate(${at.x} ${at.y}) rotate(${angle})" x="${-(textWidth(text) + 10) / 2}" y="-9" width="${textWidth(text) + 10}" height="18" rx="5"/>`;
-const meet = crossing(0, 0);
-// A line tapped point by point: each dot lands with the finger, and the
-// stretch to it follows. Delays count from when the step's answer shows.
-const drawing = (points: Point[], color: string) =>
-  points.slice(1).map((point, i) =>
-    `<path d="${line([points[i]!, point])}" pathLength="1" class="tour-draw" style="--c:${color};animation-delay:${PRESS - ANSWER + (i + 1) * TAP_GAP}ms"/>`).join("")
-  + dots(points, (i) => ` class="tour-dot" style="--c:${color};animation-delay:${PRESS - ANSWER + i * TAP_GAP}ms"`);
-
-// Two layers: the scan, darkened as the app does unless Dark map is off, and
-// what the app draws over it.
-const plan = `<div class="tour-plan" style="left:${-PLAN_OFFSET.x}px;top:${-PLAN_OFFSET.y}px;width:${PLAN_WIDTH}px;height:${PLAN_HEIGHT}px;transform-origin:${PLAN_OFFSET.x + 227}px ${PLAN_OFFSET.y + 285}px;--plan-dark:${PLAN_DARK}">
-${planMarkup().replace("<svg ", '<svg class="tour-scan" ')}
-<svg class="tour-marks" viewBox="0 0 ${PLAN_WIDTH} ${PLAN_HEIGHT}">${[north!, south!].map(found("found")).join("")}${[south!, allee55!].map(found("pair")).join("")}
-<circle class="tour-meet" data-layer="pair" cx="${meet.x}" cy="${meet.y}" r="16"/>
-<g class="tour-trail" data-layer="trail-old"><path d="${line(trailPoints)}"/>${dots(trailPoints)}</g>
-<g class="tour-trail" data-layer="trail"><path d="${line([...trailPoints, spot.mark])}"/>${dots(trailPoints)}<circle class="tour-mark" cx="${toPlan(spot.mark).x}" cy="${toPlan(spot.mark).y}" r="7"/></g>
-<circle class="tour-glow" data-layer="glow" cx="${toPlan(spot.mark).x}" cy="${toPlan(spot.mark).y}" r="7"/>
-<g data-layer="route-drawing">${drawing(routePoints, routeColors[0]!)}</g>
-<g data-layer="route">${route(routePoints.map(toPlan))}</g>
-<g data-layer="shared">${route([spot.shared, at(-3, 1), spot.puits].map(toPlan), routeColors[1])}${place("room", "Salle Z", spot.shared, 250, 420)}</g>
-<g data-layer="scale">${drawing(scaleEnds, "var(--neon-measure)")}</g>
-<g data-layer="measure">${drawing(measureEnds, "var(--neon-measure)")}</g>
-${place("shaft", "Puits Lalande", spot.puits, 14, 240)}${place("sculpture", "Le gardien", spot.gardien, 40, 470)}
-<g data-layer="chatiere">${place("passage", "Chatière", spot.chatiere, 250, 232)}</g>
-</svg></div>`;
-
-const screen = tourScreenMarkup(plan);
+/** Back to the first step, the screen fades to black and back in. */
+const FADE = 400;
 
 const wheelLabels: Record<WheelChoice, string> = {
   place: t("Add a place"),
@@ -133,7 +71,7 @@ const basics: Guide[] = [
     steps: [
       { from: "", touch: { move: "drag", at: on(297, 370), to: on(297, 310) }, show: "panned" },
       { touch: { move: "pinch", at: on(227, 225) }, show: "panned zoomed" },
-      { touch: { move: "tap", at: [on(166, 325)] }, show: "panned zoomed place" },
+      { touch: { move: "tap", at: [pinOnScreen("panned zoomed", spot.gardien)] }, show: "panned zoomed place" },
     ],
   },
 ];
@@ -172,7 +110,7 @@ const groups: [string, Guide[]][] = [
     {
       id: "read-place", title: t("Read and edit a place"), icon: icons.edit, color: "var(--neon-add)",
       steps: [
-        { text: t("Tap a place to read about it"), from: "panned", touch: { move: "tap", at: [on(spot.gardien.x, spot.gardien.y - 78)] }, show: "panned place" },
+        { text: t("Tap a place to read about it"), from: "panned", touch: { move: "tap", at: [pinOnScreen("panned", spot.gardien)] }, show: "panned place" },
         { text: t("Tap Edit to change its name, type, notes or photos"), tap: "edit", show: "panned edit" },
         { text: t("Move puts its pin somewhere else"), tap: "move", show: "panned move-tool" },
         { text: t("Drag the pin, or tap where it goes, then tap Done"), tap: "done", show: "panned" },
@@ -186,7 +124,7 @@ const groups: [string, Guide[]][] = [
         { text: t("Hold the map where you are, drag down, then lift"), from: "trail-old", touch: { move: "hold", at: spot.mark, to: on(spot.mark.x, spot.mark.y + 60), choice: "trail" }, show: "trail trail-added" },
         { text: t("Each mark joins your trail"), touch: { move: "drag", at: on(177, 190), to: on(257, 430) }, show: "trail away" },
         { text: t("Lost? Hold, then drag up-right"), touch: { move: "hold", at: on(207, 300), to: on(257, 250), choice: "back" }, show: "trail" },
-        { text: t("The map comes back to your last mark"), show: "trail glow" },
+        { text: t("The map comes back to your last mark"), show: "trail" },
       ],
       note: t("Tap Trail at the top to see your trip, or end it."),
     },
@@ -225,9 +163,9 @@ const groups: [string, Guide[]][] = [
     {
       id: "search", title: t("Search and find crossings"), icon: icons.search, color: "var(--neon-saved)",
       steps: [
-        { text: t("Type a name in the search field"), from: "", tap: "search", show: "query count found" },
-        { text: t("Matches light up on the map; tap the count to go through them"), tap: "count", show: "query count found panned" },
-        { text: t("Put ; between two names to find where they meet"), tap: "search", show: "query-pair count-pair pair" },
+        { text: t("Type a name in the search field"), from: "", tap: "search", show: "query count" },
+        { text: t("Matches light up on the map; tap the count to go through them"), tap: "count", show: "query count next panned" },
+        { text: t("Put ; between two names to find where they meet"), tap: "search", show: "query-pair count" },
       ],
       note: t("Search also finds your saved places by name or description."),
     },
@@ -266,7 +204,7 @@ export const tutorials = groups.flatMap(([, guides]) => guides);
 
 export const tutorialsMarkup = `<dialog id="tour" class="tour" aria-labelledby="tour-title">
 <div class="tour-bar"><button type="button" class="page-back" id="tour-back" aria-label="${t("All tutorials")}" title="${t("All tutorials")}" hidden>${icons.arrow}</button><span class="tour-dots" id="tour-dots"></span><button type="button" class="dialog-close" id="tour-close" aria-label="${t("Close")}" title="${t("Close")}">${icons.close}</button></div>
-<div class="tour-phone" id="tour-phone" aria-hidden="true">${screen}</div>
+<div class="tour-phone" id="tour-phone" aria-hidden="true">${tourScreenMarkup}</div>
 <h2 id="tour-title"></h2><p id="tour-text"></p>
 <ol class="share-summary tour-steps" id="tour-steps"></ol><p class="dialog-note" id="tour-note"></p>
 <div id="tour-list" class="tour-list"><div class="share-summary"><button type="button" class="share-row" data-guide="basics"><span class="share-row-icon" style="--k:var(--neon-add)">${icons.sparkle}</span><span class="share-row-label">${t("Getting started")}<small>${t("The basics in three steps")}</small></span>${icons.arrow}</button></div>
@@ -323,6 +261,7 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
   const next = part<HTMLButtonElement>("tour-next");
   const fingers = [...screenBox.querySelectorAll<HTMLElement>(".tour-finger")];
   const wheel = screenBox.querySelector<HTMLElement>('[data-id="hold-wheel"]')!;
+  const map = new TourMap(screenBox);
   let view: View = { kind: "list" };
   let steps: Step[] = [];
   let timers: ReturnType<typeof setTimeout>[] = [];
@@ -334,21 +273,21 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
     timers.forEach(clearTimeout);
     timers = [];
     act(fingers, undefined);
+    screenBox.classList.remove("fading");
   };
-  // What the phone shows: the app's screens set up as `show` names them, map
-  // layers on, and the map's own states matched in CSS.
-  const display = (show: string, jump = false) => {
-    const shown = show.split(" ");
+  // What the phone shows: the app's screens and its map set up as `show`
+  // names them, getting there as `move` says.
+  const display = (show: string, move: Move = "glide", drawn?: number) => {
     screenBox.dataset.show = show;
-    for (const layer of screenBox.querySelectorAll("[data-layer]")) layer.classList.toggle("on", shown.includes(layer.getAttribute("data-layer")!));
-    showScene(screenBox, show, jump);
+    showScene(screenBox, show, move === "jump", drawn);
+    map.display(show, move, drawn);
   };
 
   const showStep = (index: number) => {
     stop();
     const current = steps[index]!;
     const { show = "", tap, touch } = current;
-    display(current.from ?? steps[index - 1]?.show ?? "", true);
+    display(current.from ?? steps[index - 1]?.show ?? "", "jump");
     screenBox.querySelectorAll(".tapped").forEach((target) => target.classList.remove("tapped"));
     wheel.hidden = true;
     stepList.querySelectorAll("li").forEach((item, i) => item.toggleAttribute("aria-current", i === index));
@@ -384,11 +323,20 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
         wheel.hidden = true;
         display(show);
       });
+    } else if (touch?.move === "tap") {
+      after(0, () => act(fingers, touch));
+      // A line tapped out gains a point with each tap.
+      touch.at.forEach((_, i) => after(ANSWER + i * TAP_GAP, () => display(show, "glide", i + 1)));
     } else if (touch) {
       after(0, () => act(fingers, touch));
-      after(touch.move === "tap" ? ANSWER : MOVE, () => display(show));
+      after(MOVE, () => display(show, "gesture"));
     } else after(ANSWER, () => display(show));
-    after(stepTime(current), () => showStep((index + 1) % steps.length));
+    // The last step fades out, so starting over doesn't read as one more step.
+    after(stepTime(current), () => {
+      if (index + 1 < steps.length) return showStep(index + 1);
+      screenBox.classList.add("fading");
+      later(FADE, () => showStep(0));
+    });
   };
 
   const render = (to: View) => {
@@ -414,6 +362,7 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
       : to.kind === "list" ? `${icons.check}<span>${t("Start using Mega Maps")}</span>` : `<span>${t("Next: {title}", { title: following?.title ?? "" })}</span>${icons.next}`;
     steps = guide?.steps ?? [];
     if (guide) showStep(0);
+    else map.stop();
     tour.scrollTop = 0;
   };
 
@@ -455,7 +404,10 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
     if (view.kind === "basics") track("tour_skipped", { page: view.page });
     tour.close();
   });
-  tour.addEventListener("close", stop);
+  tour.addEventListener("close", () => {
+    stop();
+    map.stop();
+  });
 
   const answer = (yes: boolean) => {
     track("tour_offer_answered", { yes });

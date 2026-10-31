@@ -1186,6 +1186,7 @@ dialog.tour > * {
   text-align: left;
   user-select: none;
   -webkit-user-select: none;
+  transition: opacity 0.4s ease;
 }
 .tour-screen .viewer {
   --hud-top: var(--space-12);
@@ -1193,6 +1194,16 @@ dialog.tour > * {
   position: absolute;
   inset: 0;
   z-index: auto;
+}
+/* Behind the library and Settings the map keeps its size, so the viewer
+   never has to fit itself to an empty screen. */
+.tour-screen .viewer[hidden] {
+  display: block !important;
+  visibility: hidden;
+}
+/* Starting over, the screen fades to black and back. */
+.tour-screen.fading {
+  opacity: 0;
 }
 .tour-screen :is(.home, .settings-page) {
   --home-top: var(--space-20);
@@ -1249,139 +1260,6 @@ dialog.tour > * {
 .tour-screen:has(.place-card[open][data-mode="edit"]) .tour-scrim {
   opacity: 1;
   background: rgb(0 0 0 / 0.35);
-}
-/* The example plan, far bigger than the screen so its edges never show;
-   where it sits is set inline, from the same numbers as the gestures. */
-.tour-plan {
-  position: absolute;
-  transition: transform 0.9s ease-in-out;
-}
-.tour-plan svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-[data-show~="panned"] .tour-plan {
-  transform: translateY(-60px);
-}
-[data-show~="panned"][data-show~="zoomed"] .tour-plan {
-  transform: translateY(-60px) scale(0.75);
-}
-[data-show~="turned"] .tour-plan {
-  transform: rotate(-24deg);
-}
-[data-show~="away"] .tour-plan {
-  transform: translate(80px, 240px);
-}
-/* Dark map darkens the paper scan as the app does; brightness dims only the scan. */
-.tour-scan {
-  filter: var(--plan-dark);
-  opacity: 0.85;
-  transition: opacity 0.3s, filter 0.3s;
-}
-[data-show~="paper"] .tour-scan {
-  filter: none;
-  opacity: 1;
-}
-[data-show~="dim"] .tour-scan {
-  opacity: 0.55;
-}
-.tour-marks svg[width="32"] {
-  width: 32px;
-  height: 32px;
-}
-.tour-marks svg[width="20"] {
-  width: 20px;
-  height: 20px;
-}
-.tour-marks [data-layer] {
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.tour-marks [data-layer].on {
-  opacity: 1;
-}
-/* Search boxes what it found once the name is typed. */
-.tour-found {
-  fill: color-mix(in srgb, var(--neon-saved) 18%, transparent);
-  stroke: var(--neon-saved);
-  stroke-width: 2;
-}
-.tour-marks .tour-found.on {
-  transition-delay: 0.8s;
-}
-.tour-meet {
-  fill: color-mix(in srgb, var(--neon-saved) 18%, transparent);
-  stroke: var(--neon-saved);
-  stroke-width: 3;
-}
-.tour-trail path {
-  fill: none;
-  stroke: var(--neon-trail);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.tour-trail circle {
-  fill: var(--neon-trail);
-}
-.tour-trail .tour-mark,
-.tour-glow {
-  stroke: #000;
-  stroke-width: 3;
-}
-.tour-glow {
-  fill: none;
-  stroke: var(--neon-trail);
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.tour-glow.on {
-  animation: tour-glow 1.2s ease-out infinite;
-}
-@keyframes tour-glow {
-  to {
-    transform: scale(3.5);
-    opacity: 0;
-  }
-}
-/* Lines drawn by tapping: each dot lands with the finger, then the stretch to it. */
-.tour-draw {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 4.5;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-.tour-dot {
-  fill: var(--c);
-  stroke: #000;
-  stroke-width: 2;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.on > .tour-draw {
-  animation: tour-draw 0.15s ease-out both;
-}
-.on > .tour-dot {
-  animation: tour-dot 0.2s ease-out both;
-}
-@keyframes tour-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes tour-dot {
-  from {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  to {
-    opacity: 1;
-  }
 }
 /* A query is typed out, letter by letter; a long one keeps its end in view. */
 [data-show~="query"] [data-id="map-search"] {
