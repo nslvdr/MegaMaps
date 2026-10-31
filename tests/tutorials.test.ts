@@ -104,3 +104,42 @@ test("a tutorial lists its steps and plays them on the map in turn", (t) => {
   assert.equal(tour.dataset.view, "list");
   assert.equal(part("tour-steps").children.length, 0);
 });
+
+test("starting over fades the screen to black instead of reading as one more step", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { tour, part, tutorials } = setup();
+  tutorials.openList();
+  tour.querySelector<HTMLElement>('[data-guide="rotate"]')!.click();
+  const screen = part("tour-screen");
+  const steps = [...part("tour-steps").querySelectorAll("li")];
+  // Three steps of 0.9 s lead and 3.2 s each.
+  t.mock.timers.tick(4100);
+  t.mock.timers.tick(4100);
+  t.mock.timers.tick(4099);
+  assert.ok(!screen.classList.contains("fading"));
+  assert.ok(steps[2]!.hasAttribute("aria-current"));
+  t.mock.timers.tick(1);
+  assert.ok(screen.classList.contains("fading"), "the last step fades out");
+  assert.ok(steps[2]!.hasAttribute("aria-current"), "and holds while it does");
+  t.mock.timers.tick(400);
+  assert.ok(!screen.classList.contains("fading"), "the first step fades back in");
+  assert.ok(steps[0]!.hasAttribute("aria-current"));
+  assert.equal(screen.dataset.show, "");
+});
+
+test("search shows what the example map's own text gives", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { tour, part, tutorials } = setup();
+  tutorials.openList();
+  tour.querySelector<HTMLElement>('[data-guide="search"]')!.click();
+  const count = part("tour-screen").querySelector<HTMLElement>('[data-id="search-count"]')!;
+  const steps = [...part("tour-steps").querySelectorAll("li")];
+  const shown = (index: number) => {
+    steps[index]!.click();
+    t.mock.timers.tick(4000);
+    return count.textContent;
+  };
+  assert.equal(shown(0), "2 matches", "both Allée 25 labels");
+  assert.equal(shown(1), "2 / 2", "the count steps to the next one");
+  assert.equal(shown(2), "1 match", "the one crossing of Allée 25 and 55");
+});

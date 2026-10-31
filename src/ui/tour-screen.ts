@@ -1,6 +1,6 @@
 import { PLAN_DARK, planMarkup } from "../example/plan";
 import { locale, plural, t } from "../i18n";
-import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, brightnessPercent, markerKinds, placeColor, routeColors, type MapMarker } from "../viewer/navigation";
+import { BRIGHTNESS_LEVELS, DEFAULT_DIMMING, brightnessPercent, markerKinds, placeColor, routeColors } from "../viewer/navigation";
 import { formatDistance, formatWalk } from "../viewer/measure";
 import { formatBytes, lastUsed, updatedAgo } from "./format";
 import { icons } from "./icons";
@@ -8,6 +8,7 @@ import { homeMarkup, importDialogsMarkup, mapDialogsMarkup } from "./library-mar
 import { placeIcon } from "./place-icon";
 import { settingsMarkup } from "./settings-page";
 import { sharingMarkup } from "./sharing";
+import { gardien, places, routes, searchText, tourSearch } from "./tour-map";
 import { viewerMarkup } from "./viewer-markup";
 
 // The tutorials' phone runs the app's own screens: their markup, copied with
@@ -23,22 +24,7 @@ const mapBytes = { image: 18_400_000, tiles: 24_100_000 };
 // The library's thumbnail: the example map's overview, darkened like the app's.
 const thumbnail = `<img src="data:image/svg+xml,${encodeURIComponent(planMarkup(240, "300 250 640 640"))}" alt="" style="filter:${PLAN_DARK}">`;
 
-// Places and routes on the made-up map, newest first like Saved, and the
-// show names that put each one there.
-type Place = { kind: MapMarker["kind"]; label: string; when?: string; description?: string };
-const places: Place[] = [
-  { kind: "room", label: "Salle Z", when: "shared" },
-  { kind: "passage", label: "Chatière", when: "chatiere" },
-  { kind: "sculpture", label: "Le gardien", description: t("A soldier carved into the quarry wall, just past the junction.") },
-  { kind: "shaft", label: "Puits Lalande" },
-];
-const gardien = places[2]!;
-const routes = [
-  { name: "Vers le puits", when: "shared", color: routeColors[1]!, points: 3 },
-  { name: `${t("Route")} 1`, when: "route", color: routeColors[0]!, points: 4 },
-];
-// The tutorials draw 4 route points, mark 2 scale ends and measure 38 m.
-const ROUTE_POINTS = 4;
+// The tutorials measure 38 m.
 const MEASURED = 38;
 
 const mapCard = `<article class="map-card" data-id="tour-map-card"><button class="map-open"><div class="thumbnail">${thumbnail}</div><div class="map-details"><h3>${MAP_NAME}</h3><p class="map-saved"><span class="saved-places">${icons.pin}2</span></p><p class="map-meta"><span>${lastUsed({ created: now - 9 * DAY, opened: now - 2 * DAY }, now)}</span><span class="map-size">${icons.storage}${formatBytes(mapBytes.image + mapBytes.tiles)}</span></p></div></button><button class="map-more">${icons.more}</button></article>`;
@@ -48,9 +34,9 @@ const actionItem = (icon: string, label: string, id = "") =>
   `<button type="button" class="action-sheet-item"${id && ` data-id="${id}"`}>${icon}<span>${label}</span></button>`;
 const actionSheet = `<dialog class="action-sheet" data-id="tour-actions"><div class="action-sheet-body"><div class="dialog-header"><span class="action-sheet-icon">${thumbnail}</span><div class="action-sheet-title"><h2>${MAP_NAME}</h2><small>${t("Image {size}", { size: formatBytes(mapBytes.image) })} · ${t("Tiles {size}", { size: formatBytes(mapBytes.tiles) })}</small></div><button type="button" class="dialog-close">${icons.close}</button></div><div class="action-sheet-list">${actionItem(icons.share, t("Share"))}${actionItem(icons.edit, t("Rename"))}${actionItem(icons.tools, t("Advanced settings"), "tour-advanced")}</div><button type="button" class="danger">${icons.trash}<span>${t("Delete")}</span></button></div></dialog>`;
 
-/** The phone's screen around `plan`, which stands in for the map's canvas. */
-export const tourScreenMarkup = (plan: string) => `<div class="tour-screen" id="tour-screen" data-show="" inert>
-<section class="viewer" data-id="viewer">${copy(viewerMarkup).replace(/<canvas[^>]*><\/canvas>/, plan)}</section>
+/** The phone's screen, its map drawn by the app's viewer (see tour-map). */
+export const tourScreenMarkup = `<div class="tour-screen" id="tour-screen" data-show="" inert>
+<section class="viewer" data-id="viewer">${copy(viewerMarkup)}</section>
 ${copy(homeMarkup()).replace('<div class="map-list" data-id="map-grid"></div>', `<div class="map-list" data-id="map-grid">${mapCard}</div>`)}
 ${copy(settingsMarkup)}
 ${copy(importDialogsMarkup + mapDialogsMarkup + sharingMarkup)}${actionSheet}
@@ -81,7 +67,7 @@ export const tapTarget = (screen: HTMLElement, tap: string) =>
 const day = (time: number, timeStyle?: "short") => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle }).format(time);
 const toastTexts: Record<string, string> = {
   "chatiere-saved": t("{name} saved", { name: "Chatière" }),
-  "route-saved": t("{name} saved · {points}", { name: routes[1]!.name, points: plural(ROUTE_POINTS, "point") }),
+  "route-saved": t("{name} saved · {points}", { name: routes[1]!.name, points: plural(routes[1]!.points.length, "point") }),
   "trail-added": t("Trail point added"),
   "scale-set": t("Scale set"),
 };
@@ -94,9 +80,10 @@ const dialogs: Record<string, string> = {
 /**
  * Sets the screens up for `show`, the space-separated names of what is on
  * screen, the way the app would have them. A step that starts somewhere new
- * `jump`s there; one the app answers moves there as the app does.
+ * `jump`s there; one the app answers moves there as the app does. While a
+ * line is tapped out, `drawn` says how many of its points are down.
  */
-export function showScene(screen: HTMLElement, show: string, jump = false) {
+export function showScene(screen: HTMLElement, show: string, jump = false, drawn?: number) {
   const shown = new Set(show.split(" "));
   const has = (name: string) => shown.has(name);
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => screen.querySelector<T>(`[data-id="${id}"]`)!;
@@ -201,13 +188,14 @@ export function showScene(screen: HTMLElement, show: string, jump = false) {
   hide("routes-order", routesShown.length < 2);
   hide("places-order", placesShown.length < 2);
   $("route-list").innerHTML = sheet === "saved"
-    ? routesShown.map((route) => row(icons.route.replace("<svg ", `<svg style="color:${route.color}" `), route.name, plural(route.points, "point"))).join("") : "";
+    ? routesShown.map((route, i) => row(icons.route.replace("<svg ", `<svg style="color:${routeColors[i % routeColors.length]}" `), route.name, plural(route.points.length, "point"))).join("") : "";
   $("marker-list").innerHTML = sheet === "saved"
     ? placesShown.map((place) => row(placeIcon(place.kind), place.label, place.description)).join("") : "";
 
   // A tool swaps the pill for its card.
   const tool = has("route-tool") ? "route" : has("scale-tool") ? "scale" : has("measure-tool") ? "measure" : has("move-tool") ? "move" : undefined;
-  const points = tool === "route" ? (has("route-drawing") ? ROUTE_POINTS : 0) : tool === "scale" ? (has("scale") ? 2 : 0) : tool === "measure" ? (has("measure") ? 2 : 0) : 0;
+  const line = tool === "route" ? has("route-drawing") && routes[1]!.points.length : (tool === "scale" ? has("scale") : tool === "measure" && has("measure")) && 2;
+  const points = Math.min(drawn ?? Infinity, line || 0);
   const measuring = tool === "measure" || tool === "scale";
   viewer.dataset.tool = tool ?? "browse";
   for (const name of ["display", "rotation", "trail", "saved", "add"]) $<HTMLButtonElement>(`open-${name}`).disabled = !!tool;
@@ -221,13 +209,13 @@ export function showScene(screen: HTMLElement, show: string, jump = false) {
     : tool === "scale"
       ? [icons.scale, t("Set scale"), points ? t("Drag the ends to adjust, then tap Next") : t("Tap one end of the scale bar or of a known length")]
       : tool === "measure"
-        ? [icons.measure, t("Measure"), points ? t("~{time} on foot · Tap to add, drag to adjust", { time: formatWalk(MEASURED) }) : t("Tap where to start measuring")]
+        ? [icons.measure, t("Measure"), points > 1 ? t("~{time} on foot · Tap to add, drag to adjust", { time: formatWalk(MEASURED) }) : t("Tap where to start measuring")]
         : [icons.move, gardien.label, t("Drag the pin, or tap where it goes")];
   $("tool-icon").innerHTML = icon;
   text("tool-title", title);
   text("tool-message", hint);
-  text("tool-total", tool === "measure" && points ? formatDistance(MEASURED) : "");
-  hide("tool-total", !(tool === "measure" && points));
+  text("tool-total", tool === "measure" && points > 1 ? formatDistance(MEASURED) : "");
+  hide("tool-total", !(tool === "measure" && points > 1));
   hide("tool-rename", tool !== "route" && tool !== "measure");
   hide("route-undo", tool !== "route" && !measuring);
   const done = $<HTMLButtonElement>("tool-done");
@@ -247,14 +235,14 @@ export function showScene(screen: HTMLElement, show: string, jump = false) {
   text("ocr-percent", "64%");
 
   // Search, typed in the pill.
-  const query = has("query") ? "Allée 25" : has("query-pair") ? "Allée 25; Allée 55" : "";
+  const query = searchText(show);
   const search = $<HTMLInputElement>("map-search");
   search.value = query;
   search.setAttribute("aria-expanded", String(!!query));
   search.scrollLeft = search.scrollWidth;
   hide("search-close", !query);
-  const matches = has("count") ? 2 : has("count-pair") ? 1 : 0;
-  $("search-count").innerHTML = matches ? `${plural(matches, "match")}${icons.next}` : "";
+  const matches = has("count") ? tourSearch(query).length : 0;
+  $("search-count").innerHTML = matches ? `${has("next") ? `2 / ${matches}` : plural(matches, "match")}${icons.next}` : "";
   hide("search-count", !matches);
 
   // The place card: reading first, editing behind Edit.

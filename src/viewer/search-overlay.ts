@@ -20,6 +20,7 @@ const project = (match: MapSearchMatch, camera: Camera) => {
 };
 
 // Every match gets a callout; screen-space layout stays legible while exploring.
+let overlays = 0;
 export class SearchOverlay {
   private matches: MapSearchMatch[] = [];
   private holes: SVGPolygonElement[][] = [];
@@ -30,8 +31,10 @@ export class SearchOverlay {
   private active = false;
   private selected = 0;
   constructor(private svg: SVGSVGElement) {
+    // Its own mask, since the tutorials run a second viewer beside the app's.
+    const id = ++overlays;
     svg.innerHTML =
-      '<defs><mask id="map-search-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"><rect width="100%" height="100%" fill="white"/></mask></defs><rect width="100%" height="100%" fill="black" fill-opacity="0.55" mask="url(#map-search-mask)"/><g class="search-highlights"></g>';
+      `<defs><mask id="map-search-mask-${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"><rect width="100%" height="100%" fill="white"/></mask></defs><rect width="100%" height="100%" fill="black" fill-opacity="0.55" mask="url(#map-search-mask-${id})"/><g class="search-highlights"></g>`;
     svg.setAttribute("hidden", "");
   }
   set(matches: MapSearchMatch[], active: boolean, selected = 0) {

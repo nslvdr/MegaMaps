@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import { preference } from "../preferences";
 import { TILE_SIZE, tileKey, type MapRecord } from "../types";
-import { payloadStore } from "../storage/payloads";
+import { payloadStore, type PayloadStore } from "../storage/payloads";
 import {
   fitCamera,
   constrain,
@@ -71,6 +71,8 @@ export interface ViewerOptions {
   /** It was put down (moved) or put back (interrupted). */
   onDrop?(moved: boolean): void;
   onAppearance?(mode: DarkMode): void;
+  /** Where the tiles come from, if not the map's own storage. */
+  store?: PayloadStore;
 }
 /** Screen distance from a point to the segment between a and b. */
 function segmentDistance(p: Point, a: Point, b: Point) {
@@ -150,7 +152,7 @@ export class Viewer {
         this.searchOverlay = new SearchOverlay(options.searchOverlay);
     }
     this.cache = new TileCache(
-      payloadStore(map.backend),
+      this.store,
       map.id,
       () => this.invalidate(),
       onError,
@@ -212,6 +214,9 @@ export class Viewer {
     else this.fit(false);
     this.applyAppearance();
     void this.loadBase();
+  }
+  private get store() {
+    return this.options?.store ?? payloadStore(this.map.backend);
   }
   private viewport() {
     return { width: this.width, height: this.height };
@@ -282,7 +287,7 @@ export class Viewer {
   }
   private async loadBase() {
     try {
-      const blob = await payloadStore(this.map.backend).get(
+      const blob = await this.store.get(
         this.map.id,
         tileKey(this.map.levels.length - 1, 0, 0),
       );
@@ -462,6 +467,12 @@ export class Viewer {
       this.stopAnimation();
       this.setCamera(camera);
     }
+  }
+  /** Puts the map exactly here at once, as a scripted demo moves it. */
+  setView(camera: Camera) {
+    this.stopAnimation();
+    this.interactions.reset();
+    this.setCamera(camera);
   }
   /** Glides back to a center and zoom the map once showed, keeping its turn. */
   showView(view: { center: Point; scale: number }) {

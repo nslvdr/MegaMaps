@@ -8,11 +8,11 @@ import { PIN_CASING, PLACE_PIN, placeIcon } from "./place-icon";
 type Point = { x: number; y: number };
 
 // App icons are sized and placed like the viewer's pins: centred, or a teardrop by its tip.
-export const placed = (markup: string, at: Point, size: number, extra = "", anchor = { x: size / 2, y: size / 2 }) =>
+const placed = (markup: string, at: Point, size: number, extra = "", anchor = { x: size / 2, y: size / 2 }) =>
   markup.replace("<svg ", `<svg x="${at.x - anchor.x}" y="${at.y - anchor.y}" width="${size}" height="${size}" ${extra}`);
 
 // A label as the viewer draws it: a chip with the kind's icon, tied to its pin.
-export function callout(name: string, icon: string, color: string, from: Point, left: number, top: number) {
+function callout(name: string, icon: string, color: string, from: Point, left: number, top: number) {
   const width = name.length * 8 + 51;
   return `<g class="map-callout" style="--callout-color:${color}">
 <line class="map-callout-connector" x1="${from.x}" y1="${from.y}" x2="${left + width / 2}" y2="${top + 18}"/>
@@ -20,7 +20,7 @@ export function callout(name: string, icon: string, color: string, from: Point, 
 <text x="${left + 38}" y="${top + 23}">${name}</text></g>`;
 }
 
-export function route(points: Point[], color = routeColors[0]!) {
+function route(points: Point[], color = routeColors[0]!) {
   const d = `M${points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join("L")}`;
   const dots = points.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${PIN_CASING}"/><circle cx="${p.x}" cy="${p.y}" r="2" fill="${color}"/>`).join("");
   return `<path d="${d}" fill="none" stroke="${PIN_CASING}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${color}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}`
