@@ -15,7 +15,8 @@ import { ViewerControls } from "./ui/viewer-controls";
 import { loadNavigation, lastMap, setLastMap } from "./storage/navigation";
 import { photoBytes, prunePhotos } from "./storage/photos";
 import { darkMode, measureTone } from "./viewer/appearance";
-import { initLibraryFooter, libraryFooterMarkup } from "./ui/library-footer";
+import { initLibraryFooter } from "./ui/library-footer";
+import { homeMarkup, importDialogsMarkup, mapDialogsMarkup } from "./ui/library-markup";
 import { initKeyboardInset, initTapAway } from "./ui/keyboard-inset";
 import { lockPageZoom } from "./ui/page-zoom";
 import { loadOcr } from "./storage/ocr";
@@ -34,35 +35,29 @@ import { preference } from "./preferences";
 import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
+import { initTutorials, tutorialsMarkup } from "./ui/tutorials";
 import { failure, setPerson, startStats, track } from "./stats";
 
 document.documentElement.lang = language;
 document.documentElement.dataset.labels = preference("label-size");
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
-  <main class="home" id="home">
-    <div class="top-edge" aria-hidden="true"></div>
-    <header class="header"><div class="library-brand"><img class="library-logo" src="/icons/icon.svg" alt="" width="48" height="48" draggable="false"><h1>Mega Maps${import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>'}</h1></div><button class="settings-open" id="settings-open" aria-label="${t("Settings")}" title="${t("Settings")}">${icons.settings}<span class="update-dot" aria-hidden="true"></span></button></header>
-    <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">${t("Your maps")} <span id="map-count">0</span></h2><button class="import-trigger" id="import-open">${icons.plus}<span>${t("Import")}</span></button></div><div class="map-list" id="map-grid"></div><div class="empty" id="empty" hidden><span class="empty-icon">${icons.map}</span><h3>${t("Your next route starts here")}</h3><p>${t("Import a JPEG, PNG or WebP map, or a .megamap file from a friend.")}<br>${t("Keep it with you, even offline.")}</p><p class="empty-drop">${t("You can also drop or paste one here.")}</p></div></section>
-    <button type="button" class="help-open" id="help-open">${icons.help}<span>${t("Need help?")} <strong>${t("Tap here")}</strong></span></button>
-    ${libraryFooterMarkup}
-  </main>
+  ${homeMarkup(import.meta.env.MODE === "production" ? "" : ' <span class="dev-title">Dev</span>')}
   ${settingsMarkup}
   ${installMarkup}
   <section id="viewer" class="viewer" aria-label="${t("Map viewer")}" hidden>${viewerMarkup}</section>
   <input type="file" id="file-input" hidden>
-  <dialog id="import-dialog" aria-labelledby="import-title">${dialogHeader("import-title", t("Import"), icons.download, "import-cancel")}<p>${t("What would you like to add?")}</p><div class="share-summary"><button class="share-row" id="import-image"><span class="share-row-icon share-image">${icons.map}</span><span class="share-row-label">${t("New map")}<small>${t("JPEG, PNG or WebP image")}</small></span>${icons.arrow}</button><button class="share-row" id="import-share"><span class="share-row-icon share-file">${icons.download}</span><span class="share-row-label">${t("Shared file")}<small>${t(".megamap with places and routes")}</small></span>${icons.arrow}</button></div></dialog>
-  <dialog id="progress-dialog" aria-labelledby="progress-title">${dialogHeader("progress-title", t("Preparing map"), icons.map, "cancel-import", t("Cancel import"))}<p id="import-name"></p><div class="progress-track" id="progress-track" role="progressbar" aria-labelledby="progress-message" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div><div class="progress-info"><span id="progress-message">${t("Reading image…")}</span><span id="progress-percent">0%</span></div><p class="dialog-note" id="progress-note">${t("Keep Mega Maps open while your map is prepared.")}</p></dialog>
+  ${importDialogsMarkup}
   <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>${t("Got it")}</span></button></dialog>
-  <dialog id="help-dialog" aria-labelledby="help-title">${dialogHeader("help-title", t("Need help?"), icons.help, "help-close")}<p>${t("Found a problem or have a question? Open an issue on GitHub: say what you did, what you expected and what happened. A screenshot helps.")}</p><p class="dialog-note">${t("A free GitHub account is needed to submit an issue.")}</p><a class="primary" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener">${icons.externalLink}<span>${t("Open an issue on GitHub")}</span></a></dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title">${dialogHeader("help-title", t("Need help?"), icons.help, "help-close")}<p>${t("Found a problem or have a question? Open an issue on GitHub: say what you did, what you expected and what happened. A screenshot helps.")}</p><p class="dialog-note">${t("A free GitHub account is needed to submit an issue.")}</p><div class="dialog-actions"><a class="primary" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener">${icons.externalLink}<span>${t("Open an issue on GitHub")}</span></a><button type="button" class="secondary" id="help-tutorials">${icons.tutorials}<span>${t("See the tutorials")}</span></button></div></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", t("Delete this map?"), icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>${t("Delete map")}</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
   ${updateDialogMarkup}
   ${restoreDialogMarkup}
   ${eraseDialogMarkup}
-  <dialog id="advanced-map-dialog" aria-labelledby="advanced-map-title">${dialogHeader("advanced-map-title", t("Advanced settings"), icons.tools, "advanced-map-close")}<p id="advanced-map-name"></p><h3>${t("Text detection")}</h3><p id="ocr-status" role="status" aria-live="polite"></p><p class="dialog-note">${t("Detect labels in all directions for map search. Everything stays on this device. Large maps can take a while; keep the app open.")}</p><div class="map-options"><button class="primary" id="rerun-ocr">${icons.search}<span>${t("Rerun text detection")}</span></button><button class="secondary" id="stop-ocr" hidden>${icons.close}<span>${t("Stop detection")}</span></button></div></dialog>
-  <dialog id="ocr-offer-dialog" aria-labelledby="ocr-offer-title">${dialogHeader("ocr-offer-title", "", icons.scanText, "ocr-offer-close")}<p id="ocr-offer-body"></p><p class="dialog-note">${t("You can run it later from the map’s Advanced settings.")}</p><div class="dialog-actions"><button type="button" id="ocr-offer-start" class="primary">${icons.scanText}<span>${t("Detect text")}</span></button><button type="button" id="ocr-offer-later" class="quiet">${t("Not now")}</button></div></dialog>
+  ${tutorialsMarkup}
+  ${mapDialogsMarkup}
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -106,6 +101,7 @@ const settings = initSettingsPage(settingsPage, {
   release: releaseName,
   back: hideSettings,
   checkUpdates: openUpdates,
+  openTutorials: () => tutorials.openList(),
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
@@ -710,6 +706,11 @@ progressDialog.addEventListener("cancel", (event) => {
 const helpDialog = element<HTMLDialogElement>("help-dialog");
 element("help-open").addEventListener("click", () => showDialog(helpDialog));
 element("help-close").addEventListener("click", () => helpDialog.close());
+const tutorials = initTutorials(element("tour"), element("tour-offer"));
+element("help-tutorials").addEventListener("click", () => {
+  helpDialog.close();
+  tutorials.openList();
+});
 for (const id of ["message-close", "message-dismiss"])
   element(id).addEventListener("click", () => messageDialog.close());
 function openUpdates() {
@@ -1010,6 +1011,7 @@ async function start() {
   const map = maps.find((map) => map.id === resume);
   if (map) await openMap(map);
   retileMaps();
+  tutorials.atLaunch(maps.length > 0);
 }
 // A dev server on a new port starts empty; it brings back the shared dev maps.
 async function restoreDevData() {

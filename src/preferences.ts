@@ -18,6 +18,8 @@ const choices = {
   "update-install": ["auto", "ask"],
   /** The hidden map overlay: tile borders and live stats. */
   debug: ["off", "on"],
+  /** Whether this device was shown Getting started, or offered it. */
+  tour: ["new", "seen"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };

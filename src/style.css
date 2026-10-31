@@ -540,7 +540,7 @@ small {
   height: 14px;
 }
 /* The icon says "last update"; a ready update says so itself. */
-#update-hint {
+.update-hint {
   display: none;
 }
 .footer-offline:has([data-state="unavailable"]) {
@@ -644,11 +644,11 @@ small {
 .settings-icon {
   --k: var(--neon-view);
 }
-#settings-backup .settings-icon,
-#settings-restore .settings-icon {
+.settings-backup .settings-icon,
+.settings-restore .settings-icon {
   --k: var(--neon-saved);
 }
-#settings-storage .settings-icon {
+.settings-storage .settings-icon {
   --k: var(--muted);
 }
 .settings-page .share-row-label small:empty {
@@ -716,12 +716,12 @@ small {
   --k: var(--neon-add);
 }
 /* Held for the debug overlay, so no system callout or selection. */
-#settings-update {
+.settings-update {
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
 }
-#settings-update[data-state="ready"] small {
+.settings-update[data-state="ready"] small {
   color: var(--neon-add);
 }
 /* The backup note lines up with the row labels above it. */
@@ -736,7 +736,7 @@ small {
   color: var(--danger);
 }
 /* The nickname box sits at the row's end, like the choices above it. */
-#settings-name {
+.settings-name {
   flex: 0 1 160px;
   min-width: 0;
   min-height: 40px;
@@ -749,11 +749,11 @@ small {
   font-size: var(--font-size-body);
   transition: border-color 0.15s;
 }
-#settings-name:focus {
+.settings-name:focus {
   border-color: var(--neon-view);
   outline: none;
 }
-#settings-name::placeholder {
+.settings-name::placeholder {
   color: var(--muted);
 }
 
@@ -792,7 +792,7 @@ small {
   stroke: var(--bg);
   stroke-width: 26;
 }
-.landing-map .cave-floor ellipse {
+:is(.landing-map, .tour-scan, .tour-thumb) .cave-floor ellipse {
   fill: var(--bg);
 }
 .plan-ink {
@@ -1065,6 +1065,427 @@ small {
   }
 }
 
+/* ---------- Tutorials ---------- */
+/* Getting started and the tutorials fill the page: a phone acting the feature
+   out with the app's own controls, then what to do. */
+dialog.tour {
+  --accent: var(--neon-saved);
+  --tour-side: max(var(--space-20), (100vw - var(--surface-max-width)) / 2);
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: max(var(--space-12), env(safe-area-inset-top)) max(var(--tour-side), env(safe-area-inset-right)) 0
+    max(var(--tour-side), env(safe-area-inset-left));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+dialog.tour[open] {
+  display: flex;
+  flex-direction: column;
+}
+/* The page scrolls; nothing in it shrinks to fit. */
+dialog.tour > * {
+  flex-shrink: 0;
+}
+.tour-bar {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  min-height: 44px;
+}
+.tour-dots {
+  grid-column: 2;
+  display: flex;
+  justify-content: center;
+  gap: var(--space-8);
+}
+.tour-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: #ffffff2e;
+  transition: width 0.25s var(--ease-out), background 0.25s;
+}
+.tour-dots i.on {
+  width: 24px;
+  background: var(--accent);
+}
+.tour-bar .dialog-close {
+  grid-column: 3;
+  justify-self: end;
+}
+.tour > h2 {
+  margin: 0 0 var(--space-8);
+}
+.tour > p {
+  margin: 0;
+  line-height: 1.5;
+}
+.tour-steps {
+  padding: 0;
+  list-style: none;
+}
+.tour-steps li {
+  transition: background 0.25s;
+}
+.tour-steps .share-row-icon {
+  font-size: var(--font-size-small);
+  font-weight: 700;
+}
+.tour-steps li:not([aria-current]) .share-row-icon {
+  --k: var(--muted);
+}
+.tour-steps li[aria-current] {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.tour > .dialog-note {
+  margin-top: var(--space-12);
+}
+.tour-list > .share-summary:first-child {
+  margin-top: var(--space-20);
+}
+.tour-list .settings-heading {
+  margin: var(--space-24) 0 0;
+}
+.tour-list .share-summary {
+  margin-top: var(--space-8);
+}
+.tour-list .share-row > svg:last-child {
+  color: var(--muted);
+}
+/* Always in reach at the bottom, over whatever scrolls under it. */
+#tour-next {
+  position: sticky;
+  bottom: max(var(--space-20), env(safe-area-inset-bottom));
+  flex: none;
+  width: 100%;
+  margin: auto 0 max(var(--space-20), env(safe-area-inset-bottom));
+  box-shadow:
+    0 0 0 var(--space-20) var(--bg),
+    0 var(--space-20) 0 var(--space-20) var(--bg);
+}
+/* A phone-sized screen, 375×667, drawn smaller: the app's own screens run in
+   it, so everything inside keeps the real sizes and spacing. */
+.tour-phone {
+  --tour-scale: 0.75;
+  position: relative;
+  flex: none;
+  width: calc(375px * var(--tour-scale) + 12px);
+  height: calc(667px * var(--tour-scale) + 12px);
+  margin: var(--space-12) auto var(--space-20);
+  overflow: hidden;
+  border: 6px solid #151515;
+  border-radius: 32px;
+  box-shadow: 0 0 0 1px #ffffff26;
+  background: #000;
+}
+/* Smaller phones get a smaller one, so the words still show below it. */
+@media (max-width: 375px), (max-height: 800px) {
+  .tour-phone {
+    --tour-scale: 0.64;
+  }
+}
+/* The transform makes the screen hold what the app fixes to the viewport;
+   what measures the viewport itself is measured against the screen here. */
+.tour-screen {
+  --accent: var(--neon-add);
+  --edge-l: var(--space-12);
+  --edge-r: var(--space-12);
+  --surface-width: 351px;
+  --surface-left: var(--space-12);
+  --surface-padding: var(--space-20);
+  --keyboard-inset: 0px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 375px;
+  height: 667px;
+  overflow: hidden;
+  transform: scale(var(--tour-scale));
+  transform-origin: 0 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-size-body);
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tour-screen .viewer {
+  --hud-top: var(--space-12);
+  --hud-bottom: var(--space-12);
+  position: absolute;
+  inset: 0;
+  z-index: auto;
+}
+.tour-screen :is(.home, .settings-page) {
+  --home-top: var(--space-20);
+  min-height: 100%;
+}
+.tour-screen .settings-page {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.tour-screen .sheet {
+  max-height: calc(667px - 2 * var(--space-12) - var(--dock-h) - 16px);
+}
+.tour-screen .sheet:is([data-panel="trail"], [data-panel="display"], [data-panel="rotation"]) {
+  max-height: calc(667px - 2 * var(--space-12) - var(--dock-h) - 68px);
+}
+.tour-screen .toasts {
+  top: calc(var(--hud-top) + var(--icon-button-size) + var(--space-12));
+  max-width: var(--surface-width);
+}
+/* Dialogs open in place, not in the page's top layer, as phone cards. */
+.tour-screen dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 41;
+  height: fit-content;
+  max-height: calc(100% - var(--space-24));
+  margin: auto auto var(--space-12);
+}
+.tour-screen .place-card[data-mode="view"] {
+  z-index: 20;
+  top: auto;
+  bottom: var(--space-12);
+  max-height: calc(70% - var(--space-12));
+  margin-block: 0;
+  padding-bottom: var(--space-20);
+}
+.tour-screen .place-save {
+  padding-bottom: var(--space-20);
+}
+.tour-screen .action-sheet-icon {
+  width: 48px;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  overflow: hidden;
+}
+.tour-screen .action-sheet-icon svg {
+  width: 100%;
+  height: 100%;
+}
+/* Open dialogs dim what's behind them, like their backdrop. */
+.tour-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: rgb(0 0 0 / 0.72);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.tour-screen:has(dialog[open]:not(.place-card)) .tour-scrim {
+  opacity: 1;
+}
+.tour-screen:has(.place-card[open][data-mode="edit"]) .tour-scrim {
+  opacity: 1;
+  background: rgb(0 0 0 / 0.35);
+}
+.tour-plan {
+  position: absolute;
+  left: -13px;
+  top: -80px;
+  width: 400px;
+  height: 860px;
+  transform-origin: 240px 365px;
+  transition: transform 0.9s ease-in-out;
+}
+.tour-plan svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+[data-show~="panned"] .tour-plan {
+  transform: translateY(-60px);
+}
+[data-show~="panned"][data-show~="zoomed"] .tour-plan {
+  transform: translateY(-60px) scale(0.75);
+}
+[data-show~="turned"] .tour-plan {
+  transform: rotate(-24deg);
+}
+[data-show~="away"] .tour-plan {
+  transform: translate(80px, 240px);
+}
+/* Dark map is the scan inverted on black; brightness dims only the scan. */
+.tour-scan {
+  opacity: 0.85;
+  transition: opacity 0.3s, filter 0.3s;
+}
+[data-show~="paper"] .tour-scan {
+  filter: invert(1);
+  opacity: 1;
+}
+[data-show~="dim"] .tour-scan {
+  opacity: 0.55;
+}
+.tour-marks svg[width="32"] {
+  width: 32px;
+  height: 32px;
+}
+.tour-marks svg[width="20"] {
+  width: 20px;
+  height: 20px;
+}
+.tour-marks [data-layer] {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.tour-marks [data-layer].on {
+  opacity: 1;
+}
+/* Search boxes what it found once the name is typed. */
+.tour-found {
+  fill: color-mix(in srgb, var(--neon-saved) 18%, transparent);
+  stroke: var(--neon-saved);
+  stroke-width: 2;
+}
+.tour-marks .tour-found.on {
+  transition-delay: 0.8s;
+}
+.tour-meet {
+  fill: color-mix(in srgb, var(--neon-saved) 18%, transparent);
+  stroke: var(--neon-saved);
+  stroke-width: 3;
+}
+.tour-trail path {
+  fill: none;
+  stroke: var(--neon-trail);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tour-trail circle {
+  fill: var(--neon-trail);
+}
+.tour-trail .tour-mark,
+.tour-glow {
+  stroke: #000;
+  stroke-width: 3;
+}
+.tour-glow {
+  fill: none;
+  stroke: var(--neon-trail);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.tour-glow.on {
+  animation: tour-glow 1.2s ease-out infinite;
+}
+@keyframes tour-glow {
+  to {
+    transform: scale(3.5);
+    opacity: 0;
+  }
+}
+/* Lines drawn by tapping: each dot lands with the finger, then the stretch to it. */
+.tour-draw {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.tour-dot {
+  fill: var(--c);
+  stroke: #000;
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.on > .tour-draw {
+  animation: tour-draw 0.15s ease-out both;
+}
+.on > .tour-dot {
+  animation: tour-dot 0.2s ease-out both;
+}
+@keyframes tour-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes tour-dot {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* A query is typed out, letter by letter; a long one keeps its end in view. */
+[data-show~="query"] [data-id="map-search"] {
+  animation: tour-type 0.8s steps(8) both;
+}
+[data-show~="query-pair"] [data-id="map-search"] {
+  animation: tour-type-pair 0.8s steps(18) both;
+}
+@keyframes tour-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes tour-type-pair {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+.tour-screen [data-id="search-count"] {
+  animation: toast-in 0.2s 0.8s ease-out both;
+}
+.tour-screen [data-id="progress-fill"] {
+  animation: tour-fill 1.6s ease-out both;
+}
+@keyframes tour-fill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+.tour-thumb {
+  width: 100%;
+  height: 100%;
+}
+.tour-screen .map-card:not([hidden]) {
+  animation: pop-in 0.24s var(--ease-out);
+}
+/* What the finger taps flashes as it's pressed. */
+.tour-screen .tapped {
+  animation: tour-press 0.3s ease-out;
+}
+@keyframes tour-press {
+  50% {
+    filter: brightness(1.6);
+    scale: 0.94;
+  }
+}
+.tour-finger {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  margin: -22px;
+  border: 2px solid rgb(255 255 255 / 0.75);
+  border-radius: var(--radius-round);
+  background: rgb(255 255 255 / 0.3);
+  box-shadow: 0 4px 16px #0008;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ---------- Dialogs ---------- */
 /* Phones: a card floating just above the home indicator, within thumb reach,
    like the place card. Wider screens: centered. Dialogs rise in and fade out
@@ -1299,7 +1720,6 @@ dialog .dialog-error {
   margin: var(--space-20) 0 var(--space-12);
   overflow: hidden;
 }
-#progress-fill,
 .progress-fill {
   height: 100%;
   background: var(--accent);
@@ -1813,7 +2233,7 @@ dialog input[type="date"]::-webkit-date-and-time-value {
 .search-field > svg {
   color: var(--c);
 }
-.viewer .glass button:not(#open-saved, #open-add, .search-count):active:not(:disabled) {
+.viewer .glass button:not(.open-saved, .open-add, .search-count):active:not(:disabled) {
   background-color: var(--fill-strong);
 }
 button.glass:active:not(:disabled) {
@@ -2026,15 +2446,15 @@ button.glass:active:not(:disabled) {
   width: 21px;
   height: 21px;
 }
-#open-saved,
+.open-saved,
 .sheet[data-panel="saved"] {
   --c: var(--neon-saved);
 }
-#open-display,
+.open-display,
 .sheet[data-panel="display"] {
   --c: var(--neon-view);
 }
-#open-search {
+.open-search {
   --c: var(--neon-saved);
 }
 .search-field {
@@ -2062,7 +2482,7 @@ button.glass:active:not(:disabled) {
   height: calc(var(--icon-button-size) - 2 * var(--space-8));
   flex-shrink: 0;
 }
-#map-search {
+.map-search {
   appearance: none;
   -webkit-appearance: none;
   min-width: 0;
@@ -2077,11 +2497,11 @@ button.glass:active:not(:disabled) {
   font: inherit;
   font-size: var(--font-size-body);
 }
-#map-search::-webkit-search-cancel-button,
-#map-search::-webkit-search-decoration {
+.map-search::-webkit-search-cancel-button,
+.map-search::-webkit-search-decoration {
   -webkit-appearance: none;
 }
-#map-search::placeholder {
+.map-search::placeholder {
   color: var(--muted);
 }
 .search-status {
@@ -2182,7 +2602,7 @@ button.glass:active:not(:disabled) {
   width: 20px;
   height: 20px;
 }
-#open-add,
+.open-add,
 .sheet[data-panel="add"],
 .tool-bar,
 .place-card {
@@ -2190,7 +2610,7 @@ button.glass:active:not(:disabled) {
 }
 /* Measure lights up while its tool is open; the line on the map shares its neon
    (MEASURE_COLOR in overlays.ts). */
-#open-measure,
+.open-measure,
 [data-tool="measure"] .tool-bar,
 [data-tool="scale"] .tool-bar {
   --c: var(--neon-measure);
@@ -2200,16 +2620,16 @@ button.glass:active:not(:disabled) {
 }
 /* Trail, like the dot that marks where you are, is red. While a trip is under
    way its chip carries that dot. */
-#open-trail,
+.open-trail,
 .sheet[data-panel="trail"],
 [data-tool="trail"] .tool-bar,
 .trip-card {
   --c: var(--neon-trail);
 }
-#open-trail {
+.open-trail {
   position: relative;
 }
-#open-trail.on-trip::after {
+.open-trail.on-trip::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -2221,7 +2641,7 @@ button.glass:active:not(:disabled) {
   box-shadow: 0 0 0 2px #000;
 }
 /* Rotation always has a mode, so like View it only lights up while open. */
-#open-rotation,
+.open-rotation,
 .sheet[data-panel="rotation"] {
   --c: var(--neon-lock);
 }
@@ -2229,18 +2649,17 @@ button.glass:active:not(:disabled) {
 /* Saved and Add are solid neon buttons; each opens its panel above the pill.
    Placing, drawing or moving swaps the pill for a card with the panels'
    header (icon, title, X), a hint and full-size actions. */
-#open-saved,
-#open-add {
+.dock > :is(.open-saved, .open-add) {
   background: var(--c);
   color: #000;
 }
-#open-saved svg,
-#open-add svg {
+.open-saved svg,
+.open-add svg {
   color: currentColor;
   filter: none;
 }
-#open-saved:active:not(:disabled),
-#open-add:active:not(:disabled) {
+.open-saved:active:not(:disabled),
+.open-add:active:not(:disabled) {
   background: color-mix(in srgb, var(--c) 75%, #fff);
 }
 .dock button:disabled {
@@ -2354,14 +2773,14 @@ button.glass:active:not(:disabled) {
 .place-save > button {
   width: 100%;
 }
-#marker-form > .dialog-actions > :first-child,
+.marker-form > .dialog-actions > :first-child,
 .mark-actions > :first-child {
   flex-basis: 0;
 }
 .mark-actions {
   margin-top: var(--space-16);
 }
-#marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
+.marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
   display: none;
 }
 .place-card[data-mode="view"] {
@@ -3211,13 +3630,13 @@ label.panel-row {
   max-height: none;
 }
 /* Auto and its speeds read as one tinted block while Auto is chosen. */
-.rotation-auto:has(#compass-follow-auto:checked) {
+.rotation-auto:has(> .choice-row input:checked) {
   background: color-mix(in srgb, var(--c) 7%, transparent);
 }
 .rotation-auto > .choice-row:has(input:checked) {
   background: none;
 }
-#speed-field {
+.speed-field {
   padding: 0 var(--space-12) var(--space-12);
 }
 /* Auto's speeds: one pill, the chosen speed lit inside it. */
@@ -3275,7 +3694,7 @@ label.panel-row {
   display: block;
   color: var(--danger);
 }
-#north-field {
+.north-field {
   margin-top: var(--space-12);
 }
 /* Map north: an iOS Clock-style wheel; the band marks the chosen degree. */
@@ -3416,15 +3835,15 @@ label.panel-row {
 }
 
 /* Saved: one black group per section, outlined in that section's colour. */
-#route-list,
+.route-list,
 .section-title.routes {
   --k: var(--kind-route);
 }
-#marker-list,
+.marker-list,
 .section-title.places {
   --k: var(--kind-place);
 }
-#trip-list,
+.trip-list,
 .section-title.trips {
   --k: var(--neon-trail);
 }
@@ -3578,8 +3997,8 @@ label.panel-row {
 /* With a mouse, show which row and which pill button a click will hit. */
 @media (hover: hover) {
   .row-more:hover:not([aria-expanded="true"]) { background: #ffffff12; color: var(--text); }
-  #open-saved:hover:not(:disabled),
-  #open-add:hover:not(:disabled) {
+  .open-saved:hover:not(:disabled),
+  .open-add:hover:not(:disabled) {
     background: color-mix(in srgb, var(--c) 85%, #fff);
   }
   .status-chip:hover:not(:disabled),
@@ -4022,11 +4441,11 @@ dialog .share-size { display: flex; justify-content: space-between; gap: var(--s
 /* Import: shared files go only onto maps made from the same image. */
 .share-file { --k: var(--neon-view); }
 .share-heading { margin: var(--space-16) 0 var(--space-8); font-size: var(--font-size-small); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
-#receive-destinations { margin-top: 0; }
-#receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
-#receive-destinations.single { margin-top: var(--space-16); }
-#receive-destinations.single .share-row { cursor: default; background: none; }
-#receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.receive-destinations { margin-top: 0; }
+.receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
+.receive-destinations.single { margin-top: var(--space-16); }
+.receive-destinations.single .share-row { cursor: default; background: none; }
+.receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .receive-thumbnail {
   display: grid;
   place-items: center;
@@ -4062,4 +4481,4 @@ dialog .share-size { display: flex; justify-content: space-between; gap: var(--s
 .share-segments input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .share-segments label:has(input:checked) { color: var(--text); background: color-mix(in srgb, var(--c) 18%, #000); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
 .share-segments .share-segment-danger { --c: var(--danger); }
-dialog #receive-note { margin: var(--space-16) 0 0; }
+dialog .receive-note { margin: var(--space-16) 0 0; }
