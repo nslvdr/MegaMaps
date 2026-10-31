@@ -767,48 +767,21 @@ small {
   align-items: center;
   padding: env(safe-area-inset-top) var(--space-20) max(var(--space-20), env(safe-area-inset-bottom));
 }
-/* A made-up plan, dimmed throughout so the text reads over it. */
+/* The example map, darkened like in the app and dimmed so the text reads over it. */
 .landing-map {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.28;
+}
+.landing-map svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
-  opacity: 0.28;
 }
-.plan-cave path,
-.plan-cave ellipse {
-  fill: none;
-  stroke-linecap: round;
-}
-.cave-wall {
-  stroke: #d8d8d0;
-  stroke-width: 30;
-}
-.cave-wall ellipse {
-  fill: #d8d8d0;
-}
-.cave-floor {
-  stroke: var(--bg);
-  stroke-width: 26;
-}
-:is(.landing-map, .tour-scan, .tour-thumb) .cave-floor ellipse {
-  fill: var(--bg);
-}
-.plan-ink {
-  fill: none;
-  stroke: #d8d8d0;
-  stroke-width: 1.2;
-}
-.plan-ink .survey {
-  stroke-dasharray: 2 6;
-}
-.plan-ink text {
-  fill: #d8d8d0;
-  stroke: none;
-  font-family: Georgia, serif;
-  font-size: var(--font-size-small);
-  text-anchor: middle;
+.landing-map > svg:first-child {
+  filter: var(--plan-dark);
 }
 /* Styled like a map label, since it sits on the plan. */
 #landing-language {
@@ -1260,16 +1233,6 @@ dialog.tour > * {
 .tour-screen .place-save {
   padding-bottom: var(--space-20);
 }
-.tour-screen .action-sheet-icon {
-  width: 48px;
-  height: 48px;
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  overflow: hidden;
-}
-.tour-screen .action-sheet-icon svg {
-  width: 100%;
-  height: 100%;
-}
 /* Open dialogs dim what's behind them, like their backdrop. */
 .tour-scrim {
   position: absolute;
@@ -1287,13 +1250,10 @@ dialog.tour > * {
   opacity: 1;
   background: rgb(0 0 0 / 0.35);
 }
+/* The example plan, far bigger than the screen so its edges never show;
+   where it sits is set inline, from the same numbers as the gestures. */
 .tour-plan {
   position: absolute;
-  left: -13px;
-  top: -80px;
-  width: 400px;
-  height: 860px;
-  transform-origin: 240px 365px;
   transition: transform 0.9s ease-in-out;
 }
 .tour-plan svg {
@@ -1314,13 +1274,14 @@ dialog.tour > * {
 [data-show~="away"] .tour-plan {
   transform: translate(80px, 240px);
 }
-/* Dark map is the scan inverted on black; brightness dims only the scan. */
+/* Dark map darkens the paper scan as the app does; brightness dims only the scan. */
 .tour-scan {
+  filter: var(--plan-dark);
   opacity: 0.85;
   transition: opacity 0.3s, filter 0.3s;
 }
 [data-show~="paper"] .tour-scan {
-  filter: invert(1);
+  filter: none;
   opacity: 1;
 }
 [data-show~="dim"] .tour-scan {
@@ -1452,10 +1413,6 @@ dialog.tour > * {
   to {
     width: 100%;
   }
-}
-.tour-thumb {
-  width: 100%;
-  height: 100%;
 }
 .tour-screen .map-card:not([hidden]) {
   animation: pop-in 0.24s var(--ease-out);
