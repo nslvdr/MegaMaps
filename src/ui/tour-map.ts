@@ -157,8 +157,8 @@ function navigation(shown: Set<string>): NavigationState {
 export type Move = "jump" | "glide" | "gesture";
 const MOVES = { glide: 240, gesture: 900 };
 const ease = { glide: (k: number) => 1 - (1 - k) ** 3, gesture: (k: number) => (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2) };
-/** The typed query lights up its matches once it's typed out. */
-const TYPING = 800;
+/** A query takes this long to type; it lights up its matches once it's typed out. */
+export const TYPING = 800;
 
 /** The viewer on the tutorials' phone, running while a tutorial shows. */
 export class TourMap {
