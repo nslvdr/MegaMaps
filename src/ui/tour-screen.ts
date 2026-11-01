@@ -34,6 +34,10 @@ const actionItem = (icon: string, label: string, id = "") =>
   `<button type="button" class="action-sheet-item"${id && ` data-id="${id}"`}>${icon}<span>${label}</span></button>`;
 const actionSheet = `<dialog class="action-sheet" data-id="tour-actions"><div class="action-sheet-body"><div class="dialog-header"><span class="action-sheet-icon">${thumbnail}</span><div class="action-sheet-title"><h2>${MAP_NAME}</h2><small>${t("Image {size}", { size: formatBytes(mapBytes.image) })} · ${t("Tiles {size}", { size: formatBytes(mapBytes.tiles) })}</small></div><button type="button" class="dialog-close">${icons.close}</button></div><div class="action-sheet-list">${actionItem(icons.share, t("Share"))}${actionItem(icons.edit, t("Rename"))}${actionItem(icons.tools, t("Advanced settings"), "tour-advanced")}</div><button type="button" class="danger">${icons.trash}<span>${t("Delete")}</span></button></div></dialog>`;
 
+// A finger: a big hand whose fingertip is the touch, a red dot while it
+// presses and a red ring spreading from each press.
+const tourFinger = `<span class="tour-finger"><span class="tour-ripple"></span><span class="tour-touch"></span><span class="tour-hand">${icons.followTap}${icons.followTap}</span></span>`;
+
 /** The phone's screen, its map drawn by the app's viewer (see tour-map). */
 export const tourScreenMarkup = `<div class="tour-screen" id="tour-screen" data-show="" inert>
 <section class="viewer" data-id="viewer">${copy(viewerMarkup)}</section>
@@ -41,7 +45,7 @@ ${copy(homeMarkup()).replace('<div class="map-list" data-id="map-grid"></div>', 
 ${copy(settingsMarkup)}
 ${copy(importDialogsMarkup + mapDialogsMarkup + sharingMarkup)}${actionSheet}
 <div class="tour-scrim"></div>
-<span class="tour-finger"></span><span class="tour-finger"></span>
+${tourFinger}${tourFinger}
 </div>`;
 
 // What each tutorial taps, in the copied screens.

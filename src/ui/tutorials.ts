@@ -28,6 +28,8 @@ const HOLD_TIME = 4200;
 /** A finger touches what it taps, then the app answers. */
 const PRESS = 550;
 const ANSWER = 650;
+/** The hand's size as it touches, against 1 just above the screen. */
+const PRESSED = 0.8;
 /** Taps along the map come this far apart. */
 const TAP_GAP = 500;
 /** The map follows a drag, pinch or twist from here, for MOVE_TIME. */
@@ -217,12 +219,27 @@ ${groups.map(([title, guides]) => `<h3 class="settings-heading">${title}</h3><di
 // A finger acts out each touch on the step's timeline, using the Web
 // Animations API where there is one. `start` is how far into the step it is.
 function act(fingers: HTMLElement[], touch: Touch | undefined, start = 0) {
-  for (const finger of fingers) finger.getAnimations?.().forEach((animation) => animation.cancel());
+  for (const finger of fingers) finger.getAnimations?.({ subtree: true }).forEach((animation) => animation.cancel());
   if (!touch || !fingers[0]!.animate) return;
-  const run = (finger: HTMLElement, frames: [number, Point, number?, number?][], end: number) =>
-    finger.animate(frames.map(([ms, { x, y }, scale = 0.8, opacity = 1]) =>
-      ({ offset: (ms - start) / (end - start), opacity, transform: `translate(${x}px, ${y}px) scale(${scale})` })),
-    { duration: end - start, fill: "both", easing: "ease-in-out" });
+  // Each frame: when, where, the hand's size (PRESSED when it touches) and
+  // how much it shows.
+  type Frame = [number, Point, number?, number?];
+  const down = (frame?: Frame) => !!frame && (frame[2] ?? PRESSED) <= PRESSED;
+  const run = (finger: HTMLElement, frames: Frame[], end: number) => {
+    const timing = { duration: end - start, fill: "both", easing: "ease-in-out" } as const;
+    const offset = (ms: number) => (ms - start) / (end - start);
+    // The hand glides in to its first touch, so the eye follows it there.
+    const [[ms, { x, y }, ...rest], ...others] = frames as [Frame, ...Frame[]];
+    frames = [[ms, on(x + 36, y + 48), ...rest], ...others];
+    finger.animate(frames.map(([ms, { x, y }, , opacity = 1]) => ({ offset: offset(ms), opacity, transform: `translate(${x}px, ${y}px)` })), timing);
+    finger.querySelector(".tour-hand")!.animate(frames.map(([ms, , scale = PRESSED]) => ({ offset: offset(ms), transform: `scale(${scale})` })), timing);
+    finger.querySelector(".tour-touch")!.animate(frames.map((frame) => ({ offset: offset(frame[0]), opacity: down(frame) ? 1 : 0 })), timing);
+    const ripple = finger.querySelector(".tour-ripple")!;
+    frames.forEach((frame, i) => {
+      if (down(frame) && !down(frames[i - 1]))
+        ripple.animate([{ opacity: 1, transform: "scale(0.6)" }, { opacity: 0, transform: "scale(2.4)" }], { duration: 450, delay: frame[0] - start, easing: "ease-out" });
+    });
+  };
   if (touch.move === "tap") {
     const last = touch.at.length - 1;
     const press = (i: number) => PRESS + i * TAP_GAP;
