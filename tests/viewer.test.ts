@@ -432,15 +432,16 @@ test("renderer restores a rotated view, inverts only the map, keeps margins dark
     assert.equal(internals.cursorAt(mid), "");
     assert.equal(openedRoutes.length, routeCount);
 
-    // Name chips select the same route as its line, once zoomed in to show them.
+    // Name balloons select the same route as its line, once zoomed in to show them.
     state.layers.routes = state.layers.labels = true;
     viewer.updateNavigation(state);
     positioning.setCamera(cameraAt({ x: 256, y: 256 }, viewport, 2.5, Math.PI / 2));
     step(performance.now() + 300);
-    const chip = [...overlay.querySelectorAll<SVGGElement>(".map-callout")]
-      .find((callout) => callout.querySelector("text")!.textContent === "First")!;
-    const [x, y] = chip.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
-    assert.equal(internals.tap({ x: x! + 2, y: y! + 2 }), true);
+    const balloon = [...overlay.querySelectorAll<SVGGElement>(".map-balloon")]
+      .find((label) => label.querySelector("text")!.textContent === "First")!;
+    const [x, y] = balloon.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
+    const body = balloon.querySelector("clipPath rect")!, side = (name: string) => Number(body.getAttribute(name));
+    assert.equal(internals.tap({ x: x! + side("x") + side("width") - 8, y: y! + side("y") + side("height") / 2 }), true);
     assert.equal(openedRoutes.at(-1), "first-line");
 
     const selectedCount = openedRoutes.length;

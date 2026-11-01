@@ -1,8 +1,7 @@
 import { worldToScreen, type Camera, type Point, type Size } from "./camera";
 import { icons } from "../ui/icons";
 import { PIN_CASING, PLACE_PIN, placeIcon } from "../ui/place-icon";
-import { MapCallout } from "./map-callout";
-import { PlaceLabel } from "./place-label";
+import { MapBalloon, placeSymbol, routeSymbol } from "./map-balloon";
 import { boundsOverlap, CalloutLayout, type CalloutBounds } from "./callout-layout";
 import {
   routeColor,
@@ -80,7 +79,7 @@ export function arrows(points: Point[]) {
   return d;
 }
 type OverlayCallout = {
-  callout: MapCallout | PlaceLabel; point: Point; padding: number; layer: Layer; priority: number;
+  callout: MapBalloon; point: Point; layer: Layer; priority: number;
   /** Build order, which breaks priority ties the same way on every sort. */
   order: number; markerId?: string; routeId?: string;
 };
@@ -135,11 +134,9 @@ export class NavigationOverlay {
     const raised = item.markerId
       ? item.markerId === this.moving || item.markerId === this.selected
       : item.routeId === this.editing || item.routeId === this.selected;
-    item.padding = raised ? 10 : 8;
     item.priority = raised ? (item.markerId ? 2 : 1) : 0;
   }
-  // Places claim space first, since a balloon has only its one spot and a chip
-  // can turn aside; then higher priority. Sorted on changes, not on every frame.
+  // Places claim space first, then higher priority. Sorted on changes, not on every frame.
   private sortCallouts() {
     const rank = (item: OverlayCallout) => item.priority + (item.markerId ? 2 : 0);
     this.callouts.sort((a, b) => rank(b) - rank(a) || a.order - b.order);
@@ -198,15 +195,13 @@ export class NavigationOverlay {
     };
     const label = (
       parent: SVGGElement, text: string, point: Point,
-      callout: MapCallout | PlaceLabel, layer: Layer, markerId?: string, routeId?: string,
+      callout: MapBalloon, layer: Layer, markerId?: string, routeId?: string,
     ) => {
       callout.element.classList.add("overlay-label");
       callout.setText(text);
-      const before = previous.get(markerId ?? routeId);
-      if (callout instanceof PlaceLabel) callout.follow(before);
-      else if (before instanceof MapCallout) callout.follow(before);
+      callout.follow(previous.get(markerId ?? routeId));
       parent.append(callout.element);
-      const item = { callout, point, padding: 0, layer, priority: 0, order: this.callouts.length, markerId, routeId };
+      const item = { callout, point, layer, priority: 0, order: this.callouts.length, markerId, routeId };
       this.raise(item);
       this.callouts.push(item);
     };
@@ -250,6 +245,7 @@ export class NavigationOverlay {
     }
     // Lines first so every pin and label sits above them.
     const routes = group("routes");
+    const routeBalloons: { balloon: MapBalloon; name: string; start: Point; id: string }[] = [];
     for (const route of state.routes) {
       const color = routeColor(state, route.id),
         active = route.id === this.editing,
@@ -287,7 +283,10 @@ export class NavigationOverlay {
         icon.setAttribute("fill", color);
         icon.setAttribute("stroke", CASING);
         icon.setAttribute("stroke-width", "3.6");
-        label(layer, route.name, start, new MapCallout(icons.route, color), "routes", undefined, route.id);
+        // Its balloon grows out of the start pin, like a place's out of its own.
+        const balloon = new MapBalloon(routeSymbol(color), body);
+        if (route.id === this.found) balloon.element.classList.add("found");
+        routeBalloons.push({ balloon, name: route.name, start, id: route.id });
       }
       const end = route.points.at(-1);
       if (end && route.points.length > 1) {
@@ -303,6 +302,8 @@ export class NavigationOverlay {
     };
     const places = group("places");
     // Balloons sit over every pin, since each one grows out of its own.
+    const routeLabels = group("routes", "route-labels");
+    for (const { balloon, name, start, id } of routeBalloons) label(routeLabels, name, start, balloon, "routes", undefined, id);
     const balloons = group("places", "place-labels");
     for (const marker of state.markers) {
       const { element, body } = pin(places, marker.point);
@@ -311,7 +312,7 @@ export class NavigationOverlay {
       if (marker.id === this.selected) element.classList.add("selected");
       this.selectable.push({ id: marker.id, element });
       placeBody(body, marker.kind, marker);
-      const balloon = new PlaceLabel(marker, body);
+      const balloon = new MapBalloon(placeSymbol(marker), body);
       if (marker.id === this.found) balloon.element.classList.add("found");
       label(balloons, marker.label, marker.point, balloon, "places", marker.id);
     }
@@ -419,23 +420,23 @@ export class NavigationOverlay {
       }
       if (!outside) pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
     }
-    // Open balloons, which a route's chip on the same point goes around like a pin.
+    // Open balloons, which another balloon on the same point goes around like a pin.
     const balloons: CalloutBounds[] = [];
     // The selected place and balloons already open claim their spots first, so
     // one coming into view goes around them instead of pushing them aside.
-    const leads = ({ callout, priority }: OverlayCallout) => callout instanceof PlaceLabel && (priority > 0 || callout.opened);
+    const leads = ({ callout, priority }: OverlayCallout) => priority > 0 || callout.opened;
     // With a place selected, the other labels close to their pins. Its balloon
     // opens over the pins beside it, which hide, so no other place peeks out from under it.
     const focused = this.callouts.some(item => item.markerId && item.markerId === this.selected);
     const wanted = (priority: number) => (named && !focused) || priority > 0;
     let cover: CalloutBounds | undefined;
-    for (const { callout, point, padding, layer, priority, markerId } of [...this.callouts.filter(leads), ...this.callouts.filter(item => !leads(item))]) {
+    for (const { callout, point, layer, priority, markerId } of [...this.callouts.filter(leads), ...this.callouts.filter(item => !leads(item))]) {
       const p = worldToScreen(camera, point);
       if ((markerId && this.searchMarkers.has(markerId)) || !this.visible(layer) || !this.visible("labels")) {
         callout.hide();
         continue;
       }
-      if (callout instanceof PlaceLabel && cover && boundsOverlap(cover, pinBounds(p, 4, false))) {
+      if (cover && boundsOverlap(cover, pinBounds(p, 4, false))) {
         callout.hide(true);
         continue;
       }
@@ -444,23 +445,15 @@ export class NavigationOverlay {
       // the symbols on its point.
       const own = selected ? this.anchors : [...this.anchors, ...balloons].filter(anchor =>
         p.x >= anchor.left && p.x <= anchor.right && p.y >= anchor.top && p.y <= anchor.bottom);
-      if (callout instanceof PlaceLabel) {
-        const lift = selected ? "selected" : priority > 0 ? "raised" : "";
-        if (callout.draw(p, viewport, labels, wanted(priority), lift, own)) gliding = true;
-        if (callout.bounds) balloons.push(callout.bounds);
-        if (selected) cover = callout.bounds;
-        continue;
-      }
-      let bounds = { left: p.x - padding, right: p.x + padding, top: p.y - padding, bottom: p.y + padding };
-      for (const anchor of own)
-        bounds = { left: Math.min(bounds.left, anchor.left), right: Math.max(bounds.right, anchor.right),
-          top: Math.min(bounds.top, anchor.top), bottom: Math.max(bounds.bottom, anchor.bottom) };
       // The selected, moving or edited item keeps its label when zoomed out.
-      if (callout.draw(p, viewport, bounds, labels, wanted(priority))) gliding = true;
+      const lift = selected ? "selected" : priority > 0 ? "raised" : "";
+      if (callout.draw(p, viewport, labels, wanted(priority), lift, own)) gliding = true;
+      if (callout.bounds) balloons.push(callout.bounds);
+      if (selected) cover = callout.bounds;
     }
     return gliding;
   }
-  /** The place or route whose label chip covers this screen point, if any. */
+  /** The place or route whose balloon covers this screen point, if any. */
   labelAt(screen: Point): { markerId?: string; routeId?: string } | undefined {
     for (const { callout, markerId, routeId } of this.callouts) {
       const bounds = callout.bounds;

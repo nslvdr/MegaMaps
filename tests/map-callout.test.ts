@@ -21,7 +21,7 @@ const balloonBox = (label: Element): CalloutBounds => {
   return { left: Math.min(left, x!), right: Math.max(right, x!), top: Math.min(top, y!), bottom: Math.max(bottom, y!) };
 };
 
-test("saved places open into named balloons beside route callouts and retain layer/edit controls", (t) => {
+test("saved places and routes open into named balloons and retain layer/edit controls", (t) => {
   let now = 0;
   t.mock.method(performance, "now", () => now);
   const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
@@ -47,10 +47,13 @@ test("saved places open into named balloons beside route callouts and retain lay
   overlay.draw(camera, viewport);
   now += 1000;
   overlay.draw(camera, viewport);
-  const route = svg.querySelector<SVGGElement>('[data-layer="routes"] .map-callout')!;
+  const route = svg.querySelector<SVGGElement>(".route-labels .map-balloon")!;
+  assert.equal(route.hasAttribute("hidden"), false);
   assert.equal(route.querySelector("text")!.textContent, "<Exit route>");
-  assert.equal(route.style.getPropertyValue("--callout-color"), routeColor(state, "exit-route"));
-  const balloons = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  assert.equal(route.querySelector(".head")!.getAttribute("fill"), routeColor(state, "exit-route"));
+  assert.equal(route.getAttribute("transform"), "translate(40.0,700.0)", "its tail ends on the route's start");
+  assert.equal(svg.querySelector<SVGGElement>(".route-start .pin-body")!.style.opacity, "0", "the open balloon takes the place of the start pin");
+  const balloons = [...svg.querySelectorAll<SVGGElement>(".place-labels .map-balloon")];
   assert.equal(balloons.length, state.markers.length, "every saved place has a balloon");
   const pins = [...svg.querySelectorAll<SVGGElement>('[data-layer="places"]:not(.place-labels) .pin-body')];
   for (const [index, balloon] of balloons.entries()) {
@@ -66,11 +69,7 @@ test("saved places open into named balloons beside route callouts and retain lay
     assert.equal(pins[index]!.style.opacity, "0", "the open balloon takes the place of its pin");
     assert.ok(balloon.classList.contains("overlay-label"), "Names controls the balloon");
   }
-  const boxes = [route, ...balloons].map((label, index) => {
-    if (index) return balloonBox(label);
-    const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
-    return { left: x!, right: x! + Number(label.querySelector("rect")!.getAttribute("width")), top: y!, bottom: y! + 36 };
-  });
+  const boxes = [route, ...balloons].map(balloonBox);
   for (const [index, box] of boxes.entries()) {
     for (const other of boxes.slice(index + 1)) assert.equal(boundsOverlap(box, other), false);
     for (const [other, marker] of state.markers.entries())
@@ -101,7 +100,7 @@ test("saved places open into named balloons beside route callouts and retain lay
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
   now += 1000;
   overlay.draw({ x: -1000, y: -1000, scale: 1 }, viewport);
-  assert.ok([...svg.querySelectorAll(".place-label:not([hidden])")].every(label => {
+  assert.ok([...svg.querySelectorAll(".place-labels .map-balloon:not([hidden])")].every(label => {
     const box = balloonBox(label);
     return box.right < 0 || box.bottom < 0;
   }), "offscreen saved items do not leave detached labels in view");
@@ -119,7 +118,7 @@ test("a pin grows into its balloon, moves to a free side, and shrinks back into 
   const overlay = new NavigationOverlay(svg);
   overlay.rebuild(state);
   const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
-  const balloon = svg.querySelector<SVGGElement>(".place-label")!;
+  const balloon = svg.querySelector<SVGGElement>(".place-labels .map-balloon")!;
   const pin = svg.querySelector<SVGGElement>(".pin-body")!;
   const width = () => Number(balloon.querySelector("clipPath rect")!.getAttribute("width"));
   const frame = (ms: number, layout?: CalloutLayout) => {
@@ -189,7 +188,7 @@ test("with the four sides taken, a balloon opens diagonally, past the corner, it
     overlay.reserve(camera, layout);
     overlay.draw(camera, viewport, layout);
   }
-  const balloon = svg.querySelector<SVGGElement>(".place-label")!;
+  const balloon = svg.querySelector<SVGGElement>(".place-labels .map-balloon")!;
   assert.equal(balloon.hasAttribute("hidden"), false);
   const body = balloon.querySelector("clipPath rect")!;
   const left = 300 + Number(body.getAttribute("x")), bottom = 300 + Number(body.getAttribute("y")) + Number(body.getAttribute("height"));
@@ -221,7 +220,7 @@ test("an open balloon keeps its spot when another place's balloon opens next to 
       overlay.draw(camera, viewport, layout);
     }
   };
-  const [older, newer] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  const [older, newer] = [...svg.querySelectorAll<SVGGElement>(".place-labels .map-balloon")];
   // At first, something leaves the older place no room.
   settle({ left: 320, right: 562, top: 290, bottom: 362 });
   assert.equal(older!.hasAttribute("hidden"), true);
@@ -252,7 +251,7 @@ test("a balloon waiting for a spot opens as soon as the balloon there has closed
     overlay.reserve(camera, layout);
     return overlay.draw(camera, viewport, layout);
   };
-  const [waiting, leaving] = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  const [waiting, leaving] = [...svg.querySelectorAll<SVGGElement>(".place-labels .map-balloon")];
   for (let step = 0; step < 3; step++) frame(1000, [{ left: 320, right: 562, top: 290, bottom: 362 }]);
   assert.ok(balloonBox(leaving!).bottom <= 300, "the newer place opens above");
   // The older place can only open above, where the newer one's balloon is.
@@ -284,7 +283,7 @@ test("a pan never opens, closes or turns a balloon, on screen or off", (t) => {
   const overlay = new NavigationOverlay(svg);
   overlay.rebuild(state);
   const viewport = { width: 600, height: 600 };
-  const balloons = [...svg.querySelectorAll<SVGGElement>(".place-label")];
+  const balloons = [...svg.querySelectorAll<SVGGElement>(".place-labels .map-balloon")];
   for (let step = 0; step < 3; step++, now += 1000) overlay.draw({ x: 0, y: 0, scale: 1 }, viewport);
   assert.ok(balloons.every(balloon => !balloon.hasAttribute("hidden")), "every balloon is open, the far one too");
   const before = balloons.map(balloonBox);
@@ -314,7 +313,7 @@ test("zoomed out, saved items show only pins, except the selected one", (t) => {
     overlay.draw(camera, viewport, undefined, named);
     now += 1000;
     overlay.draw(camera, viewport, undefined, named);
-    return [...svg.querySelectorAll(".place-label")].filter(label => !label.hasAttribute("hidden"))
+    return [...svg.querySelectorAll(".place-labels .map-balloon")].filter(label => !label.hasAttribute("hidden"))
       .map(label => label.querySelector("text")!.textContent);
   };
   assert.deepEqual(shown(true), ["gate", "well"]);
@@ -339,7 +338,7 @@ test("the selected place's balloon closes the others and hides the pins under it
   overlay.rebuild(state);
   const viewport = { width: 600, height: 600 }, camera = { x: 0, y: 0, scale: 1 };
   const [gate, well, spray] = [...svg.querySelectorAll<SVGGElement>(".pin-body")];
-  const labels = () => [...svg.querySelectorAll(".place-label")];
+  const labels = () => [...svg.querySelectorAll(".place-labels .map-balloon")];
   const shown = () => {
     overlay.draw(camera, viewport);
     now += 1000;
@@ -395,7 +394,9 @@ test("route outlines and pins follow the camera and drop out while off screen", 
   assert.equal(pin().getAttribute("transform"), "translate(150.0,150.0)");
   overlay.dispose();
 });
-test("search and saved labels share space, including routes starting on a saved place", () => {
+test("search and saved labels share space, including routes starting on a saved place", (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
   const { document } = parseHTML('<html><body><svg id="saved"></svg><svg id="search"></svg></body></html>');
   Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const savedSvg = document.querySelector<SVGSVGElement>("#saved")!;
@@ -417,16 +418,22 @@ test("search and saved labels share space, including routes starting on a saved 
   const viewport = { width: 600, height: 600 };
   const camera = { x: 0, y: 0, scale: 1 };
   const panel = { left: 120, right: 480, top: 400, bottom: 600 };
-  const layout = new CalloutLayout(viewport, [panel]);
-  search.reserve(camera, layout);
-  saved.reserve(camera, layout);
-  search.draw(camera, viewport, layout);
-  saved.draw(camera, viewport, layout);
-  const labels = [...document.querySelectorAll<SVGGElement>(".map-callout, .place-label")];
+  const frame = () => {
+    const layout = new CalloutLayout(viewport, [panel]);
+    search.reserve(camera, layout);
+    saved.reserve(camera, layout);
+    search.draw(camera, viewport, layout);
+    saved.draw(camera, viewport, layout);
+  };
+  // Both balloons grow out of the same point; once open they sit apart.
+  frame();
+  now += 1000;
+  frame();
+  const labels = [...document.querySelectorAll<SVGGElement>(".map-callout, .map-balloon")];
   assert.equal(labels.length, 3);
   const boxes = labels.map(label => {
     assert.equal(label.hasAttribute("hidden"), false);
-    if (label.classList.contains("place-label")) return balloonBox(label);
+    if (label.classList.contains("map-balloon")) return balloonBox(label);
     const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
     return { left: x!, right: x! + Number(label.querySelector("rect")!.getAttribute("width")),
       top: y!, bottom: y! + 36 };
@@ -477,7 +484,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   const point = worldToScreen(camera, marker.point);
   assert.equal(Number(hole.getAttribute("cx")), point.x);
   assert.equal(Number(hole.getAttribute("cy")), point.y);
-  assert.equal(savedSvg.querySelector(".place-label")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
+  assert.equal(savedSvg.querySelector(".place-labels .map-balloon")!.hasAttribute("hidden"), true, "matching saved labels are not duplicated");
   // A tap on a result's label answers with that result, and only on the label.
   const labelCenter = (label: SVGGElement) => {
     const [x, y] = label.getAttribute("transform")!.slice(10, -1).split(",").map(Number);
@@ -492,7 +499,7 @@ test("search shows text and saved-place callouts together and restores saved lab
   saved.setSearchMarkers([]);
   saved.setLayers({ places: true, labels: true, routes: true });
   draw();
-  assert.equal(savedSvg.querySelector(".place-label")!.hasAttribute("hidden"), false);
+  assert.equal(savedSvg.querySelector(".place-labels .map-balloon")!.hasAttribute("hidden"), false);
   assert.equal(searchSvg.hasAttribute("hidden"), true);
   assert.equal(search.labelAt(labelCenter(callouts[0]!)), undefined, "a closed search answers no taps");
   search.dispose();
