@@ -15,8 +15,8 @@ import { PLACE_PIN } from "./place-icon";
 // moving its camera along with the finger, and each moment's places, routes,
 // trail, tools and search are handed to it the way the app hands them over.
 
-/** The phone's screen is 375×667; at rest the example plan sits this far up and left, one plan unit a pixel. */
-const PLAN_OFFSET = { x: 380, y: 330 };
+/** The phone's screen is an iPhone Pro Max's, 440×956; at rest the example plan sits this far up and left, one plan unit a pixel. */
+const PLAN_OFFSET = { x: 348, y: 186 };
 export const on = (x: number, y: number): Point => ({ x, y });
 /** Where a point of the plan shows on the screen, with the map at rest. */
 const seen = ({ x, y }: Point) => on(Math.round(x - PLAN_OFFSET.x), Math.round(y - PLAN_OFFSET.y));
@@ -67,8 +67,8 @@ export const searchText = (show: string) => query(new Set(show.split(" ")));
 // finger would leave it. Moving between two blends these, so a pinch closes
 // round the fingers and a twist turns round them.
 type Pose = { pan: Point; zoom: number; turn: number; away: Point };
-const PINCH = on(227, 225);
-const TWIST = on(227, 285);
+const PINCH = on(259, 369);
+const TWIST = on(259, 429);
 const pose = (shown: Set<string>): Pose => ({
   pan: on(0, shown.has("panned") ? -60 : 0),
   zoom: shown.has("zoomed") ? 0.75 : 1,
@@ -155,10 +155,12 @@ function navigation(shown: Set<string>): NavigationState {
 
 /** A gesture moves the map with the finger; the app glides it as the viewer does. */
 export type Move = "jump" | "glide" | "gesture";
-const MOVES = { glide: 240, gesture: 900 };
+/** How long the map takes to follow a drag, pinch or twist. */
+export const GESTURE = 1600;
+const MOVES = { glide: 240, gesture: GESTURE };
 const ease = { glide: (k: number) => 1 - (1 - k) ** 3, gesture: (k: number) => (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2) };
 /** A query takes this long to type; it lights up its matches once it's typed out. */
-export const TYPING = 800;
+export const TYPING = 1600;
 
 /** The viewer on the tutorials' phone, running while a tutorial shows. */
 export class TourMap {

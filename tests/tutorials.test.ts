@@ -87,11 +87,11 @@ test("a tutorial lists its steps and plays them on the map in turn", (t) => {
   // The step holds still before its finger moves, so the gesture is seen from its start.
   t.mock.timers.tick(1000);
   assert.equal(screen.dataset.show, "");
-  t.mock.timers.tick(600);
+  t.mock.timers.tick(1900);
   assert.equal(screen.dataset.show, "rotation");
   assert.ok(!sheet.hidden && sheet.dataset.panel === "rotation", "the tap opens the app's own Rotation sheet");
-  t.mock.timers.tick(2600);
-  t.mock.timers.tick(1600);
+  t.mock.timers.tick(2900);
+  t.mock.timers.tick(2800);
   assert.equal(screen.dataset.show, "rotation manual");
   assert.ok(steps[1]!.hasAttribute("aria-current"));
 
@@ -112,10 +112,10 @@ test("starting over fades the screen to black instead of reading as one more ste
   tour.querySelector<HTMLElement>('[data-guide="rotate"]')!.click();
   const screen = part("tour-screen");
   const steps = [...part("tour-steps").querySelectorAll("li")];
-  // Three steps of 0.9 s lead and 3.2 s each.
-  t.mock.timers.tick(4100);
-  t.mock.timers.tick(4100);
-  t.mock.timers.tick(4099);
+  // Three steps of 1.2 s lead and 4.6 s each.
+  t.mock.timers.tick(5800);
+  t.mock.timers.tick(5800);
+  t.mock.timers.tick(5799);
   assert.ok(!screen.classList.contains("fading"));
   assert.ok(steps[2]!.hasAttribute("aria-current"));
   t.mock.timers.tick(1);
@@ -136,7 +136,7 @@ test("search shows what the example map's own text gives", (t) => {
   const steps = [...part("tour-steps").querySelectorAll("li")];
   const shown = (index: number) => {
     steps[index]!.click();
-    t.mock.timers.tick(4000);
+    t.mock.timers.tick(5000);
     return count.textContent;
   };
   assert.equal(shown(0), "2 matches", "both Allée 25 labels");
@@ -158,19 +158,19 @@ test("search types its query out before showing what it finds", (t) => {
     for (let i = 0; i < ms / 10; i++) t.mock.timers.tick(10);
   };
   // The finger taps the field, then the app answers.
-  wait(900 + 650 + 300);
+  wait(1200 + 1600 + 700);
   assert.equal(field.value, "All", "typed a letter at a time");
   assert.ok(count.hidden, "no count while typing");
-  wait(500);
+  wait(1000);
   assert.equal(field.value, "Allée 25");
   assert.ok(!count.hidden);
 
   steps[2]!.click();
   assert.equal(field.value, "Allée 25", "the pair goes on from the first name");
-  wait(900 + 650 + 80);
+  wait(1200 + 1600 + 200);
   assert.equal(field.value, "Allée 25;");
   assert.ok(count.hidden);
-  wait(800);
+  wait(1600);
   assert.equal(field.value, "Allée 25; Allée 55");
   assert.equal(count.textContent, "1 match");
 });

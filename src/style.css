@@ -1141,42 +1141,67 @@ dialog.tour > * {
     0 0 0 var(--space-20) var(--bg),
     0 var(--space-20) 0 var(--space-20) var(--bg);
 }
-/* A phone-sized screen, 375×667, drawn smaller: the app's own screens run in
-   it, so everything inside keeps the real sizes and spacing. */
+/* An iPhone Pro Max: its 440×956 screen, Dynamic Island and home
+   indicator, drawn smaller. The app's own screens run in it, so everything
+   inside keeps the real sizes, spacing and safe areas. */
 .tour-phone {
-  --tour-scale: 0.75;
+  --tour-scale: 0.6;
+  --tour-bezel: 5px;
   position: relative;
   flex: none;
-  width: calc(375px * var(--tour-scale) + 12px);
-  height: calc(667px * var(--tour-scale) + 12px);
+  width: calc(440px * var(--tour-scale) + 2 * var(--tour-bezel));
+  height: calc(956px * var(--tour-scale) + 2 * var(--tour-bezel));
   margin: var(--space-12) auto var(--space-20);
   overflow: hidden;
-  border: 6px solid #151515;
-  border-radius: 32px;
+  border: var(--tour-bezel) solid #151515;
+  border-radius: calc(62px * var(--tour-scale) + var(--tour-bezel));
   box-shadow: 0 0 0 1px #ffffff26;
   background: #000;
+}
+.tour-phone::before,
+.tour-phone::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  translate: -50% 0;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+.tour-phone::before {
+  top: calc(11px * var(--tour-scale));
+  width: calc(126px * var(--tour-scale));
+  height: calc(37px * var(--tour-scale));
+  background: #000;
+}
+.tour-phone::after {
+  bottom: calc(8px * var(--tour-scale));
+  width: calc(150px * var(--tour-scale));
+  height: calc(5px * var(--tour-scale));
+  background: #fff;
 }
 /* Smaller phones get a smaller one, so the words still show below it. */
 @media (max-width: 375px), (max-height: 800px) {
   .tour-phone {
-    --tour-scale: 0.64;
+    --tour-scale: 0.5;
   }
 }
 /* The transform makes the screen hold what the app fixes to the viewport;
-   what measures the viewport itself is measured against the screen here. */
+   what measures the viewport itself is measured against the screen here,
+   with the Pro Max's safe areas: 62px up top, 34px at the bottom. */
 .tour-screen {
   --accent: var(--neon-add);
   --edge-l: var(--space-12);
   --edge-r: var(--space-12);
-  --surface-width: 351px;
+  --surface-width: 416px;
   --surface-left: var(--space-12);
-  --surface-padding: var(--space-20);
+  --surface-padding: var(--space-20) var(--space-20) 34px;
   --keyboard-inset: 0px;
   position: absolute;
   left: 0;
   top: 0;
-  width: 375px;
-  height: 667px;
+  width: 440px;
+  height: 956px;
   overflow: hidden;
   transform: scale(var(--tour-scale));
   transform-origin: 0 0;
@@ -1189,8 +1214,8 @@ dialog.tour > * {
   transition: opacity 0.4s ease;
 }
 .tour-screen .viewer {
-  --hud-top: var(--space-12);
-  --hud-bottom: var(--space-12);
+  --hud-top: 64px;
+  --hud-bottom: 22px;
   position: absolute;
   inset: 0;
   z-index: auto;
@@ -1206,7 +1231,7 @@ dialog.tour > * {
   opacity: 0;
 }
 .tour-screen :is(.home, .settings-page) {
-  --home-top: var(--space-20);
+  --home-top: calc(var(--space-20) + 62px);
   min-height: 100%;
 }
 .tour-screen .settings-page {
@@ -1215,10 +1240,10 @@ dialog.tour > * {
   overflow: hidden;
 }
 .tour-screen .sheet {
-  max-height: calc(667px - 2 * var(--space-12) - var(--dock-h) - 16px);
+  max-height: calc(956px - var(--hud-top) - var(--hud-bottom) - var(--dock-h) - 16px);
 }
 .tour-screen .sheet:is([data-panel="trail"], [data-panel="display"], [data-panel="rotation"]) {
-  max-height: calc(667px - 2 * var(--space-12) - var(--dock-h) - 68px);
+  max-height: calc(956px - var(--hud-top) - var(--hud-bottom) - var(--dock-h) - 68px);
 }
 .tour-screen .toasts {
   top: calc(var(--hud-top) + var(--icon-button-size) + var(--space-12));
@@ -1230,13 +1255,13 @@ dialog.tour > * {
   inset: 0;
   z-index: 41;
   height: fit-content;
-  max-height: calc(100% - var(--space-24));
-  margin: auto auto var(--space-12);
+  max-height: calc(100% - 62px - 34px);
+  margin: auto auto 34px;
 }
 .tour-screen .place-card[data-mode="view"] {
   z-index: 20;
   top: auto;
-  bottom: var(--space-12);
+  bottom: 34px;
   max-height: calc(70% - var(--space-12));
   margin-block: 0;
   padding-bottom: var(--space-20);
@@ -1873,7 +1898,8 @@ dialog form > label {
 dialog form > label small {
   opacity: 0.7;
 }
-dialog input:not([type="checkbox"]):not([type="radio"]),
+/* Not the dock's search field, which shows in the tutorials' phone. */
+dialog input:not([type="checkbox"], [type="radio"], .map-search),
 dialog select,
 dialog textarea {
   display: block;

@@ -3,7 +3,7 @@ import { preference, setPreference } from "../preferences";
 import { track } from "../stats";
 import { dialogHeader, showDialog } from "./dialog";
 import { icons } from "./icons";
-import { measureEnds, on, pinOnScreen, routePoints, scaleEnds, spot, TourMap, type Move } from "./tour-map";
+import { GESTURE, measureEnds, on, pinOnScreen, routePoints, scaleEnds, spot, TourMap, type Move } from "./tour-map";
 import { showScene, tapTarget, tourScreenMarkup } from "./tour-screen";
 import type { WheelChoice } from "./hold-wheel";
 
@@ -20,25 +20,28 @@ type Touch =
 type Step = { text?: string; from?: string; show?: string; tap?: string; touch?: Touch };
 type Guide = { id: string; title: string; text?: string; icon: string; color: string; steps: Step[]; note?: string };
 
-// One timeline for every step, in ms from when its finger starts. Each step
-// first shows where it starts for LEAD, so the gesture is never missed.
-const LEAD = 900;
-const STEP_TIME = 3200;
-const HOLD_TIME = 4200;
+// One timeline for every step, in ms from when its finger starts, slow
+// enough to follow: each step first shows where it starts for LEAD, the hand
+// glides in, presses, and the screen's answer then stays a while to read.
+const LEAD = 1200;
+const STEP_TIME = 4600;
+const HOLD_TIME = 6800;
 /** A finger touches what it taps, then the app answers. */
-const PRESS = 550;
-const ANSWER = 650;
+const PRESS = 1300;
+const ANSWER = 1600;
 /** The hand's size as it touches, against 1 just above the screen. */
 const PRESSED = 0.8;
 /** Taps along the map come this far apart. */
-const TAP_GAP = 500;
-/** The map follows a drag, pinch or twist from here, for MOVE_TIME. */
-const MOVE = 400;
-const MOVE_TIME = 900;
+const TAP_GAP = 1100;
+/** A hand shows above where it touches by here, and fades out this long after lifting. */
+const ARRIVE = 600;
+const LEAVE = 500;
+/** The map follows a drag, pinch or twist from here, for GESTURE. */
+const MOVE = 1000;
 /** The wheel shows under a held finger, lights the third it's dragged into, then goes with the lift. */
-const WHEEL = 700;
-const CHOICE = 1300;
-const LIFT = 2300;
+const WHEEL = 1600;
+const CHOICE = 2900;
+const LIFT = 4200;
 /** Back to the first step, the screen fades to black and back in. */
 const FADE = 400;
 
@@ -55,7 +58,7 @@ const basics: Guide[] = [
     text: t("Mega Maps keeps big scans of quarry and cave plans on your phone. Once a map is in, it works with no signal."),
     steps: [
       { from: "library map-card", tap: "open-map" },
-      { touch: { move: "drag", at: on(297, 370), to: on(297, 310) }, show: "panned" },
+      { touch: { move: "drag", at: on(329, 514), to: on(329, 454) }, show: "panned" },
     ],
   },
   {
@@ -71,8 +74,8 @@ const basics: Guide[] = [
     id: "explore", title: t("Find your way around"), icon: icons.pin, color: "var(--neon-view)",
     text: t("Drag to move, pinch to zoom. Tap a place to read what’s there."),
     steps: [
-      { from: "", touch: { move: "drag", at: on(297, 370), to: on(297, 310) }, show: "panned" },
-      { touch: { move: "pinch", at: on(227, 225) }, show: "panned zoomed" },
+      { from: "", touch: { move: "drag", at: on(329, 514), to: on(329, 454) }, show: "panned" },
+      { touch: { move: "pinch", at: on(259, 369) }, show: "panned zoomed" },
       { touch: { move: "tap", at: [pinOnScreen("panned zoomed", spot.gardien)] }, show: "panned zoomed place" },
     ],
   },
@@ -85,7 +88,7 @@ const groups: [string, Guide[]][] = [
       steps: [
         { text: t("Tap Rotation at the top"), from: "", tap: "rotation", show: "rotation" },
         { text: t("Choose Manual"), tap: "manual", show: "rotation manual" },
-        { text: t("Turn the map with two fingers"), from: "manual", touch: { move: "twist", at: on(227, 285) }, show: "manual turned" },
+        { text: t("Turn the map with two fingers"), from: "manual", touch: { move: "twist", at: on(259, 429) }, show: "manual turned" },
       ],
       note: t("Locked keeps north up. Compass modes turn the map as you turn."),
     },
@@ -124,8 +127,8 @@ const groups: [string, Guide[]][] = [
       id: "trail", title: t("Mark your path"), icon: icons.trail, color: "var(--neon-trail)",
       steps: [
         { text: t("Hold the map where you are, drag down, then lift"), from: "trail-old", touch: { move: "hold", at: spot.mark, to: on(spot.mark.x, spot.mark.y + 60), choice: "trail" }, show: "trail trail-added" },
-        { text: t("Each mark joins your trail"), touch: { move: "drag", at: on(177, 190), to: on(257, 430) }, show: "trail away" },
-        { text: t("Lost? Hold, then drag up-right"), touch: { move: "hold", at: on(207, 300), to: on(257, 250), choice: "back" }, show: "trail" },
+        { text: t("Each mark joins your trail"), touch: { move: "drag", at: on(209, 334), to: on(289, 574) }, show: "trail away" },
+        { text: t("Lost? Hold, then drag up-right"), touch: { move: "hold", at: on(239, 444), to: on(289, 394), choice: "back" }, show: "trail" },
         { text: t("The map comes back to your last mark"), show: "trail" },
       ],
       note: t("Tap Trail at the top to see your trip, or end it."),
@@ -237,19 +240,19 @@ function act(fingers: HTMLElement[], touch: Touch | undefined, start = 0) {
     const ripple = finger.querySelector(".tour-ripple")!;
     frames.forEach((frame, i) => {
       if (down(frame) && !down(frames[i - 1]))
-        ripple.animate([{ opacity: 1, transform: "scale(0.6)" }, { opacity: 0, transform: "scale(2.4)" }], { duration: 450, delay: frame[0] - start, easing: "ease-out" });
+        ripple.animate([{ opacity: 1, transform: "scale(0.6)" }, { opacity: 0, transform: "scale(2.4)" }], { duration: 700, delay: frame[0] - start, easing: "ease-out" });
     });
   };
   if (touch.move === "tap") {
     const last = touch.at.length - 1;
     const press = (i: number) => PRESS + i * TAP_GAP;
-    run(fingers[0]!, [[start, touch.at[0]!, 1.3, 0], [press(0) - 200, touch.at[0]!, 1], ...touch.at.flatMap((point, i): [number, Point, number?][] =>
-      [[press(i) - 120, point, 1], [press(i), point], [press(i) + 120, point, 1]]),
-    [press(last) + 400, touch.at[last]!, 1, 0]], press(last) + 400);
+    run(fingers[0]!, [[start, touch.at[0]!, 1.3, 0], [press(0) - 450, touch.at[0]!, 1], ...touch.at.flatMap((point, i): [number, Point, number?][] =>
+      [[press(i) - 250, point, 1], [press(i), point], [press(i) + 200, point], [press(i) + 450, point, 1]]),
+    [press(last) + 450 + LEAVE, touch.at[last]!, 1, 0]], press(last) + 450 + LEAVE);
   } else if (touch.move === "hold") {
-    run(fingers[0]!, [[0, touch.at, 1.3, 0], [300, touch.at, 1], [MOVE, touch.at], [WHEEL + 200, touch.at], [CHOICE, touch.to], [LIFT, touch.to], [LIFT + 200, touch.to, 1, 0]], LIFT + 200);
+    run(fingers[0]!, [[0, touch.at, 1.3, 0], [ARRIVE, touch.at, 1], [MOVE, touch.at], [WHEEL + 300, touch.at], [CHOICE, touch.to], [LIFT - 200, touch.to], [LIFT, touch.to, 1], [LIFT + LEAVE, touch.to, 1, 0]], LIFT + LEAVE);
   } else if (touch.move === "drag") {
-    run(fingers[0]!, [[0, touch.at, 1.3, 0], [300, touch.at, 1], [MOVE, touch.at], [MOVE + MOVE_TIME, touch.to], [MOVE + MOVE_TIME + 200, touch.to, 1, 0]], MOVE + MOVE_TIME + 200);
+    run(fingers[0]!, [[0, touch.at, 1.3, 0], [ARRIVE, touch.at, 1], [MOVE, touch.at], [MOVE + GESTURE, touch.to], [MOVE + GESTURE + 200, touch.to, 1], [MOVE + GESTURE + 200 + LEAVE, touch.to, 1, 0]], MOVE + GESTURE + 200 + LEAVE);
   } else {
     // Two fingers: together for a pinch, round a circle for a twist, the
     // same way the map moves.
@@ -260,13 +263,13 @@ function act(fingers: HTMLElement[], touch: Touch | undefined, start = 0) {
     };
     fingers.forEach((finger, side) => {
       const [from, to] = touch.move === "pinch" ? [around(-135, 80, side), around(-135, 60, side)] : [around(-10, 60, side), around(-34, 60, side)];
-      run(finger, [[0, from, 1.3, 0], [300, from, 1], [MOVE, from], [MOVE + MOVE_TIME, to], [MOVE + MOVE_TIME + 200, to, 1, 0]], MOVE + MOVE_TIME + 200);
+      run(finger, [[0, from, 1.3, 0], [ARRIVE, from, 1], [MOVE, from], [MOVE + GESTURE, to], [MOVE + GESTURE + 200, to, 1], [MOVE + GESTURE + 200 + LEAVE, to, 1, 0]], MOVE + GESTURE + 200 + LEAVE);
     });
   }
 }
 
 const stepTime = ({ touch }: Step) =>
-  touch?.move === "hold" ? HOLD_TIME : touch?.move === "tap" ? Math.max(STEP_TIME, PRESS + touch.at.length * TAP_GAP + 1500) : STEP_TIME;
+  touch?.move === "hold" ? HOLD_TIME : touch?.move === "tap" ? Math.max(STEP_TIME, PRESS + touch.at.length * TAP_GAP + 2500) : STEP_TIME;
 
 type View = { kind: "basics"; page: number } | { kind: "list" } | { kind: "guide"; guide: Guide };
 
