@@ -364,7 +364,6 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
     view = to;
     stop();
     const guide = to.kind === "basics" ? basics[to.page]! : to.kind === "guide" ? to.guide : undefined;
-    const following = to.kind === "guide" ? tutorials[tutorials.indexOf(to.guide) + 1] : undefined;
     tour.dataset.view = to.kind;
     part("tour-back").hidden = to.kind !== "guide";
     part("tour-phone").hidden = !guide;
@@ -377,10 +376,11 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
     stepList.hidden = to.kind !== "guide";
     part("tour-note").textContent = to.kind === "guide" ? to.guide.note ?? "" : "";
     part("tour-note").hidden = !part("tour-note").textContent;
-    next.hidden = to.kind === "list" ? !finished : to.kind === "guide" && !following;
+    // A tutorial plays on its own: nothing leads on to the next one.
+    next.hidden = to.kind === "list" ? !finished : to.kind === "guide";
     next.innerHTML = to.kind === "basics"
       ? `<span>${to.page < basics.length - 1 ? t("Next") : t("See the tutorials")}</span>${icons.next}`
-      : to.kind === "list" ? `${icons.check}<span>${t("Start using Mega Maps")}</span>` : `<span>${t("Next: {title}", { title: following?.title ?? "" })}</span>${icons.next}`;
+      : `${icons.check}<span>${t("Start using Mega Maps")}</span>`;
     steps = guide?.steps ?? [];
     if (guide) showStep(0);
     else map.stop();
@@ -399,11 +399,6 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
       finished = true;
       track("tour_finished");
       return render({ kind: "list" });
-    }
-    if (view.kind === "guide") {
-      const guide = tutorials[tutorials.indexOf(view.guide) + 1]!;
-      track("tutorial_opened", { tutorial: guide.id, from: "next" });
-      return render({ kind: "guide", guide });
     }
     tour.close();
   });
