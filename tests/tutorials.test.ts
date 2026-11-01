@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import { initTutorials, tutorialsMarkup } from "../src/ui/tutorials";
+import { viewerMarkup } from "../src/ui/viewer-markup";
 import { preference, setPreference } from "../src/preferences";
 
 function setup() {
@@ -173,4 +174,17 @@ test("search types its query out before showing what it finds", (t) => {
   wait(1600);
   assert.equal(field.value, "Allée 25; Allée 55");
   assert.equal(count.textContent, "1 match");
+});
+
+test("each map panel's tutorial line opens the tutorial it names", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { tour, part, tutorials } = setup();
+  const links = [...parseHTML(`<html><body>${viewerMarkup}</body></html>`).document.querySelectorAll<HTMLElement>("[data-tutorial]")];
+  assert.ok(links.length >= 5);
+  for (const link of links) {
+    tutorials.openGuide(link.dataset.tutorial!);
+    assert.ok(tour.open);
+    assert.equal(part("tour-title").textContent, link.textContent);
+    tour.close();
+  }
 });
