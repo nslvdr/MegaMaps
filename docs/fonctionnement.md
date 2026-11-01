@@ -36,7 +36,7 @@ flowchart LR
 
 Une image de 9 000 × 9 000 pixels occupe environ 309 Mio une fois décodée, plus qu’un iPhone n’en accorde à une page web. L’app ne décode donc jamais une carte entière. Elle la transforme une fois pour toutes en petites tuiles à l’import, puis ne lit plus que des tuiles.
 
-1. **D’abord les en-têtes.** `src/processing/headers.ts` lit la taille et le format sans rien décoder. L’app refuse les images de plus de 600 mégapixels, de plus de 32 768 px de côté ou de plus de 256 Mo, ainsi que les JPEG qui dépendent d’une rotation EXIF.
+1. **D’abord les en-têtes.** `src/processing/headers.ts` lit la taille et le format sans rien décoder. Une image de plus de 600 mégapixels ou de plus de 32 768 px de côté est réduite pendant le décodage pour tenir dans ces limites (`src/processing/shrink.ts`), ligne par ligne, et l’original est gardé tel quel. L’app refuse les images de plus de 1 000 mégapixels ou de plus de 256 Mo, ainsi que les JPEG qui dépendent d’une rotation EXIF. Au-delà de 1 000 mégapixels, les fichiers temporaires d’un JPEG progressif dépasseraient 2 Go.
 2. **Un worker décode par bandes.** `src/processing/import.worker.ts` lit l’image 512 lignes à la fois et découpe chaque bande en tuiles de 512 × 512.
    - Le JPEG est décodé par libjpeg-turbo compilé en WebAssembly (`public/codecs/`, sources dans `native/`), qui lit le fichier via un accès OPFS. Les JPEG progressifs déversent leurs coefficients dans des fichiers temporaires OPFS, pour que la mémoire reste bornée.
    - Le PNG est décompressé par le `DecompressionStream` du navigateur, 4 Kio à la fois, et ses lignes sont défiltrées dans `src/processing/png.ts`.

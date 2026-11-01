@@ -13,6 +13,7 @@ import { loadPhoto, prunePhotos, savePhoto } from "../src/storage/photos";
 import { saveSetting } from "../src/storage/settings";
 import { loadOcr, saveOcr } from "../src/storage/ocr";
 import { OCR_VERSION, type OcrIndex } from "../src/ocr/index";
+import { mapSize } from "../src/processing/headers";
 import type { MapRecord } from "../src/types";
 
 // A container header is enough for image identity checks; decoding stays in the existing importer.
@@ -55,6 +56,14 @@ test("portable shares round trip annotations and optional original bytes", async
   await verifyImage(decoded.image!, manifest);
   const imageOnly = { ...withImage, markers: [], routes: [] };
   assert.equal((await readShare(encodeShare(imageOnly, original))).manifest.markers.length, 0);
+});
+
+test("a shrunk map's share verifies against its full-size original", async () => {
+  const original = image(40000, 20000);
+  const { manifest } = await fixture();
+  const shrunk = { ...manifest, map: { ...manifest.map, ...mapSize(40000, 20000), fingerprint: await fingerprint(original) } };
+  await verifyImage(original, shrunk);
+  await assert.rejects(verifyImage(original, { ...shrunk, map: { ...shrunk.map, width: 40000, height: 20000 } }), /dimensions/);
 });
 
 test("older shared bookmarks import as landmarks and re-export with the merged type", async () => {

@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { MAX_FILE_BYTES, MAX_PIXELS, type ImageHeader } from "../types";
+import { MAX_FILE_BYTES, MAX_PIXELS, MAX_SIDE, MAX_SOURCE_PIXELS, type ImageHeader } from "../types";
 const text = (bytes: Uint8Array, start: number, count: number) =>
   String.fromCharCode(...bytes.subarray(start, start + count));
 function exifOrientation(data: Uint8Array): number {
@@ -114,14 +114,14 @@ export async function readHeader(file: Blob): Promise<ImageHeader> {
       };
     } else throw new Error(t("Unsupported WebP header."));
   } else throw new Error(t("Choose a JPEG, PNG, or WebP image."));
-  if (
-    !header.width ||
-    !header.height ||
-    header.width * header.height > MAX_PIXELS ||
-    Math.max(header.width, header.height) > 32768
-  )
-    throw new Error(
-      t("Image exceeds the 600 megapixel / 32,768 pixel per side limit."),
-    );
+  if (!header.width || !header.height || header.width * header.height > MAX_SOURCE_PIXELS)
+    throw new Error(t("Image exceeds the 1,000 megapixel limit."));
   return header;
+}
+/** The size a map of this image gets: larger images shrink to fit the limits, keeping their shape. */
+export function mapSize(width: number, height: number) {
+  const scale = Math.min(1, Math.sqrt(MAX_PIXELS / (width * height)), MAX_SIDE / width, MAX_SIDE / height);
+  // The tiny margin stops 32,767.99… from losing a whole pixel.
+  const side = (length: number) => Math.max(1, Math.floor(length * scale + 1e-6));
+  return scale === 1 ? { width, height } : { width: side(width), height: side(height) };
 }

@@ -16,7 +16,7 @@ L’app publiée est disponible sur [app.mega-maps.fr](https://app.mega-maps.fr)
 
 ## Fonctionnalités
 
-- **Grandes cartes.** Les images JPEG, PNG et WebP jusqu’à 600 mégapixels (32 768 px de côté, 256 Mo par fichier) sont découpées en tuiles à l’import. La visionneuse ne garde jamais une carte entière en mémoire.
+- **Grandes cartes.** Les images JPEG, PNG et WebP jusqu’à 600 mégapixels (32 768 px de côté, 256 Mo par fichier) sont découpées en tuiles à l’import. Une image plus grande, jusqu’à 1 000 mégapixels, est réduite pour tenir dans ces limites. La visionneuse ne garde jamais une carte entière en mémoire.
 - **Hors ligne.** Une fois installée, l’app démarre et fonctionne sans connexion. Les cartes ne passent par aucun serveur.
 - **Lieux.** 12 types de repères : entrée, puits, passage, salle, danger, inondé, ossuaire, sculpture, graffiti, outils, squat et point d’intérêt. Chaque lieu peut avoir une description, des photos, une hauteur d’eau ou un niveau de danger, et un historique des visites, notes et modifications.
 - **Itinéraires.** Un itinéraire tracé sur la carte indique sa longueur et un temps de marche estimé, une fois l’échelle réglée.

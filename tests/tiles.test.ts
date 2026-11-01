@@ -281,7 +281,7 @@ test("shipped decoder is small and the app does not depend on a remote codec", a
   assert.ok(binary.byteLength < 300000);
 });
 
-test("JPEG maps up to 600 megapixels pass the header and decoder checks", async () => {
+test("JPEG images up to 1,000 megapixels pass the header and decoder checks", async () => {
   const small = new Uint8Array(await createCanvas(8, 8).encode("jpeg"));
   // Rewrite the frame size; nothing past the header is decoded.
   const sized = (width: number, height: number) => {
@@ -305,11 +305,11 @@ test("JPEG maps up to 600 megapixels pass the header and decoder checks", async 
     const width = module._decoder_open();
     return width ? width : module.UTF8ToString(module._decoder_error());
   };
-  const large = sized(32000, 18000);
-  assert.equal((await readHeader(new Blob([large]))).width, 32000);
-  assert.equal(await open(large), 32000);
-  const tooLarge = sized(32000, 19000);
-  await assert.rejects(readHeader(new Blob([tooLarge])), /600 megapixel/);
+  const large = sized(40000, 25000);
+  assert.equal((await readHeader(new Blob([large]))).width, 40000);
+  assert.equal(await open(large), 40000);
+  const tooLarge = sized(40000, 25001);
+  await assert.rejects(readHeader(new Blob([tooLarge])), /1,000 megapixel/);
   assert.match(String(await open(tooLarge)), /exceeds supported dimensions/);
 });
 

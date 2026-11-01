@@ -1,11 +1,11 @@
-import { TILE_SIZE, tileKey, type ImageHeader, type Level } from "../types";
+import { TILE_SIZE, tileKey, type Level } from "../types";
 import type { PayloadStore } from "../storage/payloads";
 import type { RowConsumer } from "./png";
 
 // Only one full-width 512-row band exists: 17.6 MiB for a 9k map,
 // rather than a 309 MiB RGBA image. It is reused for every tile row.
 export function tileBand(
-  header: ImageHeader,
+  header: { width: number; height: number },
   canvas: OffscreenCanvas,
   store: PayloadStore,
   id: string,
