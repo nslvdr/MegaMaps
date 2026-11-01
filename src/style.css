@@ -1295,30 +1295,71 @@ dialog.tour > * {
 .tour-screen .map-card:not([hidden]) {
   animation: pop-in 0.24s var(--ease-out);
 }
-/* What the finger taps flashes as it's pressed. */
+/* What the finger taps flashes, ringed in red, as it's pressed. */
 .tour-screen .tapped {
-  animation: tour-press 0.3s ease-out;
+  animation: tour-press 0.6s ease-out;
 }
 @keyframes tour-press {
-  50% {
+  30% {
     filter: brightness(1.6);
     scale: 0.94;
+    box-shadow: 0 0 0 4px #ff3b30;
   }
 }
+/* A finger is a point at the touch: a big white hand points at it, a red dot
+   shows while it presses and a red ring spreads from each press. */
 .tour-finger {
+  --touch: #ff3b30;
   position: absolute;
   left: 0;
   top: 0;
   z-index: 60;
-  width: 44px;
-  height: 44px;
-  margin: -22px;
-  border: 2px solid rgb(255 255 255 / 0.75);
-  border-radius: var(--radius-round);
-  background: rgb(255 255 255 / 0.3);
-  box-shadow: 0 4px 16px #0008;
+  width: 0;
+  height: 0;
   opacity: 0;
   pointer-events: none;
+}
+.tour-touch,
+.tour-ripple {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--touch);
+  border-radius: var(--radius-round);
+  opacity: 0;
+}
+.tour-touch {
+  background: rgb(255 59 48 / 0.45);
+  box-shadow: 0 0 16px var(--touch);
+}
+/* Lucide's pointer, its fingertip (8, 2 of 24) on the touch: white strokes
+   drawn wide under the dark ones make it a solid hand on any screen. */
+.tour-hand {
+  position: absolute;
+  left: -28px;
+  top: -7px;
+  width: 84px;
+  height: 84px;
+  transform-origin: 28px 7px;
+}
+.tour-hand svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  stroke: #111;
+  stroke-width: 1.8;
+}
+.tour-hand svg:first-child {
+  stroke: #fff;
+  stroke-width: 5;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 4px 8px #0009);
+}
+/* The second of two fingers is the other hand. */
+.tour-finger + .tour-finger .tour-hand {
+  scale: -1 1;
 }
 
 /* ---------- Dialogs ---------- */
