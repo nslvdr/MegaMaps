@@ -1,8 +1,8 @@
 import { t } from "../i18n";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { MAX_FILE_BYTES, MAX_PIXELS } from "../types";
-import { readHeader } from "../processing/headers";
+import { MAX_FILE_BYTES, MAX_PIXELS, MAX_SIDE } from "../types";
+import { mapSize, readHeader } from "../processing/headers";
 import { readOcrIndex, type OcrIndex } from "../ocr/index";
 import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, visitFromLastSeen, type MapMarker, type PlaceChange, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
@@ -84,7 +84,7 @@ export function validateManifest(value: unknown): ShareManifest {
   if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5 && value.version !== 6) throw new Error(t("This sharing format is not supported. Update MegaMaps and try again."));
   const map = value.map;
   if (!object(map) || !name(map.name, 1000) ||
-      !integer(map.width, 1, 32768) || !integer(map.height, 1, 32768) ||
+      !integer(map.width, 1, MAX_SIDE) || !integer(map.height, 1, MAX_SIDE) ||
       map.width * map.height > MAX_PIXELS ||
       typeof map.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(map.fingerprint)) invalid();
   if (!Array.isArray(value.markers) || !Array.isArray(value.routes) ||
@@ -294,8 +294,8 @@ export async function readShare(file: Blob): Promise<SharedMap> {
 
 /** Verify the source image before placing annotations or creating a new map. */
 export async function verifyImage(image: Blob, manifest: ShareManifest, signal?: AbortSignal) {
-  const header = await readHeader(image);
-  if (header.width !== manifest.map.width || header.height !== manifest.map.height || header.orientation !== 1)
+  const header = await readHeader(image), size = mapSize(header.width, header.height);
+  if (size.width !== manifest.map.width || size.height !== manifest.map.height || header.orientation !== 1)
     throw new Error(t("The map image dimensions or orientation do not match this share."));
   if (await fingerprint(image, signal) !== manifest.map.fingerprint)
     throw new Error(t("The map image does not match this share. Choose the exact original image."));

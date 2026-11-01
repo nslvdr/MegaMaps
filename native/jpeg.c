@@ -48,7 +48,7 @@ static int open_source(void) {
   source.base.skip_input_data = skip; source.base.resync_to_restart = jpeg_resync_to_restart; source.base.term_source = term_source;
   image.src = &source.base;
   jpeg_read_header(&image, TRUE);
-  if (image.image_width * (double)image.image_height > 600000000 || image.data_precision != 8) { strcpy(error.message, "JPEG exceeds supported dimensions/precision."); decoder_close(); return 0; }
+  if (image.image_width * (double)image.image_height > 1000000000 || image.data_precision != 8) { strcpy(error.message, "JPEG exceeds supported dimensions/precision."); decoder_close(); return 0; }
   image.mem->max_memory_to_use = 12 * 1024 * 1024;
   return 1;
 }

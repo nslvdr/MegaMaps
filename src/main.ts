@@ -658,6 +658,8 @@ function importImage(file: File) {
   showProgress(0, t("Reading image metadata…"));
   showDialog(progressDialog);
   const started = Date.now();
+  // Which kinds of file people pick, to see what fails; the name itself is never sent.
+  const kind = { type: file.type || "none", extension: /\.(\w{1,10})$/.exec(file.name)?.[1]?.toLowerCase() ?? "none" };
   // The map opens once its tiles are saved; text detection waits for a yes.
   void mutate(() =>
     importMap(
@@ -667,7 +669,7 @@ function importImage(file: File) {
     ),
   )
     .then(async (map) => {
-      track("map_imported", { ok: true, megapixels: Math.round(map.width * map.height / 1e6), seconds: Math.round((Date.now() - started) / 1000) });
+      track("map_imported", { ok: true, ...kind, megapixels: Math.round(map.width * map.height / 1e6), shrunk: !!map.shrunkFrom, seconds: Math.round((Date.now() - started) / 1000) });
       channel?.postMessage("changed");
       progressDialog.close();
       importing = undefined;
@@ -677,7 +679,7 @@ function importImage(file: File) {
     })
     .catch((error) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      track("map_imported", { ok: false, error: failure(error) });
+      track("map_imported", { ok: false, ...kind, error: failure(error) });
       showMessage(
         t("Couldn’t import this map"),
         error instanceof Error ? error.message : String(error),
