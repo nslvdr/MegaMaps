@@ -79,6 +79,7 @@ test("a tutorial lists its steps and plays them on the map in turn", (t) => {
   tutorials.openList();
   assert.ok(part("tour-next").hidden, "the list opened from Settings has no start button");
   tour.querySelector<HTMLElement>('[data-guide="rotate"]')!.click();
+  assert.ok(part("tour-next").hidden, "a tutorial doesn't lead on to the next one");
   const screen = part("tour-screen");
   const steps = [...part("tour-steps").querySelectorAll("li")];
   assert.deepEqual(steps.map((step) => step.textContent), ["1Tap Rotation at the top", "2Choose Manual", "3Turn the map with two fingers"]);

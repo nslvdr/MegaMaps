@@ -190,7 +190,6 @@ export const fr = {
   "Move puts its pin somewhere else": "Déplacer met son épingle ailleurs",
   "Name it and pick its type, then tap Save": "Nommez-le, choisissez son type, puis touchez Enregistrer",
   "New: tutorials": "Nouveau : des tutoriels",
-  "Next: {title}": "Suivant : {title}",
   "No mark yet": "Aucun point pour l’instant",
   "On a new phone, Restore a backup brings it all back": "Sur un nouveau téléphone, Restaurer une sauvegarde ramène tout",
   "On the way": "En chemin",
