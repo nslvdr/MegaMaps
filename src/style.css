@@ -1408,6 +1408,12 @@ dialog[open] {
   transition-duration: 0.26s;
   transition-timing-function: var(--ease-out);
 }
+/* While a modal is open the page behind it never scrolls, even when a drag
+   starts on the backdrop or on a part of the modal that doesn't scroll.
+   Non-modal dialogs, such as the place card, leave the page usable. */
+html:has(dialog:modal) {
+  overflow: hidden;
+}
 /* Native scroll indicators appear only when modal or panel content overflows. */
 :is(dialog, .sheet-content, .place-details, .share-items) {
   scrollbar-width: thin;
