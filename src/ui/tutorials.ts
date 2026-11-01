@@ -441,12 +441,14 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
   return {
     /** Settings opens the list of tutorials. */
     openList: () => open({ kind: "list" }),
-    /** The first launch shows Getting started; someone who already has maps is asked once instead. */
+    /** The first launch shows Getting started; someone who already has maps is asked once instead.
+     *  Returns whether it showed anything. */
     atLaunch(hasMaps: boolean) {
-      if (preference("tour") === "seen") return;
+      if (preference("tour") === "seen") return false;
       setPreference("tour", "seen");
       if (hasMaps) showDialog(offer);
       else open({ kind: "basics", page: 0 });
+      return true;
     },
   };
 }

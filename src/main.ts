@@ -36,6 +36,7 @@ import { importAnnotations, importNewCopy } from "./sharing/storage";
 import { isShareFile } from "./sharing/format";
 import { initInstallPage, installMarkup, isInstalled } from "./ui/install-page";
 import { initTutorials, tutorialsMarkup } from "./ui/tutorials";
+import { initWhatsNew, whatsNewMarkup } from "./ui/whats-new";
 import { failure, setPerson, startStats, track } from "./stats";
 
 document.documentElement.lang = language;
@@ -57,6 +58,7 @@ app.innerHTML = `
   ${restoreDialogMarkup}
   ${eraseDialogMarkup}
   ${tutorialsMarkup}
+  ${whatsNewMarkup}
   ${mapDialogsMarkup}
 `;
 const element = <T extends HTMLElement>(id: string) =>
@@ -1017,7 +1019,8 @@ async function start() {
   if (map) await openMap(map);
   retileMaps();
   const newcomer = !maps.length && preference("tour") !== "seen";
-  tutorials.atLaunch(maps.length > 0);
+  const touring = tutorials.atLaunch(maps.length > 0);
+  initWhatsNew(element("whats-new")).atLaunch(maps.length > 0, !touring);
   if (newcomer) preparingExample = addExample().finally(() => (preparingExample = undefined));
 }
 // New users get the example map to try things on, made while Getting started plays.
