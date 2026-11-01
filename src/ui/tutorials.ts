@@ -214,10 +214,11 @@ export const tutorialsMarkup = `<dialog id="tour" class="tour" aria-labelledby="
 <ol class="share-summary tour-steps" id="tour-steps"></ol><p class="dialog-note" id="tour-note"></p>
 <div id="tour-list" class="tour-list"><div class="share-summary"><button type="button" class="share-row" data-guide="basics"><span class="share-row-icon" style="--k:var(--neon-add)">${icons.sparkle}</span><span class="share-row-label">${t("Getting started")}<small>${t("The basics in three steps")}</small></span>${icons.arrow}</button></div>
 ${groups.map(([title, guides]) => `<h3 class="settings-heading">${title}</h3><div class="share-summary">${guides.map((guide) =>
-  `<button type="button" class="share-row" data-guide="${guide.id}"><span class="share-row-icon" style="--k:${guide.color}">${guide.icon}</span><span class="share-row-label">${guide.title}</span>${icons.arrow}</button>`).join("")}</div>`).join("")}</div>
+  `<button type="button" class="share-row" data-guide="${guide.id}"><span class="share-row-icon" style="--k:${guide.color}">${guide.icon}</span><span class="share-row-label">${guide.title}</span>${icons.arrow}</button>`).join("")}</div>`).join("")}
+<h3 class="settings-heading">${t("Still stuck?")}</h3><div class="share-summary"><a class="share-row tour-report" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener"><span class="share-row-icon" style="--k:var(--neon-view)">${icons.help}</span><span class="share-row-label">${t("Report a problem")}<small>${t("Opens GitHub, with a free account")}</small></span>${icons.externalLink}</a></div></div>
 <button type="button" class="primary" id="tour-next"></button>
 </dialog>
-<dialog id="tour-offer" aria-labelledby="tour-offer-title">${dialogHeader("tour-offer-title", t("New: tutorials"), icons.sparkle, "tour-offer-close")}<p>${t("Short animated guides now show how each feature works, from adding places to finding crossings.")}</p><p class="dialog-note">${t("You can find them anytime in Settings.")}</p><div class="dialog-actions"><button type="button" id="tour-offer-yes" class="primary">${icons.sparkle}<span>${t("Show me")}</span></button><button type="button" id="tour-offer-no" class="quiet">${t("Not now")}</button></div></dialog>`;
+<dialog id="tour-offer" aria-labelledby="tour-offer-title">${dialogHeader("tour-offer-title", t("New: tutorials"), icons.sparkle, "tour-offer-close")}<p>${t("Short animated guides now show how each feature works, from adding places to finding crossings.")}</p><p class="dialog-note">${t("You can find them anytime at the bottom of the main screen.")}</p><div class="dialog-actions"><button type="button" id="tour-offer-yes" class="primary">${icons.sparkle}<span>${t("Show me")}</span></button><button type="button" id="tour-offer-no" class="quiet">${t("Not now")}</button></div></dialog>`;
 
 // A finger acts out each touch on the step's timeline, using the Web
 // Animations API where there is one. `start` is how far into the step it is.
@@ -370,7 +371,7 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
     part("tour-list").hidden = to.kind !== "list";
     part("tour-dots").innerHTML = to.kind === "basics" ? basics.map((_, i) => `<i${i === to.page ? ' class="on"' : ""}></i>`).join("") : "";
     part("tour-title").textContent = guide?.title ?? t("Tutorials");
-    part("tour-text").textContent = guide ? guide.text ?? "" : t("Short guides for everything else. Find them anytime in Settings.");
+    part("tour-text").textContent = guide ? guide.text ?? "" : t("Short animated guides for each feature.");
     part("tour-text").hidden = !part("tour-text").textContent;
     stepList.innerHTML = to.kind === "guide" ? to.guide.steps.map((s, i) => `<li class="share-row"><span class="share-row-icon" style="--k:${to.guide.color}">${i + 1}</span><span class="share-row-label">${s.text}</span></li>`).join("") : "";
     stepList.hidden = to.kind !== "guide";
@@ -439,8 +440,15 @@ export function initTutorials(tour: HTMLDialogElement, offer: HTMLDialogElement)
   offer.querySelector("#tour-offer-close")!.addEventListener("click", () => answer(false));
 
   return {
-    /** Settings opens the list of tutorials. */
+    /** The main screen opens the list of tutorials. */
     openList: () => open({ kind: "list" }),
+    /** A map panel opens the tutorial for what it does. */
+    openGuide(id: string) {
+      const guide = tutorials.find((guide) => guide.id === id);
+      if (!guide) return;
+      track("tutorial_opened", { tutorial: guide.id, from: "map" });
+      open({ kind: "guide", guide });
+    },
     /** The first launch shows Getting started; someone who already has maps is asked once instead.
      *  Returns whether it showed anything. */
     atLaunch(hasMaps: boolean) {

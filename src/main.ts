@@ -50,7 +50,6 @@ app.innerHTML = `
   <input type="file" id="file-input" hidden>
   ${importDialogsMarkup}
   <dialog id="message-dialog" aria-labelledby="message-title" aria-describedby="message-body">${dialogHeader("message-title", "", icons.sparkle, "message-dismiss")}<p id="message-body"></p><button class="primary" id="message-close">${icons.check}<span>${t("Got it")}</span></button></dialog>
-  <dialog id="help-dialog" aria-labelledby="help-title">${dialogHeader("help-title", t("Need help?"), icons.help, "help-close")}<p>${t("Found a problem or have a question? Open an issue on GitHub: say what you did, what you expected and what happened. A screenshot helps.")}</p><p class="dialog-note">${t("A free GitHub account is needed to submit an issue.")}</p><div class="dialog-actions"><a class="primary" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener">${icons.externalLink}<span>${t("Open an issue on GitHub")}</span></a><button type="button" class="secondary" id="help-tutorials">${icons.tutorials}<span>${t("See the tutorials")}</span></button></div></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title">${dialogHeader("delete-title", t("Delete this map?"), icons.trash, "delete-cancel")}<p id="delete-name" class="delete-map"></p><p class="dialog-note" id="delete-note"></p><div class="dialog-actions"><button class="danger" id="delete-confirm">${icons.trash}<span>${t("Delete map")}</span></button></div></dialog>
   ${mapRenameMarkup}
   ${sharingMarkup}
@@ -103,7 +102,6 @@ const settings = initSettingsPage(settingsPage, {
   release: releaseName,
   back: hideSettings,
   checkUpdates: openUpdates,
-  openTutorials: () => tutorials.openList(),
   openWhatsNew: () => whatsNew.openAll(),
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
@@ -711,14 +709,13 @@ progressDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   importing?.abort();
 });
-const helpDialog = element<HTMLDialogElement>("help-dialog");
-element("help-open").addEventListener("click", () => showDialog(helpDialog));
-element("help-close").addEventListener("click", () => helpDialog.close());
 const tutorials = initTutorials(element("tour"), element("tour-offer"));
 const whatsNew = initWhatsNew(element("whats-new"));
-element("help-tutorials").addEventListener("click", () => {
-  helpDialog.close();
-  tutorials.openList();
+element("tutorials-open").addEventListener("click", () => tutorials.openList());
+// Each map panel ends with the tutorials for what it does.
+viewerSection.addEventListener("click", (event) => {
+  const id = (event.target as Element).closest<HTMLElement>("[data-tutorial]")?.dataset.tutorial;
+  if (id) tutorials.openGuide(id);
 });
 for (const id of ["message-close", "message-dismiss"])
   element(id).addEventListener("click", () => messageDialog.close());

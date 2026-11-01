@@ -461,7 +461,7 @@ small {
   margin: 0;
 }
 /* Always shown just above the footer pill, however long the list. */
-.help-open {
+.tutorials-open {
   align-self: center;
   display: inline-flex;
   align-items: center;
@@ -472,12 +472,12 @@ small {
   font-size: var(--font-size-small);
   color: var(--muted);
 }
-.help-open svg {
+.tutorials-open svg {
   width: 16px;
   height: 16px;
   color: var(--neon-saved);
 }
-.help-open strong {
+.tutorials-open strong {
   font-weight: 600;
   color: var(--neon-saved);
 }
@@ -1129,6 +1129,13 @@ dialog.tour > * {
 }
 .tour-list .share-row > svg:last-child {
   color: var(--muted);
+}
+.tour-report {
+  color: inherit;
+  text-decoration: none;
+}
+.tour-report > svg:last-child {
+  transform: none;
 }
 /* Always in reach at the bottom, over whatever scrolls under it. */
 #tour-next {
@@ -3790,6 +3797,32 @@ label.panel-row {
 }
 .spotlight-action svg {
   color: #ffe27a;
+}
+/* Quiet lines under a panel's own content; the tutorials' phone leaves them out. */
+.tour-screen .panel-tutorials {
+  display: none;
+}
+.panel-tutorials {
+  margin-top: var(--space-16);
+  border-top: 1px solid var(--line);
+}
+.panel-tutorial {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-height: var(--icon-button-size);
+  padding: var(--space-8) var(--space-4);
+  background: none;
+  text-align: left;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--c);
+}
+.panel-tutorial svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
 }
 .panel-action:disabled {
   opacity: 0.35;
