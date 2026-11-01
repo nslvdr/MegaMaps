@@ -1868,6 +1868,33 @@ dialog > a.primary {
   margin-top: var(--space-2);
   color: var(--accent);
 }
+/* What's new: one list per kind of change. */
+#whats-new section + section {
+  margin-top: var(--space-16);
+}
+#whats-new h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-8);
+  color: var(--accent);
+  font-size: var(--font-size-body);
+}
+#whats-new h3 svg {
+  width: 20px;
+  height: 20px;
+}
+.whats-new-arrow {
+  color: var(--accent);
+}
+#whats-new ul {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding-left: var(--space-20);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+}
 .update-progress .progress-track {
   margin-top: var(--space-16);
 }

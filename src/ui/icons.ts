@@ -6,6 +6,7 @@ import {
   ArrowDownAZ,
   ArrowDownUp,
   ArrowRight,
+  ArrowRightLeft,
   BetweenHorizontalStart,
   Bookmark,
   CalendarArrowDown,
@@ -88,6 +89,7 @@ import {
   WavesLadder,
   Wifi,
   WifiOff,
+  Wrench,
   X,
   Zap,
   ZoomIn,
@@ -223,4 +225,6 @@ export const icons = {
   help: svg(LifeBuoy),
   tutorials: svg(GraduationCap),
   externalLink: svg(ExternalLink),
+  changed: svg(ArrowRightLeft),
+  fixed: svg(Wrench),
 };

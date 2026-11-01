@@ -689,6 +689,20 @@ export const fr = {
   "{size} MB": "{size} Mo",
   "{speed} km/h": "{speed} km/h",
   "~{time} on foot · Tap to add, drag to adjust": "~{time} à pied · Touchez pour ajouter, glissez pour ajuster",
+  // What’s new (src/changelog.ts)
+  "What’s new": "Nouveautés",
+  "New features": "Nouvelles fonctionnalités",
+  "Changes": "Changements",
+  "Bug fixes": "Corrections",
+  "Getting started and animated tutorials show where to tap, on a real map.": "Premiers pas et des tutoriels animés montrent où appuyer, sur une vraie carte.",
+  "An example map, Val Moulin, to try the app without importing anything.": "Une carte d’exemple, Val Moulin, pour découvrir l’app sans rien importer.",
+  "A “Need help?” box above the bottom bar.": "Un encart « Besoin d’aide ? » au-dessus de la barre du bas.",
+  "Map size limit: 300 → 600 megapixels.": "Taille maximale d’une carte : 300 → 600 mégapixels.",
+  "Larger images, up to 1,000 megapixels, are shrunk instead of refused.": "Les images plus grandes, jusqu’à 1 000 mégapixels, sont réduites au lieu d’être refusées.",
+  "The app asks before running text detection.": "L’app demande avant de lancer la détection de texte.",
+  "Route names open as balloons, like place names.": "Les noms des itinéraires s’ouvrent en bulle, comme ceux des lieux.",
+  "Settings shows the time of each version, not just the day.": "Réglages indique l’heure de chaque version, plus seulement le jour.",
+  "Map previews in the main menu are square.": "Les aperçus des cartes du menu principal sont bien carrés.",
 } as const;
 
 /** Singular and plural, keyed by the English noun. */
