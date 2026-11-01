@@ -55,3 +55,19 @@ test("a launch busy with another dialog keeps what's new for the next one", () =
   whatsNew.atLaunch(true);
   assert.deepEqual(sections(), [["Bug fixes", ["Map previews in the main menu are square."]]]);
 });
+
+test("Settings shows every release under its date and leaves the launch's marker alone", () => {
+  const { dialog, whatsNew } = setup();
+  localStorage.setItem("megamaps:changelog-seen", "bbb");
+  whatsNew.openAll();
+  assert.ok(dialog.hasAttribute("open"));
+  assert.deepEqual([...dialog.querySelectorAll("article")].map((release) => [
+    release.querySelector(".whats-new-date")!.textContent,
+    [...release.querySelectorAll("h3")].map((heading) => heading.textContent),
+  ]), [
+    ["November 20, 2026", ["Bug fixes"]],
+    ["November 10, 2026", ["New features", "Changes"]],
+    ["November 1, 2026", ["New features"]],
+  ]);
+  assert.equal(localStorage.getItem("megamaps:changelog-seen"), "bbb");
+});

@@ -104,6 +104,7 @@ const settings = initSettingsPage(settingsPage, {
   back: hideSettings,
   checkUpdates: openUpdates,
   openTutorials: () => tutorials.openList(),
+  openWhatsNew: () => whatsNew.openAll(),
   restore: (backup) => void restore(backup),
   erase: () => void erase(),
   setLabelSize: (size) => { document.documentElement.dataset.labels = size; },
@@ -714,6 +715,7 @@ const helpDialog = element<HTMLDialogElement>("help-dialog");
 element("help-open").addEventListener("click", () => showDialog(helpDialog));
 element("help-close").addEventListener("click", () => helpDialog.close());
 const tutorials = initTutorials(element("tour"), element("tour-offer"));
+const whatsNew = initWhatsNew(element("whats-new"));
 element("help-tutorials").addEventListener("click", () => {
   helpDialog.close();
   tutorials.openList();
@@ -1020,7 +1022,7 @@ async function start() {
   retileMaps();
   const newcomer = !maps.length && preference("tour") !== "seen";
   const touring = tutorials.atLaunch(maps.length > 0);
-  initWhatsNew(element("whats-new")).atLaunch(maps.length > 0, !touring);
+  whatsNew.atLaunch(maps.length > 0, !touring);
   if (newcomer) preparingExample = addExample().finally(() => (preparingExample = undefined));
 }
 // New users get the example map to try things on, made while Getting started plays.

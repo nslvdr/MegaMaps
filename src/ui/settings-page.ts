@@ -34,7 +34,7 @@ ${heading(t("Map"))}<div class="share-summary">${choice("label-size", icons.labe
   ...(["100", "200", "500", "1000"] as const).map((metres): [Preferences["label-distance"], string] => [metres, formatDistance(Number(metres))]),
   ["always", t("Always")]], t("Keeps pins clear from afar"))}${choice("walking-speed", icons.walkingSpeed, t("Walking speed"), (["2", "3", "4", "5"] as const).map((speed) => [speed, t("{speed} km/h", { speed })]), t("For route travel times"))}</div>
 ${heading(t("You"))}<div class="share-summary">${choice("language", icons.language, t("Language"), [["fr", "Français"], ["en", "English"]])}<label class="share-row"><span class="share-row-icon settings-icon">${icons.user}</span>${label(t("Nickname"), t("On maps you send"))}<input id="settings-name" class="settings-name" type="text" maxlength="100" autocomplete="nickname" enterkeyhint="done" placeholder="${t("Add one")}"></label></div>
-${heading(t("Help"))}<div class="share-summary">${row("settings-tutorials", icons.tutorials, t("Tutorials"), t("How each feature works"))}</div>
+${heading(t("Help"))}<div class="share-summary">${row("settings-tutorials", icons.tutorials, t("Tutorials"), t("How each feature works"))}${row("settings-whats-new", icons.sparkle, t("What’s new"), t("Changes in each version"))}</div>
 ${heading(t("Your data"))}<div class="share-summary">${row("settings-backup", icons.backup, t("Save a backup"))}${row("settings-restore", icons.restore, t("Restore a backup"), t("Adds maps, keeps the ones here"))}<div class="share-row settings-storage" id="settings-storage"><span class="share-row-icon settings-icon">${icons.storage}</span><span class="share-row-label">${t("Storage")}</span><span class="share-row-value" id="settings-storage-status"></span></div></div>${note("", "backup-note")}<p class="settings-error" id="backup-error" role="alert" hidden></p><input type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden>
 ${heading(t("Updates"))}<div class="share-summary">${choice("update-install", icons.download, t("Install updates"), [["auto", t("Automatically")], ["ask", t("Ask first")]])}${row("settings-update", icons.update, t("Check for updates"))}</div>
 <button type="button" class="settings-erase" id="settings-erase">${icons.trash}<span>${t("Delete everything")}</span></button>
@@ -52,6 +52,7 @@ interface SettingsOptions {
   back(): void;
   checkUpdates(): void;
   openTutorials(): void;
+  openWhatsNew(): void;
   /** Rebuild the backup's missing maps; reports its own progress and outcome. */
   restore(backup: Backup): void;
   /** Remove every map and setting once all three steps are confirmed; reports its own outcome. */
@@ -184,6 +185,7 @@ export function initSettingsPage(page: HTMLElement, dialogs: { restore: HTMLDial
 
   part(page, "settings-restore").addEventListener("click", () => restoreInput.click());
   part(page, "settings-tutorials").addEventListener("click", options.openTutorials);
+  part(page, "settings-whats-new").addEventListener("click", options.openWhatsNew);
   restoreInput.addEventListener("change", () => {
     const file = restoreInput.files?.[0];
     restoreInput.value = "";

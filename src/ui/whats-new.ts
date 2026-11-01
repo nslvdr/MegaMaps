@@ -1,7 +1,7 @@
 import { changelog, type Release } from "../changelog";
 import { dialogHeader, showDialog } from "./dialog";
 import { icons } from "./icons";
-import { t, type Message } from "../i18n";
+import { locale, t, type Message } from "../i18n";
 
 export const whatsNewMarkup = `<dialog id="whats-new" aria-labelledby="whats-new-title">${dialogHeader("whats-new-title", t("What’s new"), icons.sparkle, "whats-new-close")}<div id="whats-new-sections"></div><div class="dialog-actions"><button type="button" id="whats-new-done" class="primary">${icons.check}<span>${t("Got it")}</span></button></div></dialog>`;
 
@@ -35,30 +35,47 @@ function line(document: Document, text: string) {
   return item;
 }
 
+// Release dates are calendar days, so they read the same in every time zone.
+const day = (date: string) => new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone: "UTC" }).format(new Date(date));
+
 export function initWhatsNew(dialog: HTMLDialogElement, releases = changelog) {
   const document = dialog.ownerDocument;
   const close = () => dialog.close();
   dialog.querySelector("#whats-new-close")!.addEventListener("click", close);
   dialog.querySelector("#whats-new-done")!.addEventListener("click", close);
 
-  function show(unseen: Release[]) {
-    const parts = sections.flatMap(([key, heading, icon]) => {
-      const items = unseen.flatMap((release) => release[key] ?? []);
-      if (!items.length) return [];
-      const section = document.createElement("section");
-      const title = document.createElement("h3");
-      const list = document.createElement("ul");
-      title.innerHTML = icon;
-      title.append(t(heading));
-      list.append(...items.map((item) => line(document, t(item))));
-      section.append(title, list);
-      return [section];
-    });
-    dialog.querySelector("#whats-new-sections")!.replaceChildren(...parts);
+  const lists = (shown: Release[]) => sections.flatMap(([key, heading, icon]) => {
+    const items = shown.flatMap((release) => release[key] ?? []);
+    if (!items.length) return [];
+    const section = document.createElement("section");
+    const title = document.createElement("h3");
+    const list = document.createElement("ul");
+    title.innerHTML = icon;
+    title.append(t(heading));
+    list.append(...items.map((item) => line(document, t(item))));
+    section.append(title, list);
+    return [section];
+  });
+
+  function show(parts: HTMLElement[]) {
+    const body = dialog.querySelector<HTMLElement>("#whats-new-sections")!;
+    body.replaceChildren(...parts);
+    body.scrollTop = 0;
     showDialog(dialog);
   }
 
   return {
+    /** Settings shows every release, newest first, each under its date. */
+    openAll() {
+      show(releases.map((release) => {
+        const block = document.createElement("article");
+        const date = document.createElement("p");
+        date.className = "whats-new-date";
+        date.textContent = day(release.date);
+        block.append(date, ...lists([release]));
+        return block;
+      }));
+    },
     /** Shows what's new since the last launch. When another dialog has the
      *  screen, it waits for the next launch. */
     atLaunch(hasMaps: boolean, free = true) {
@@ -73,7 +90,7 @@ export function initWhatsNew(dialog: HTMLDialogElement, releases = changelog) {
       try {
         localStorage.setItem(SEEN, latest.commit);
       } catch {}
-      if (unseen.length) show(unseen);
+      if (unseen.length) show(lists(unseen));
     },
   };
 }

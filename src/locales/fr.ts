@@ -694,6 +694,7 @@ export const fr = {
   "New features": "Nouvelles fonctionnalités",
   "Changes": "Changements",
   "Bug fixes": "Corrections",
+  "Changes in each version": "Les changements de chaque version",
   "Getting started and animated tutorials show where to tap, on a real map.": "Premiers pas et des tutoriels animés montrent où appuyer, sur une vraie carte.",
   "An example map, Val Moulin, to try the app without importing anything.": "Une carte d’exemple, Val Moulin, pour découvrir l’app sans rien importer.",
   "A “Need help?” box above the bottom bar.": "Un encart « Besoin d’aide ? » au-dessus de la barre du bas.",
