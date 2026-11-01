@@ -1261,26 +1261,6 @@ dialog.tour > * {
   opacity: 1;
   background: rgb(0 0 0 / 0.35);
 }
-/* A query is typed out, letter by letter; a long one keeps its end in view. */
-[data-show~="query"] [data-id="map-search"] {
-  animation: tour-type 0.8s steps(8) both;
-}
-[data-show~="query-pair"] [data-id="map-search"] {
-  animation: tour-type-pair 0.8s steps(18) both;
-}
-@keyframes tour-type {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-}
-@keyframes tour-type-pair {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-}
-.tour-screen [data-id="search-count"] {
-  animation: toast-in 0.2s 0.8s ease-out both;
-}
 .tour-screen [data-id="progress-fill"] {
   animation: tour-fill 1.6s ease-out both;
 }

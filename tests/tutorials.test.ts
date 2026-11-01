@@ -143,3 +143,34 @@ test("search shows what the example map's own text gives", (t) => {
   assert.equal(shown(1), "2 / 2", "the count steps to the next one");
   assert.equal(shown(2), "1 match", "the one crossing of Allée 25 and 55");
 });
+
+test("search types its query out before showing what it finds", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { tour, part, tutorials } = setup();
+  tutorials.openList();
+  tour.querySelector<HTMLElement>('[data-guide="search"]')!.click();
+  const screen = part("tour-screen");
+  const field = screen.querySelector<HTMLInputElement>('[data-id="map-search"]')!;
+  const count = screen.querySelector<HTMLElement>('[data-id="search-count"]')!;
+  const steps = [...part("tour-steps").querySelectorAll("li")];
+  // Timers set as others fire run on the next tick, so time goes by in small steps.
+  const wait = (ms: number) => {
+    for (let i = 0; i < ms / 10; i++) t.mock.timers.tick(10);
+  };
+  // The finger taps the field, then the app answers.
+  wait(900 + 650 + 300);
+  assert.equal(field.value, "All", "typed a letter at a time");
+  assert.ok(count.hidden, "no count while typing");
+  wait(500);
+  assert.equal(field.value, "Allée 25");
+  assert.ok(!count.hidden);
+
+  steps[2]!.click();
+  assert.equal(field.value, "Allée 25", "the pair goes on from the first name");
+  wait(900 + 650 + 80);
+  assert.equal(field.value, "Allée 25;");
+  assert.ok(count.hidden);
+  wait(800);
+  assert.equal(field.value, "Allée 25; Allée 55");
+  assert.equal(count.textContent, "1 match");
+});

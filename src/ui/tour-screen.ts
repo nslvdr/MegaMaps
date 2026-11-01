@@ -8,7 +8,7 @@ import { homeMarkup, importDialogsMarkup, mapDialogsMarkup } from "./library-mar
 import { placeIcon } from "./place-icon";
 import { settingsMarkup } from "./settings-page";
 import { sharingMarkup } from "./sharing";
-import { gardien, places, routes, searchText, tourSearch } from "./tour-map";
+import { gardien, places, routes, searchText, tourSearch, TYPING } from "./tour-map";
 import { viewerMarkup } from "./viewer-markup";
 
 // The tutorials' phone runs the app's own screens: their markup, copied with
@@ -26,6 +26,8 @@ const thumbnail = `<img src="data:image/svg+xml,${encodeURIComponent(planMarkup(
 
 // The tutorials measure 38 m.
 const MEASURED = 38;
+/** The query being typed out, a letter at a time. */
+let typing: ReturnType<typeof setTimeout> | undefined;
 
 const mapCard = `<article class="map-card" data-id="tour-map-card"><button class="map-open"><div class="thumbnail">${thumbnail}</div><div class="map-details"><h3>${MAP_NAME}</h3><p class="map-saved"><span class="saved-places">${icons.pin}2</span></p><p class="map-meta"><span>${lastUsed({ created: now - 9 * DAY, opened: now - 2 * DAY }, now)}</span><span class="map-size">${icons.storage}${formatBytes(mapBytes.image + mapBytes.tiles)}</span></p></div></button><button class="map-more">${icons.more}</button></article>`;
 
@@ -238,16 +240,30 @@ export function showScene(screen: HTMLElement, show: string, jump = false, drawn
   hide("ocr-progress", !has("ocr-toast"));
   text("ocr-percent", "64%");
 
-  // Search, typed in the pill.
+  // Search, typed in the pill letter by letter (a query that goes on from
+  // what's there types only the rest); its count shows once it's typed out.
   const query = searchText(show);
   const search = $<HTMLInputElement>("map-search");
-  search.value = query;
+  const count = $("search-count");
   search.setAttribute("aria-expanded", String(!!query));
-  search.scrollLeft = search.scrollWidth;
   hide("search-close", !query);
   const matches = has("count") ? tourSearch(query).length : 0;
-  $("search-count").innerHTML = matches ? `${has("next") ? `2 / ${matches}` : plural(matches, "match")}${icons.next}` : "";
-  hide("search-count", !matches);
+  count.innerHTML = matches ? `${has("next") ? `2 / ${matches}` : plural(matches, "match")}${icons.next}` : "";
+  clearTimeout(typing);
+  const from = jump || !query ? query.length : query.startsWith(search.value) ? search.value.length : 0;
+  const type = (letters: number) => {
+    search.value = query.slice(0, letters);
+    search.scrollLeft = search.scrollWidth;
+    if (letters < query.length) {
+      count.hidden = true;
+      typing = setTimeout(() => type(letters + 1), TYPING / (query.length - from));
+      return;
+    }
+    const appearing = count.hidden && !!matches && !jump;
+    count.hidden = !matches;
+    if (appearing) count.animate?.([{ opacity: 0, transform: "translateY(-6px)" }, {}], { duration: 200, easing: "ease-out" });
+  };
+  type(from);
 
   // The place card: reading first, editing behind Edit.
   const placeCard = $("marker-dialog");
