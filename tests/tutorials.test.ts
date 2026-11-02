@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import { initTutorials, tutorialsMarkup } from "../src/ui/tutorials";
-import { viewerMarkup } from "../src/ui/viewer-markup";
+import { sheetTutorials } from "../src/ui/viewer-controls";
+import { showScene, tapTarget } from "../src/ui/tour-screen";
 import { preference, setPreference } from "../src/preferences";
 
 function setup() {
@@ -62,7 +63,12 @@ test("Getting started walks through the basics, then shows the tutorials before 
   titles.push(part("tour-title").textContent);
   part("tour-next").click();
   titles.push(part("tour-title").textContent);
-  assert.deepEqual(titles, ["Your maps, even underground", "Import a map", "Find your way around"]);
+  part("tour-next").click();
+  titles.push(part("tour-title").textContent);
+  assert.deepEqual(titles, ["Your maps, even underground", "Import a map", "Find your way around", "Help in every panel"]);
+  // Its last step taps the open panel's tutorial button.
+  showScene(part("tour-screen"), "view", true);
+  assert.ok(tapTarget(part("tour-screen"), "tutorial"));
   assert.equal(part("tour-next").textContent, "See the tutorials");
 
   part("tour-next").click();
@@ -177,15 +183,13 @@ test("search types its query out before showing what it finds", (t) => {
   assert.equal(count.textContent, "1 match");
 });
 
-test("each map panel's tutorial line opens the tutorial it names", (t) => {
+test("each map panel's tutorial button opens a tutorial", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { tour, part, tutorials } = setup();
-  const links = [...parseHTML(`<html><body>${viewerMarkup}</body></html>`).document.querySelectorAll<HTMLElement>("[data-tutorial]")];
-  assert.ok(links.length >= 5);
-  for (const link of links) {
-    tutorials.openGuide(link.dataset.tutorial!);
-    assert.ok(tour.open);
-    assert.equal(part("tour-title").textContent, link.textContent);
+  const { tour, tutorials } = setup();
+  for (const id of Object.values(sheetTutorials)) {
+    tutorials.openGuide(id);
+    assert.ok(tour.open, id);
+    assert.equal(tour.dataset.view, "guide", id);
     tour.close();
   }
 });

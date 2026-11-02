@@ -79,6 +79,14 @@ const basics: Guide[] = [
       { touch: { move: "tap", at: [pinOnScreen("panned zoomed", spot.gardien)] }, show: "panned zoomed place" },
     ],
   },
+  {
+    id: "panel-help", title: t("Help in every panel"), icon: icons.tutorials, color: "var(--neon-view)",
+    text: t("Each panel has a tutorial button at the top. Tap it to see how that panel works."),
+    steps: [
+      { from: "", tap: "view", show: "view" },
+      { tap: "tutorial", show: "view" },
+    ],
+  },
 ];
 
 const groups: [string, Guide[]][] = [
@@ -212,7 +220,7 @@ export const tutorialsMarkup = `<dialog id="tour" class="tour" aria-labelledby="
 <div class="tour-phone" id="tour-phone" aria-hidden="true">${tourScreenMarkup}</div>
 <h2 id="tour-title"></h2><p id="tour-text"></p>
 <ol class="share-summary tour-steps" id="tour-steps"></ol><p class="dialog-note" id="tour-note"></p>
-<div id="tour-list" class="tour-list"><div class="share-summary"><button type="button" class="share-row" data-guide="basics"><span class="share-row-icon" style="--k:var(--neon-add)">${icons.sparkle}</span><span class="share-row-label">${t("Getting started")}<small>${t("The basics in three steps")}</small></span>${icons.arrow}</button></div>
+<div id="tour-list" class="tour-list"><div class="share-summary"><button type="button" class="share-row" data-guide="basics"><span class="share-row-icon" style="--k:var(--neon-add)">${icons.sparkle}</span><span class="share-row-label">${t("Getting started")}<small>${t("The basics in four steps")}</small></span>${icons.arrow}</button></div>
 ${groups.map(([title, guides]) => `<h3 class="settings-heading">${title}</h3><div class="share-summary">${guides.map((guide) =>
   `<button type="button" class="share-row" data-guide="${guide.id}"><span class="share-row-icon" style="--k:${guide.color}">${guide.icon}</span><span class="share-row-label">${guide.title}</span>${icons.arrow}</button>`).join("")}</div>`).join("")}
 <h3 class="settings-heading">${t("Still stuck?")}</h3><div class="share-summary"><a class="share-row tour-report" href="https://github.com/nslvdr/MegaMaps/issues/new" target="_blank" rel="noopener"><span class="share-row-icon" style="--k:var(--neon-view)">${icons.help}</span><span class="share-row-label">${t("Report a problem")}<small>${t("Opens GitHub, with a free account")}</small></span>${icons.externalLink}</a></div></div>

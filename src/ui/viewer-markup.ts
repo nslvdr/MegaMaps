@@ -55,12 +55,6 @@ const dangerPicks = dangerSteps
     `<button type="button" class="level-step" data-danger="${level}" aria-pressed="false" style="--level: ${color}">${icon}<span>${label}</span></button>`)
   .join("");
 
-// Each panel ends with the tutorials for what it does, by id and title as in
-// tutorials.ts, which can't be imported here: its phone copies this markup.
-const tutorialLinks = (...guides: [string, string][]) =>
-  `<div class="panel-tutorials">${guides.map(([id, title]) =>
-    `<button type="button" class="panel-tutorial" data-tutorial="${id}">${icons.tutorials}<span>${title}</span></button>`).join("")}</div>`;
-
 // Map-first layout: almost nothing floats over the map.
 //   top corners   – Back on the left; Trail, Measure, Rotation and View on the
 //                   right; all but Measure open panels
@@ -95,7 +89,7 @@ export const viewerMarkup = `
 </section>
 <button id="sheet-dismiss" class="sheet-dismiss" aria-label="${t("Close")}" hidden></button>
 <section id="sheet" class="sheet" aria-labelledby="sheet-title" hidden>
-  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="share-saved" class="sheet-share" aria-label="${t("Share map or selected items")}" hidden>${icons.share}</button><button id="reset-rotation" class="sheet-reset" aria-label="${t("Reset rotation to 0°")}" title="${t("Reset rotation to 0°")}" hidden>${icons.undo}</button><button id="close-sheet" class="sheet-close" aria-label="${t("Close")}">${icons.close}</button></div>
+  <div class="sheet-header"><span id="sheet-title-icon" class="dialog-title-icon" aria-hidden="true"></span><h2 id="sheet-title"></h2><button id="sheet-tutorial" class="sheet-tutorial" aria-label="${t("Tutorial")}" title="${t("Tutorial")}">${icons.tutorials}</button><button id="share-saved" class="sheet-share" aria-label="${t("Share map or selected items")}" hidden>${icons.share}</button><button id="reset-rotation" class="sheet-reset" aria-label="${t("Reset rotation to 0°")}" title="${t("Reset rotation to 0°")}" hidden>${icons.undo}</button><button id="close-sheet" class="sheet-close" aria-label="${t("Close")}">${icons.close}</button></div>
   <div class="sheet-content">
     <div id="sheet-display" data-panel="display" data-title="${t("View")}" hidden>
       <h3>${t("Map")}</h3>
@@ -110,7 +104,6 @@ export const viewerMarkup = `
         ${layerToggle("labels", t("Names"), icons.text)}
       </div>
       <button id="spotlight" class="panel-action spotlight-action" title="${t("Dim the map for a moment and pulse every route and place, even hidden ones")}">${icons.sparkle}<span>${t("Highlight saved")}</span></button>
-      ${tutorialLinks(["view", t("Dark map and brightness")])}
     </div>
     <div id="sheet-rotation" data-panel="rotation" data-title="${t("Rotation")}" hidden>
       <div class="panel-card rotation-list">
@@ -129,7 +122,6 @@ export const viewerMarkup = `
       <div id="north-field" class="panel-card north-field" hidden>
         <div class="panel-row">${rowIcon(icons.north)}<span class="row-text"><strong id="north-label">${t("North offset")}</strong><small id="north-help">${t("Turn clockwise if the map’s top isn’t north")}</small></span><div class="north-wheel"><div id="north-offset" class="north-track" role="spinbutton" aria-labelledby="north-label" aria-describedby="north-help" aria-valuemin="${NORTH_MIN}" aria-valuemax="${NORTH_MAX}">${northDegrees}</div></div></div>
       </div>
-      ${tutorialLinks(["rotate", t("Rotate the map")])}
     </div>
     <div id="sheet-trail" data-panel="trail" data-title="${t("Trail")}" hidden>
       <p id="trip-help" class="field-help">${t("Mark where you are as you walk, and see the way you came. Your trail stays on this device.")}</p>
@@ -142,21 +134,18 @@ export const viewerMarkup = `
       <p id="trip-hint" class="field-help"></p>
       <h3 id="trip-history-title" class="section-title trips">${icons.history}<span>${t("Past trips")}</span><small id="trip-history-count"></small></h3>
       <ul id="trip-list" class="navigation-list trip-list" aria-labelledby="trip-history-title"></ul>
-      ${tutorialLinks(["trail", t("Mark your path")])}
     </div>
     <div id="sheet-saved" data-panel="saved" data-title="${t("Saved")}" hidden>
       <h3 id="saved-routes-title" class="section-title routes">${icons.route}<span>${t("Routes")}</span><small id="saved-routes-count"></small><button id="routes-order" class="section-menu" aria-label="${t("Order routes")}" aria-haspopup="menu" aria-expanded="false">${icons.filter}</button></h3>
       <ul id="route-list" class="navigation-list route-list" aria-labelledby="saved-routes-title"></ul>
       <h3 id="saved-places-title" class="section-title places">${icons.pin}<span>${t("Places")}</span><small id="saved-places-count"></small><button id="places-order" class="section-menu" aria-label="${t("Order and filter places")}" aria-haspopup="menu" aria-expanded="false">${icons.filter}</button></h3>
       <ul id="marker-list" class="navigation-list marker-list" aria-labelledby="saved-places-title"></ul>
-      ${tutorialLinks(["read-place", t("Read and edit a place")], ["share", t("Share with a teammate")])}
     </div>
     <div id="sheet-add" data-panel="add" data-title="${t("Add")}" hidden>
       <div class="add-choices">
         <button id="add-marker" class="add-choice places">${icons.pin}<span>${t("Place")}</span></button>
         <button id="add-route" class="add-choice routes">${icons.route}<span>${t("Route")}</span></button>
       </div>
-      ${tutorialLinks(["add-place", t("Add a place")], ["route", t("Draw a route")])}
     </div>
   </div>
 </section>

@@ -712,7 +712,7 @@ progressDialog.addEventListener("cancel", (event) => {
 const tutorials = initTutorials(element("tour"), element("tour-offer"));
 const whatsNew = initWhatsNew(element("whats-new"));
 element("tutorials-open").addEventListener("click", () => tutorials.openList());
-// Each map panel ends with the tutorials for what it does.
+// Each map panel’s header opens the tutorial for what it does.
 viewerSection.addEventListener("click", (event) => {
   const id = (event.target as Element).closest<HTMLElement>("[data-tutorial]")?.dataset.tutorial;
   if (id) tutorials.openGuide(id);
