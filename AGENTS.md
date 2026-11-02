@@ -11,7 +11,7 @@
 - Mobile first, touch only: no keyboard controls, shortcuts or focus outlines.
 - Use only **Lucide icons**, except for the app logo and the cave entrance place icon (a Lucide-style redraw).
 - Use only **three font sizes**, with **14px as the minimum**.
-- Modal header buttons (Close, Edit, Share) share one tinted, outlined circle holding a Lucide icon at one size: **X**, **Pencil**, **Share2**. Edit sits beside Close.
+- Modal header buttons (Close, Edit, Share, Tutorial) share one tinted, outlined circle holding a Lucide icon at one size: **X**, **Pencil**, **Share2**, **GraduationCap**. Edit sits beside Close; a map panel’s Tutorial sits right after its title.
 - No handles on modals. Show a scroll indicator only when content overflows.
 - Scrolling must follow the user's movement smoothly, without jumps or teleporting.
 - Clicking a place opens readable details first; editing requires an explicit Edit action.

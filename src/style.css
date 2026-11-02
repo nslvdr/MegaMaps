@@ -1551,6 +1551,7 @@ dialog p {
 .sheet-close,
 .sheet-share,
 .sheet-reset,
+.sheet-tutorial,
 .dialog-edit {
   position: relative;
   display: grid;
@@ -1569,6 +1570,7 @@ dialog p {
 .sheet-close::after,
 .sheet-share::after,
 .sheet-reset::after,
+.sheet-tutorial::after,
 .dialog-edit::after {
   content: "";
   position: absolute;
@@ -1578,6 +1580,7 @@ dialog p {
 .sheet-close svg,
 .sheet-share svg,
 .sheet-reset svg,
+.sheet-tutorial svg,
 .dialog-edit svg {
   width: 100%;
   height: 100%;
@@ -1586,6 +1589,7 @@ dialog p {
 .sheet-close:active:not(:disabled),
 .sheet-share:active:not(:disabled),
 .sheet-reset:active:not(:disabled),
+.sheet-tutorial:active:not(:disabled),
 .dialog-edit:active:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 24%, var(--bg));
 }
@@ -1594,6 +1598,7 @@ dialog p {
   .sheet-close:hover:not(:disabled),
   .sheet-share:hover:not(:disabled),
   .sheet-reset:hover:not(:disabled),
+  .sheet-tutorial:hover:not(:disabled),
   .dialog-edit:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 22%, var(--bg));
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
@@ -3798,32 +3803,6 @@ label.panel-row {
 .spotlight-action svg {
   color: #ffe27a;
 }
-/* Quiet lines under a panel's own content; the tutorials' phone leaves them out. */
-.tour-screen .panel-tutorials {
-  display: none;
-}
-.panel-tutorials {
-  margin-top: var(--space-16);
-  border-top: 1px solid var(--line);
-}
-.panel-tutorial {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  width: 100%;
-  min-height: var(--icon-button-size);
-  padding: var(--space-8) var(--space-4);
-  background: none;
-  text-align: left;
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  color: var(--c);
-}
-.panel-tutorial svg {
-  flex: none;
-  width: 20px;
-  height: 20px;
-}
 .panel-action:disabled {
   opacity: 0.35;
 }
@@ -3866,7 +3845,8 @@ label.panel-row {
 }
 .sheet-close,
 .sheet-share,
-.sheet-reset {
+.sheet-reset,
+.sheet-tutorial {
   --accent: var(--c);
 }
 .section-title {

@@ -50,6 +50,10 @@ import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-searc
 import { track } from "../stats";
 import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
 const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
+/** The tutorial each panel's header button opens. */
+export const sheetTutorials: Record<(typeof sheets)[number], string> = {
+  trail: "trail", display: "view", rotation: "rotate", saved: "read-place", add: "add-place",
+};
 /** The place card's Delete and the trail mark's, each armed by a first tap. */
 const cardDeletes = ["marker-delete", "mark-delete"] as const;
 type CardDelete = (typeof cardDeletes)[number];
@@ -528,6 +532,9 @@ export class ViewerControls {
     this.el("close-sheet").hidden = name === "search";
     this.el("share-saved").hidden = name !== "saved" || !this.onShare;
     this.el("reset-rotation").hidden = name !== "rotation" || this.state.rotationMode === "compass";
+    const tutorial = this.el("sheet-tutorial");
+    tutorial.dataset.tutorial = name && name !== "search" ? sheetTutorials[name] : "";
+    tutorial.hidden = !tutorial.dataset.tutorial;
     this.el("sheet-title-icon").innerHTML =
       name === "display" ? icons.sun
       : name === "trail" ? icons.trail

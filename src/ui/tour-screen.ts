@@ -57,7 +57,7 @@ const taps: Record<string, string> = {
   "scale-save": "scale-save", edit: "marker-edit", move: "marker-move", save: "marker-save", share: "share-saved",
   settings: "settings-open", import: "import-open", "new-map": "import-image", "shared-file": "import-share",
   advanced: "tour-advanced", rerun: "rerun-ocr", detect: "ocr-offer-start", send: "share-send", receive: "receive-import",
-  backup: "settings-backup", restore: "settings-restore",
+  backup: "settings-backup", restore: "settings-restore", tutorial: "sheet-tutorial",
 };
 const tapSelectors: Record<string, string> = {
   "open-map": ".map-open",
