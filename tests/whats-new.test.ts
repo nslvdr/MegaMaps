@@ -5,9 +5,9 @@ import type { Release } from "../src/changelog";
 import { initWhatsNew, unseenReleases, whatsNewMarkup } from "../src/ui/whats-new";
 
 const releases: Release[] = [
-  { date: "2026-11-20", commit: "ccc", fixed: ["Map previews in the main menu are square."] },
-  { date: "2026-11-10", commit: "bbb", added: ["A “Need help?” box above the bottom bar."], changed: ["Map size limit: 300 → 600 megapixels."] },
-  { date: "2026-11-01", commit: "aaa", added: ["An example map, Val Moulin, to try the app without importing anything."] },
+  { date: "2026-11-20", commit: "ccc", fixed: ["The page behind a dialog no longer scrolls."] },
+  { date: "2026-11-10", commit: "bbb", added: ["Search finds words in any order."], changed: ["Map size limit: 300 → 600 megapixels."] },
+  { date: "2026-11-01", commit: "aaa", added: ["Settings has a What’s new row with the changes in every version."] },
 ];
 
 function setup() {
@@ -38,9 +38,9 @@ test("everything new shows once, new features first, without empty sections", ()
   whatsNew.atLaunch(true);
   assert.ok(dialog.hasAttribute("open"));
   assert.deepEqual(sections(), [
-    ["New features", ["A “Need help?” box above the bottom bar."]],
+    ["New features", ["Search finds words in any order."]],
     ["Changes", ["Map size limit: 300 → 600 megapixels."]],
-    ["Bug fixes", ["Map previews in the main menu are square."]],
+    ["Bug fixes", ["The page behind a dialog no longer scrolls."]],
   ]);
   dialog.removeAttribute("open");
   whatsNew.atLaunch(true);
@@ -53,7 +53,7 @@ test("a launch busy with another dialog keeps what's new for the next one", () =
   whatsNew.atLaunch(true, false);
   assert.ok(!dialog.hasAttribute("open"));
   whatsNew.atLaunch(true);
-  assert.deepEqual(sections(), [["Bug fixes", ["Map previews in the main menu are square."]]]);
+  assert.deepEqual(sections(), [["Bug fixes", ["The page behind a dialog no longer scrolls."]]]);
 });
 
 test("Settings shows every release under its date and leaves the launch's marker alone", () => {

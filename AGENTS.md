@@ -28,7 +28,7 @@ When the user asks for a new release:
 3. Leave out anything added and then removed since the last shipped release, and add no line saying it's gone.
 4. Sort each change users can notice into `added`, `changed` or `fixed`. Give each one short English line, most important first, merging related PRs. Only a value that changed, such as a limit or a number, reads "Thing: before → after", like "Map size limit: 300 → 600 megapixels."; describe other changes in a sentence. Leave out what users can't notice, such as docs, tests, refactors and build tooling. Omit empty lists.
 5. Add the French for each line to the "What’s new" block of `src/locales/fr.ts`.
-6. Run `npm test`, then commit as `docs: changelog for <date>`. Don't create tags or GitHub releases.
+6. Run `npm test` and `npm run build` (only the build type-checks the tests), then commit as `docs: changelog for <date>`. Don't create tags or GitHub releases.
 
 ## Testing
 
