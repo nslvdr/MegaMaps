@@ -1,5 +1,6 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   return (
@@ -12,8 +13,27 @@ async function files(dir) {
 }
 // The footer shows the release date of the loaded build, including offline.
 const builtAt = new Date().toISOString();
+// A readable name for people and stats, e.g. 2026.10.30-14.32-13c17c2 (Paris time and
+// commit); the content hash below stays the identity that updates compare.
+const git = (...args) => {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {}
+};
+const commit = git("rev-parse", "--short", "HEAD");
+const paris = Object.fromEntries(
+  new Intl.DateTimeFormat("en", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(builtAt)).map(({ type, value }) => [type, value]),
+);
+const release = [
+  `${paris.year}.${paris.month}.${paris.day}-${paris.hour}.${paris.minute}`,
+  ...(commit ? [commit] : []),
+  ...(commit && git("status", "--porcelain") ? ["dirty"] : []),
+].join("-");
 const html = await readFile("dist/index.html", "utf8");
-await writeFile("dist/index.html", html.replace("__APP_BUILT_AT__", builtAt));
+await writeFile("dist/index.html", html.replace("__APP_BUILT_AT__", builtAt).replace("__APP_RELEASE__", release));
 const paths = (await files("dist")).filter((p) => !p.endsWith("/sw.js"));
 // The availability and version probes must always reach the host, never the offline cache.
 const live = ["/app-status.json", "/app-version.json"];
@@ -153,7 +173,9 @@ self.addEventListener('message', event => {
       const missing = [];
       for (const url of ASSETS) {
         const response = await cache.match(url);
-        if (!response || !(await response.arrayBuffer()).byteLength) missing.push(url);
+        // A blob's size needs no copy of its bytes, which for the OCR models
+        // and runtime are tens of MB: the library checks every minute.
+        if (!response || !(await response.blob()).size) missing.push(url);
       }
       event.ports[0].postMessage({ ready: missing.length === 0, missing, assets: ASSETS.length, version: CACHE });
     } catch { event.ports[0].postMessage({ ready: false, missing: ['Application shell'] }); }
@@ -196,4 +218,4 @@ const FILES = ${JSON.stringify(shellFiles)};${worker}`,
 // Lets the app describe an available update before downloading it.
 // Files list each hash, so the app can tell how much an update really downloads.
 await writeFile("dist/app-version.json", JSON.stringify({ version: cacheName, size, builtAt, files: shellFiles }));
-console.log(`Offline shell: ${urls.length} assets, ${(size / 1048576).toFixed(1)} MB, ${cacheName}`);
+console.log(`Offline shell: ${urls.length} assets, ${(size / 1048576).toFixed(1)} MB, ${release} (${cacheName})`);

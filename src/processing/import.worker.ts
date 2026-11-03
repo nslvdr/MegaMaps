@@ -8,15 +8,16 @@ import {
 } from "../types";
 import { payloadStore } from "../storage/payloads";
 import { inMemory, saveMap } from "../storage/database";
-import { readHeader } from "./headers";
+import { mapSize, readHeader } from "./headers";
+import { shrinkRows } from "./shrink";
 import { pyramid, tileCount } from "./pyramid";
 import { decodePNG, NativePNGRequired } from "./png";
 import { DECODED, decodeJPEG } from "./jpeg";
-import { tileBand, buildParents } from "./tiles";
+import { tileBand, buildParents, tileWriter } from "./tiles";
 const reply = (message: WorkerReply) => postMessage(message);
 // A failed promise nothing waits on would otherwise leave the import waiting forever.
 onunhandledrejection = ({ reason }) =>
-  reply({ type: "error", message: reason instanceof Error ? reason.message : String(reason) });
+  reply({ type: "error", message: reason instanceof Error ? reason.message : String(reason), name: reason?.name });
 onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
   const { file, record } = event.data;
   const start = performance.now();
@@ -33,7 +34,10 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       throw new Error(
         t("This JPEG has EXIF rotation. Export it with rotation applied to the pixels before importing."),
       );
-    const levels = pyramid(header.width, header.height),
+    // Too large an image becomes a smaller map; the original is kept as it is.
+    const size = mapSize(header.width, header.height),
+      shrunk = size.width !== header.width || size.height !== header.height;
+    const levels = pyramid(size.width, size.height),
       total = tileCount(levels);
     const store = payloadStore(record.backend);
     let done = 0,
@@ -71,19 +75,15 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       type: "progress",
       progress: {
         fraction: 0.03,
-        message: header.progressive
+        message: shrunk
+          ? t("Shrinking the image to {megapixels} megapixels…", { megapixels: Math.round(size.width * size.height / 1e6).toLocaleString(locale) })
+          : header.progressive
           ? t("Decoding progressive JPEG locally…")
           : t("Decoding image into tiles…"),
       },
     });
     const canvas = new OffscreenCanvas(1, 1);
-    const consume = tileBand(
-      header,
-      canvas,
-      measuredStore,
-      record.id,
-      progress,
-    );
+    const consume = shrinkRows(header, size, tileBand(size, canvas, measuredStore, record.id, progress));
     let decoder = header.format === "jpeg" ? DECODED : "PNG streaming scanlines";
     async function native() {
       if (header.width * header.height > NATIVE_PIXEL_LIMIT)
@@ -95,18 +95,15 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       try {
         if (bitmap.width !== header.width || bitmap.height !== header.height)
           throw new Error(t("Image metadata does not match decoded dimensions."));
+        const tiles = tileWriter(measuredStore, record.id, progress);
         for (let y = 0; y < header.height; y += TILE_SIZE)
           for (let x = 0; x < header.width; x += TILE_SIZE) {
             canvas.width = Math.min(TILE_SIZE, header.width - x);
             canvas.height = Math.min(TILE_SIZE, header.height - y);
             canvas.getContext("2d")!.drawImage(bitmap, -x, -y);
-            await measuredStore.put(
-              record.id,
-              tileKey(0, x / TILE_SIZE, y / TILE_SIZE),
-              await canvas.convertToBlob({ type: "image/png" }),
-            );
-            progress();
+            await tiles.write(canvas, tileKey(0, x / TILE_SIZE, y / TILE_SIZE));
           }
+        await tiles.flush();
       } finally {
         bitmap.close();
       }
@@ -125,8 +122,8 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
     canvas.width = canvas.height = 1;
     const ready: MapRecord = {
       ...record,
-      width: header.width,
-      height: header.height,
+      ...size,
+      ...(shrunk ? { shrunkFrom: { width: header.width, height: header.height } } : {}),
       levels,
       status: "ready",
       importMs: performance.now() - start,
@@ -142,6 +139,7 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
       message: /quota|disk|space/i.test(message)
         ? t("Not enough device storage. Delete a map or free space and try again.")
         : message,
+      ...(error instanceof Error ? { name: error.name } : {}),
     });
   }
 };

@@ -24,13 +24,16 @@ export function isTextEntry(element: Element | null) {
 export function initKeyboardInset(root = document.documentElement) {
   const viewport = window.visualViewport;
   if (!viewport) return;
-  let frame = 0;
+  let frame = 0, shown: number | undefined;
   const update = () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       const inset = isTextEntry(document.activeElement)
         ? keyboardInset(root.clientHeight, viewport)
         : 0;
+      // Set on the root, it can restyle the whole page; scrolling sends the same value over and over.
+      if (inset === shown) return;
+      shown = inset;
       root.style.setProperty("--keyboard-inset", `${inset}px`);
     });
   };

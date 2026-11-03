@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeLine, lastUsed, nextName, updatedAgo } from "../src/ui/format";
+import { changeLine, lastUsed, nextName, timeLeft, updatedAgo } from "../src/ui/format";
 import type { PlaceChange } from "../src/viewer/navigation";
 
 test("cards say when a map was last opened, or added if never opened", () => {
@@ -52,4 +52,12 @@ test("an edit shows each change as its field, then what it became", () => {
     "a first level has nothing to come from");
   assert.deepEqual(water(2), { field: "Water level", detail: "removed" });
   assert.deepEqual(changeLine({ field: "danger", from: 1, to: 2 }), { field: "Danger level", from: "Moderate", to: "Severe" });
+});
+
+test("a long task estimates the time it has left once there's enough to go on", () => {
+  assert.equal(timeLeft(0.02, 10_000), "", "too early to tell");
+  assert.equal(timeLeft(0.5, 1_000), "", "too soon to tell");
+  assert.equal(timeLeft(0.5, 12_000), "15 s left", "seconds round up to steps of five");
+  assert.equal(timeLeft(0.25, 60_000), "3 min left");
+  assert.equal(timeLeft(0.99, 60_000), "", "nearly done says nothing");
 });

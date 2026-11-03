@@ -1,0 +1,7 @@
+contact_links:
+  - name: Ask a question · Poser une question
+    url: https://github.com/nslvdr/MegaMaps/discussions/new?category=q-a
+    about: How to do something in Mega Maps. · Comment faire quelque chose dans Mega Maps.
+  - name: Suggest a feature · Proposer une idée
+    url: https://github.com/nslvdr/MegaMaps/discussions/new?category=ideas
+    about: Vote on ideas or add yours. · Votez pour des idées ou ajoutez la vôtre.

@@ -1,5 +1,9 @@
 export const TILE_SIZE = 512;
-export const MAX_PIXELS = 300_000_000;
+/** Maps are kept at most this size; larger images are shrunk to fit. */
+export const MAX_PIXELS = 600_000_000;
+export const MAX_SIDE = 32_768;
+/** The JPEG decoder's scratch files stay under 2 GB up to this size. */
+export const MAX_SOURCE_PIXELS = 1_000_000_000;
 export const MAX_FILE_BYTES = 256 * 1024 * 1024;
 export const NATIVE_PIXEL_LIMIT = 16_000_000;
 export type Backend = "opfs" | "indexeddb";
@@ -25,7 +29,10 @@ export interface MapRecord {
   importMs?: number;
   tileBytes?: number;
   decoder?: string;
-  offlineVerifiedAt?: number;
+  /** The original's size, when it was too large and the map was shrunk to fit. */
+  shrunkFrom?: { width: number; height: number };
+  /** The example map new users get, to try things on before importing their own. */
+  example?: true;
   /** SHA-256 of the original image, calculated lazily for sharing. */
   fingerprint?: string;
 }
@@ -43,6 +50,7 @@ export interface ImportProgress {
 export type WorkerReply =
   | { type: "progress"; progress: ImportProgress }
   | { type: "done"; record: MapRecord }
-  | { type: "error"; message: string };
+  /** `name` is the error's own, such as NotReadableError, so the app can explain it. */
+  | { type: "error"; message: string; name?: string };
 export const tileKey = (level: number, x: number, y: number) =>
   `${level}-${x}-${y}.png`;

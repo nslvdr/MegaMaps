@@ -1,4 +1,4 @@
-import { findText, normalizeText, searchOcr, type OcrIndex, type OcrMatch } from "../ocr/index";
+import { findText, findWords, normalizeText, searchOcr, type OcrIndex, type OcrMatch } from "../ocr/index";
 import type { Point } from "./camera";
 import type { MapMarker } from "./navigation";
 
@@ -12,10 +12,14 @@ export function searchMap(index: OcrIndex | undefined, markers: MapMarker[], que
   if (terms) return pairUp(index, terms.map(term => searchMap(index, markers, term)) as [MapSearchMatch[], MapSearchMatch[]]);
   const normalized = normalizeText(query);
   if (!normalized) return [];
-  const places = markers.filter(marker =>
-    findText(normalizeText(`${marker.label} ${marker.description}`), normalized).length,
-  ).map(marker => ({ text: marker.label, polygons: [], marker }));
-  return [...places, ...searchOcr(index, query)];
+  const places = markers.filter(marker => {
+    const text = normalizeText(`${marker.label} ${marker.description}`);
+    return findText(text, normalized).length || !!findWords(text, normalized);
+  }).map(marker => ({ text: marker.label, polygons: [], marker }));
+  // One letter is in nearly every label: its thousands of highlights would stall the
+  // first keystroke and find nothing in particular. A number, such as gallery 5, still does.
+  const text = /^\p{L}$/u.test(normalized) ? [] : searchOcr(index, query);
+  return [...places, ...text];
 }
 
 /** "Allée 25; Allée 55": the two searches of a double search. */

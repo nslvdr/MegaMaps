@@ -37,21 +37,22 @@ async function clear() {
   for (const { id } of await listMaps()) await removeRecord(id);
 }
 
-test("compact and older JPEG maps turn back into PNG tiles one by one, skipping busy maps and not retrying failures", async () => {
+test("compact and older JPEG maps turn back into PNG tiles one by one, skipping busy maps and not retrying failures, except a read the phone refused for a moment", async () => {
   await clear();
-  for (const record of [map("sharp"), map("blurry", CHAINED_JPEG_PARENTS), map("large", PNG_PARENTS), map("compact", CUT), map("broken", CUT), map("failed", UNCUT), map("open", CUT), map("png", "PNG streaming scanlines")])
+  for (const record of [map("sharp"), map("unreadable", CUT), map("blurry", CHAINED_JPEG_PARENTS), map("large", PNG_PARENTS), map("compact", CUT), map("broken", CUT), map("failed", UNCUT), map("open", CUT), map("png", "PNG streaming scanlines")])
     await saveMap(record);
   const { sent, terminated } = fakeWorkers({
     blurry: done(1400), large: done(1500), compact: done(1800), broken: { type: "error", message: "" },
+    unreadable: { type: "error", message: "", name: "NotReadableError" },
   });
   const replaced: string[] = [];
   await startRetiling((id) => id === "open", (id) => replaced.push(id)).done;
-  assert.deepEqual(sent.sort(), ["blurry", "broken", "compact", "large"]);
-  assert.deepEqual(terminated.sort(), ["blurry", "broken", "compact", "large"]);
+  assert.deepEqual(sent.sort(), ["blurry", "broken", "compact", "large", "unreadable"]);
+  assert.deepEqual(terminated.sort(), ["blurry", "broken", "compact", "large", "unreadable"]);
   assert.deepEqual(replaced.sort(), ["blurry", "compact", "large"]);
   assert.deepEqual(await decoders(), {
     sharp: [DECODED, 900], blurry: [DECODED, 1400], large: [DECODED, 1500], compact: [DECODED, 1800],
-    broken: [UNCUT, 900], failed: [UNCUT, 900], open: [CUT, 900], png: ["PNG streaming scanlines", 900],
+    broken: [UNCUT, 900], unreadable: [CUT, 900], failed: [UNCUT, 900], open: [CUT, 900], png: ["PNG streaming scanlines", 900],
   });
 });
 

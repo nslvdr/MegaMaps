@@ -20,14 +20,25 @@ export async function loadPhoto(mapId: string, id: string) {
   return (await transact<StoredPhoto | undefined>("photos", "readonly", (s) => s.get(key(mapId, id))))?.blob;
 }
 
-/** Missing photos are left out rather than failing the whole set. */
+/** Missing photos are left out rather than failing the whole set. One
+ * transaction reads them all, rather than one per photo. */
 export async function loadPhotos(mapId: string, ids: string[]) {
-  const photos = new Map<string, Blob>();
-  for (const id of new Set(ids)) {
-    const blob = await loadPhoto(mapId, id);
-    if (blob) photos.set(id, blob);
-  }
-  return photos;
+  const db = await database();
+  return new Promise<Map<string, Blob>>((resolve, reject) => {
+    const photos = new Map<string, Blob>();
+    const tx = db.transaction("photos");
+    const store = tx.objectStore("photos");
+    for (const id of new Set(ids)) {
+      const request: IDBRequest<StoredPhoto | undefined> = store.get(key(mapId, id));
+      request.onsuccess = () => {
+        if (request.result?.blob) photos.set(id, request.result.blob);
+      };
+    }
+    // Requests complete in order, so the photos keep the order they were asked in.
+    tx.oncomplete = () => resolve(photos);
+    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 /** Imported photos are slices of the picked file; Safari only stores them once copied. */

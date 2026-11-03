@@ -1,0 +1,24 @@
+# Opened from the app's "Report a problem" links, which fill in `title`, `error` and `app`.
+name: Report a problem · Signaler un problème
+description: Something in Mega Maps doesn’t work as it should. · Quelque chose ne marche pas comme prévu.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? · Que s’est-il passé ?
+      description: What you did, what you expected, and what happened instead. Screenshots help. · Ce que vous avez fait, ce que vous attendiez, et ce qui s’est passé. Les captures d’écran aident.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message · Message d’erreur
+      description: Filled in when you report from an error. · Rempli quand vous signalez depuis une erreur.
+      render: text
+  - type: textarea
+    id: app
+    attributes:
+      label: App and device · App et appareil
+      description: Filled in by the app. · Rempli par l’app.
+      render: text

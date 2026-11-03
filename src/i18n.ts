@@ -29,3 +29,14 @@ export function pluralIn(to: Language, count: number, noun: Noun) {
 }
 
 export const plural = (count: number, noun: Noun) => pluralIn(language, count, noun);
+
+/** What went wrong, in words people can act on: a browser's own file and
+ * storage errors are terse, technical and never translated. */
+export function errorMessage(error: unknown) {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "NotReadableError")
+    return t("This file can’t be read. If it’s in a cloud folder, save it to the device first, then try again.");
+  if (name === "QuotaExceededError")
+    return t("Not enough device storage. Delete a map or free space and try again.");
+  return error instanceof Error ? error.message : String(error);
+}

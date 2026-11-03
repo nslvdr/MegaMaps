@@ -1,6 +1,6 @@
 import { language, t } from "../i18n";
 import type { ImportProgress, MapRecord, WorkerReply } from "../types";
-import { readHeader } from "./headers";
+import { mapSize, readHeader } from "./headers";
 import { chooseBackend, deleteStoredMap } from "../storage/payloads";
 import { saveMap } from "../storage/database";
 import { protectStorage } from "../storage/protection";
@@ -17,8 +17,7 @@ export async function importMap(
   const record: MapRecord = {
     id,
     name: file.name,
-    width: header.width,
-    height: header.height,
+    ...mapSize(header.width, header.height),
     bytes: file.size,
     backend: await chooseBackend(),
     levels: [],
@@ -57,7 +56,7 @@ export async function importMap(
         }
         if (message.type === "error") {
           finish();
-          reject(new Error(message.message));
+          reject(Object.assign(new Error(message.message), message.name ? { name: message.name } : {}));
         }
       };
       worker.onerror = () => {

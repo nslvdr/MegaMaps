@@ -57,6 +57,8 @@ export function startRetiling(
       );
       mapId = undefined;
       if (!reply) return;
+      // Phones sometimes can't read a file for a moment; that map is tried on a later run.
+      if (reply.type === "error" && reply.name === "NotReadableError") continue;
       const converted = reply.type === "done" && reply.converted;
       if (converted) replaced(map.id);
       // A failed map keeps its tiles and is not tried again.

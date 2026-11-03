@@ -4,11 +4,12 @@ import { database } from "./database";
 // (Safari's most of all), so Settings adds up what the library actually holds.
 
 async function folderBytes(folder: FileSystemDirectoryHandle): Promise<number> {
-  let total = 0;
+  // A map folder holds thousands of tiles; their sizes are read together, not one by one.
+  const sizes: Promise<number>[] = [];
   for await (const entry of folder.values())
-    total += entry.kind === "file" ? (await (entry as FileSystemFileHandle).getFile()).size
-      : await folderBytes(entry as FileSystemDirectoryHandle);
-  return total;
+    sizes.push(entry.kind === "file" ? (entry as FileSystemFileHandle).getFile().then((file) => file.size)
+      : folderBytes(entry as FileSystemDirectoryHandle));
+  return (await Promise.all(sizes)).reduce((total, size) => total + size, 0);
 }
 
 async function opfsBytes() {

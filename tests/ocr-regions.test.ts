@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { detectorInput } from "../src/ocr/detector";
-import { probabilityRegions } from "../src/ocr/regions";
+import { hasInk, probabilityRegions } from "../src/ocr/regions";
 import { ctcDecode } from "../src/ocr/recognizer";
 
 test("detector preprocessing preserves the model's BGR ordering and normalization", () => {
@@ -57,4 +57,22 @@ test("CTC decoding collapses repeats, keeps blank-separated letters and spans ea
     { text: "e", x0: 64, x1: 72 },
   ]);
   assert.ok(Math.abs(reading.confidence - (0.9 * 3 + 0.6 * 2) / 5) < 1e-6);
+});
+
+test("a section of plain paper skips the detector, while one small label or coloured text keeps it", () => {
+  const paper = (size: number) => {
+    const pixels = new Uint8ClampedArray(size * size * 4);
+    for (let i = 0; i < pixels.length; i += 4) {
+      const grain = 235 + ((i * 7919) % 17);
+      pixels.set([grain, grain - 3, grain - 8, 255], i);
+    }
+    return pixels;
+  };
+  assert.equal(hasInk(paper(64)), false, "scan grain is not ink");
+  const label = paper(64);
+  label.set([40, 40, 40, 255], (30 * 64 + 30) * 4);
+  assert.equal(hasInk(label), true, "a single dark pixel of print is");
+  const red = new Uint8ClampedArray(64 * 64 * 4).fill(128);
+  red.set([200, 90, 100, 255], 0);
+  assert.equal(hasInk(red), true, "colour against a grey of the same brightness is");
 });

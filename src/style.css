@@ -272,12 +272,13 @@ small {
   display: grid;
   gap: var(--space-12);
 }
-/* The preview runs edge to edge down the card's left side. */
+/* The preview runs edge to edge down the card's left side, as tall as it is
+   wide, so it stays square. */
 .map-card {
   display: flex;
   align-items: stretch;
   gap: var(--space-4);
-  min-height: 96px;
+  min-height: 104px;
   padding-right: var(--space-4);
   background: #000;
   border: 1px solid color-mix(in srgb, var(--neon-saved) 22%, transparent);
@@ -428,6 +429,33 @@ small {
   cursor: pointer;
   transition: border-color 0.2s, background-color 0.2s;
 }
+/* Once there's a map of one's own, the example offers to go. */
+.example-done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.example-done[hidden] {
+  display: none;
+}
+.example-done p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--muted);
+}
+.example-done button {
+  flex: 1;
+}
+/* Below the example map, still inviting an import of one's own. */
+.map-list:not(:empty) ~ .empty {
+  margin-top: var(--space-12);
+}
 .empty:hover,
 .dropping .empty {
   border-color: color-mix(in srgb, var(--neon-saved) 50%, transparent);
@@ -460,7 +488,7 @@ small {
   margin: 0;
 }
 .library-footer {
-  margin-top: var(--space-24);
+  margin-top: var(--space-4);
   min-height: var(--icon-button-size);
   padding: var(--space-8) var(--space-16);
   border: 1px solid var(--line);
@@ -505,7 +533,7 @@ small {
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-/* A plane marks the offline line, in its color. */
+/* A plane marks the offline line: lime when ready, red when files are missing. */
 .footer-offline {
   display: inline-flex;
   align-items: center;
@@ -518,11 +546,15 @@ small {
   height: 14px;
 }
 /* The icon says "last update"; a ready update says so itself. */
-#update-hint {
+.update-hint {
   display: none;
 }
 .footer-offline:has([data-state="unavailable"]) {
   color: var(--danger);
+}
+/* Ready offline turns the plane lime; the text stays quiet. */
+.footer-offline:has([data-state="available"]) svg {
+  color: var(--neon-add);
 }
 .footer-updated {
   padding: 0;
@@ -622,12 +654,15 @@ small {
 .settings-icon {
   --k: var(--neon-view);
 }
-#settings-backup .settings-icon,
-#settings-restore .settings-icon {
+.settings-backup .settings-icon,
+.settings-restore .settings-icon {
   --k: var(--neon-saved);
 }
-#settings-storage .settings-icon {
+.settings-storage .settings-icon {
   --k: var(--muted);
+}
+.reset-page .settings-icon {
+  --k: var(--danger);
 }
 .settings-page .share-row-label small:empty {
   display: none;
@@ -660,7 +695,7 @@ small {
   transform: translateY(-50%);
   pointer-events: none;
 }
-/* The one irreversible action stays quiet, apart from the settings it would remove. */
+/* Reset, the way to irreversible actions, stays quiet, apart from the settings. */
 .settings-erase {
   display: flex;
   align-items: center;
@@ -694,12 +729,12 @@ small {
   --k: var(--neon-add);
 }
 /* Held for the debug overlay, so no system callout or selection. */
-#settings-update {
+.settings-update {
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
 }
-#settings-update[data-state="ready"] small {
+.settings-update[data-state="ready"] small {
   color: var(--neon-add);
 }
 /* The backup note lines up with the row labels above it. */
@@ -714,7 +749,7 @@ small {
   color: var(--danger);
 }
 /* The nickname box sits at the row's end, like the choices above it. */
-#settings-name {
+.settings-name {
   flex: 0 1 160px;
   min-width: 0;
   min-height: 40px;
@@ -727,11 +762,11 @@ small {
   font-size: var(--font-size-body);
   transition: border-color 0.15s;
 }
-#settings-name:focus {
+.settings-name:focus {
   border-color: var(--neon-view);
   outline: none;
 }
-#settings-name::placeholder {
+.settings-name::placeholder {
   color: var(--muted);
 }
 
@@ -745,48 +780,21 @@ small {
   align-items: center;
   padding: env(safe-area-inset-top) var(--space-20) max(var(--space-20), env(safe-area-inset-bottom));
 }
-/* A made-up plan, dimmed throughout so the text reads over it. */
+/* The example map, darkened like in the app and dimmed so the text reads over it. */
 .landing-map {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.28;
+}
+.landing-map svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
-  opacity: 0.28;
 }
-.plan-cave path,
-.plan-cave ellipse {
-  fill: none;
-  stroke-linecap: round;
-}
-.cave-wall {
-  stroke: #d8d8d0;
-  stroke-width: 30;
-}
-.cave-wall ellipse {
-  fill: #d8d8d0;
-}
-.cave-floor {
-  stroke: var(--bg);
-  stroke-width: 26;
-}
-.landing-map .cave-floor ellipse {
-  fill: var(--bg);
-}
-.plan-ink {
-  fill: none;
-  stroke: #d8d8d0;
-  stroke-width: 1.2;
-}
-.plan-ink .survey {
-  stroke-dasharray: 2 6;
-}
-.plan-ink text {
-  fill: #d8d8d0;
-  stroke: none;
-  font-family: Georgia, serif;
-  font-size: var(--font-size-small);
-  text-anchor: middle;
+.landing-map > svg:first-child {
+  filter: var(--plan-dark);
 }
 /* Styled like a map label, since it sits on the plan. */
 #landing-language {
@@ -823,6 +831,26 @@ small {
   margin: 0;
   line-height: 1.5;
   color: var(--muted);
+}
+/* What it does, before asking to install it. */
+.landing-points {
+  display: grid;
+  gap: var(--space-8);
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.landing-points li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+.landing-points svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--neon-saved);
 }
 .landing .install-open {
   width: min(100%, var(--surface-max-width));
@@ -1043,6 +1071,23 @@ small {
   }
 }
 
+/* Help & ideas links leave for GitHub, so they end on an external link, not an arrow. */
+.help-link {
+  color: inherit;
+  text-decoration: none;
+}
+.share-row.help-link > svg:last-child {
+  transform: none;
+}
+@media (hover: hover) {
+  .help-link:hover {
+    background: #ffffff0a;
+  }
+}
+.help-link:active {
+  background: #ffffff0f;
+}
+
 /* ---------- Dialogs ---------- */
 /* Phones: a card floating just above the home indicator, within thumb reach,
    like the place card. Wider screens: centered. Dialogs rise in and fade out
@@ -1083,6 +1128,12 @@ dialog[open] {
   transform: none;
   transition-duration: 0.26s;
   transition-timing-function: var(--ease-out);
+}
+/* While a modal is open the page behind it never scrolls, even when a drag
+   starts on the backdrop or on a part of the modal that doesn't scroll.
+   Non-modal dialogs, such as the place card, leave the page usable. */
+html:has(dialog:modal) {
+  overflow: hidden;
 }
 /* Native scroll indicators appear only when modal or panel content overflows. */
 :is(dialog, .sheet-content, .place-details, .share-items) {
@@ -1277,7 +1328,6 @@ dialog .dialog-error {
   margin: var(--space-20) 0 var(--space-12);
   overflow: hidden;
 }
-#progress-fill,
 .progress-fill {
   height: 100%;
   background: var(--accent);
@@ -1291,6 +1341,11 @@ dialog .dialog-error {
   font-size: var(--font-size-small);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+/* The percentage and time left stay on one line; a long step wraps instead. */
+.progress-info > :last-child {
+  flex: none;
+  white-space: nowrap;
 }
 
 /* Main action first and full width; the rest share the row beneath it. */
@@ -1381,8 +1436,14 @@ dialog .dialog-error {
   background: var(--danger);
   color: #1a0703;
 }
-dialog > button {
+dialog > button,
+dialog > a.primary,
+dialog > a.quiet {
   width: 100%;
+}
+dialog > a.primary,
+dialog > a.quiet {
+  text-decoration: none;
 }
 
 /* ⋯ actions: what they act on, then the actions, then Delete apart. */
@@ -1499,10 +1560,10 @@ dialog > button {
 .action-sheet-list + .danger {
   margin-top: var(--space-12);
 }
-#message-dialog .primary {
+#message-dialog .primary,
+#message-report {
   margin-top: var(--space-8);
 }
-
 /* Updates: explain what changes before downloading, then show each step. */
 #update-dialog {
   --accent: var(--neon-view);
@@ -1541,6 +1602,90 @@ dialog > button {
   margin-top: var(--space-2);
   color: var(--accent);
 }
+/* What's new fills the screen: the header stays on top, the lists scroll and
+   Got it stays within thumb reach. */
+dialog#whats-new {
+  --side: max(var(--space-20), (100vw - var(--surface-max-width)) / 2);
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: max(var(--space-12), env(safe-area-inset-top)) max(var(--side), env(safe-area-inset-right))
+    max(var(--space-12), env(safe-area-inset-bottom)) max(var(--side), env(safe-area-inset-left));
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+dialog#whats-new[open] {
+  display: flex;
+  flex-direction: column;
+}
+#whats-new > .dialog-header,
+#whats-new > .whats-new-idea,
+#whats-new > .dialog-actions {
+  flex-shrink: 0;
+}
+#whats-new > .whats-new-idea {
+  margin-top: var(--space-16);
+}
+#whats-new > .whats-new-idea + .dialog-actions {
+  margin-top: var(--space-12);
+}
+#whats-new-sections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+#whats-new-sections::-webkit-scrollbar {
+  width: 6px;
+}
+#whats-new-sections::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: var(--radius-md);
+}
+#whats-new article + article {
+  margin-top: var(--space-24);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--line);
+}
+.whats-new-date {
+  margin: 0 0 var(--space-12);
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+/* What's new: one list per kind of change. */
+#whats-new section + section {
+  margin-top: var(--space-16);
+}
+#whats-new h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-8);
+  color: var(--accent);
+  font-size: var(--font-size-body);
+}
+#whats-new h3 svg {
+  width: 20px;
+  height: 20px;
+}
+.whats-new-arrow {
+  color: var(--accent);
+}
+#whats-new ul {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding-left: var(--space-20);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+}
 .update-progress .progress-track {
   margin-top: var(--space-16);
 }
@@ -1571,7 +1716,7 @@ dialog form > label {
 dialog form > label small {
   opacity: 0.7;
 }
-dialog input:not([type="checkbox"]):not([type="radio"]),
+dialog input:not([type="checkbox"], [type="radio"]),
 dialog select,
 dialog textarea {
   display: block;
@@ -1741,10 +1886,10 @@ dialog input[type="date"]::-webkit-date-and-time-value {
   stroke-width: 1px;
   opacity: 0.55;
 }
-.place-label {
+.map-balloon {
   pointer-events: none;
 }
-.place-label text {
+.map-balloon text {
   fill: var(--text);
   font-family: inherit;
 }
@@ -1787,7 +1932,7 @@ dialog input[type="date"]::-webkit-date-and-time-value {
 .search-field > svg {
   color: var(--c);
 }
-.viewer .glass button:not(#open-saved, #open-add, .search-count):active:not(:disabled) {
+.viewer .glass button:not(.open-saved, .open-add, .search-count):active:not(:disabled) {
   background-color: var(--fill-strong);
 }
 button.glass:active:not(:disabled) {
@@ -1910,6 +2055,7 @@ button.glass:active:not(:disabled) {
 }
 .ocr-percent {
   min-width: 4ch;
+  white-space: nowrap;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -2000,15 +2146,15 @@ button.glass:active:not(:disabled) {
   width: 21px;
   height: 21px;
 }
-#open-saved,
+.open-saved,
 .sheet[data-panel="saved"] {
   --c: var(--neon-saved);
 }
-#open-display,
+.open-display,
 .sheet[data-panel="display"] {
   --c: var(--neon-view);
 }
-#open-search {
+.open-search {
   --c: var(--neon-saved);
 }
 .search-field {
@@ -2036,7 +2182,7 @@ button.glass:active:not(:disabled) {
   height: calc(var(--icon-button-size) - 2 * var(--space-8));
   flex-shrink: 0;
 }
-#map-search {
+.map-search {
   appearance: none;
   -webkit-appearance: none;
   min-width: 0;
@@ -2051,11 +2197,11 @@ button.glass:active:not(:disabled) {
   font: inherit;
   font-size: var(--font-size-body);
 }
-#map-search::-webkit-search-cancel-button,
-#map-search::-webkit-search-decoration {
+.map-search::-webkit-search-cancel-button,
+.map-search::-webkit-search-decoration {
   -webkit-appearance: none;
 }
-#map-search::placeholder {
+.map-search::placeholder {
   color: var(--muted);
 }
 .search-status {
@@ -2156,7 +2302,7 @@ button.glass:active:not(:disabled) {
   width: 20px;
   height: 20px;
 }
-#open-add,
+.open-add,
 .sheet[data-panel="add"],
 .tool-bar,
 .place-card {
@@ -2164,7 +2310,7 @@ button.glass:active:not(:disabled) {
 }
 /* Measure lights up while its tool is open; the line on the map shares its neon
    (MEASURE_COLOR in overlays.ts). */
-#open-measure,
+.open-measure,
 [data-tool="measure"] .tool-bar,
 [data-tool="scale"] .tool-bar {
   --c: var(--neon-measure);
@@ -2174,16 +2320,16 @@ button.glass:active:not(:disabled) {
 }
 /* Trail, like the dot that marks where you are, is red. While a trip is under
    way its chip carries that dot. */
-#open-trail,
+.open-trail,
 .sheet[data-panel="trail"],
 [data-tool="trail"] .tool-bar,
 .trip-card {
   --c: var(--neon-trail);
 }
-#open-trail {
+.open-trail {
   position: relative;
 }
-#open-trail.on-trip::after {
+.open-trail.on-trip::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -2195,7 +2341,7 @@ button.glass:active:not(:disabled) {
   box-shadow: 0 0 0 2px #000;
 }
 /* Rotation always has a mode, so like View it only lights up while open. */
-#open-rotation,
+.open-rotation,
 .sheet[data-panel="rotation"] {
   --c: var(--neon-lock);
 }
@@ -2203,18 +2349,17 @@ button.glass:active:not(:disabled) {
 /* Saved and Add are solid neon buttons; each opens its panel above the pill.
    Placing, drawing or moving swaps the pill for a card with the panels'
    header (icon, title, X), a hint and full-size actions. */
-#open-saved,
-#open-add {
+.dock > :is(.open-saved, .open-add) {
   background: var(--c);
   color: #000;
 }
-#open-saved svg,
-#open-add svg {
+.open-saved svg,
+.open-add svg {
   color: currentColor;
   filter: none;
 }
-#open-saved:active:not(:disabled),
-#open-add:active:not(:disabled) {
+.open-saved:active:not(:disabled),
+.open-add:active:not(:disabled) {
   background: color-mix(in srgb, var(--c) 75%, #fff);
 }
 .dock button:disabled {
@@ -2328,14 +2473,14 @@ button.glass:active:not(:disabled) {
 .place-save > button {
   width: 100%;
 }
-#marker-form > .dialog-actions > :first-child,
+.marker-form > .dialog-actions > :first-child,
 .mark-actions > :first-child {
   flex-basis: 0;
 }
 .mark-actions {
   margin-top: var(--space-16);
 }
-#marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
+.marker-form > .dialog-actions:not(:has(> :not([hidden]))) {
   display: none;
 }
 .place-card[data-mode="view"] {
@@ -3185,13 +3330,13 @@ label.panel-row {
   max-height: none;
 }
 /* Auto and its speeds read as one tinted block while Auto is chosen. */
-.rotation-auto:has(#compass-follow-auto:checked) {
+.rotation-auto:has(> .choice-row input:checked) {
   background: color-mix(in srgb, var(--c) 7%, transparent);
 }
 .rotation-auto > .choice-row:has(input:checked) {
   background: none;
 }
-#speed-field {
+.speed-field {
   padding: 0 var(--space-12) var(--space-12);
 }
 /* Auto's speeds: one pill, the chosen speed lit inside it. */
@@ -3249,7 +3394,7 @@ label.panel-row {
   display: block;
   color: var(--danger);
 }
-#north-field {
+.north-field {
   margin-top: var(--space-12);
 }
 /* Map north: an iOS Clock-style wheel; the band marks the chosen degree. */
@@ -3378,9 +3523,6 @@ label.panel-row {
   height: 20px;
   color: var(--c);
 }
-.spotlight-action svg {
-  color: #ffe27a;
-}
 .panel-action:disabled {
   opacity: 0.35;
 }
@@ -3390,15 +3532,15 @@ label.panel-row {
 }
 
 /* Saved: one black group per section, outlined in that section's colour. */
-#route-list,
+.route-list,
 .section-title.routes {
   --k: var(--kind-route);
 }
-#marker-list,
+.marker-list,
 .section-title.places {
   --k: var(--kind-place);
 }
-#trip-list,
+.trip-list,
 .section-title.trips {
   --k: var(--neon-trail);
 }
@@ -3552,8 +3694,8 @@ label.panel-row {
 /* With a mouse, show which row and which pill button a click will hit. */
 @media (hover: hover) {
   .row-more:hover:not([aria-expanded="true"]) { background: #ffffff12; color: var(--text); }
-  #open-saved:hover:not(:disabled),
-  #open-add:hover:not(:disabled) {
+  .open-saved:hover:not(:disabled),
+  .open-add:hover:not(:disabled) {
     background: color-mix(in srgb, var(--c) 85%, #fff);
   }
   .status-chip:hover:not(:disabled),
@@ -3686,26 +3828,9 @@ label.panel-row {
 .map-overlay.hide-labels .overlay-label {
   display: none;
 }
-/* Highlight: dim the map and pulse opacity for the 4.5-second highlight window. */
-.map-stage.spotlight .map-shade {
-  opacity: 0.8;
-  transition-duration: 0.35s;
-}
-.map-stage.spotlight .map-overlay {
-  opacity: 1 !important;
-}
-.map-stage.spotlight .map-overlay [data-layer],
-.map-stage.spotlight .map-overlay .overlay-label {
-  display: inline;
-}
-.map-stage.spotlight .pin-body,
-.map-stage.spotlight .place-label-body,
-.map-stage.spotlight .route {
-  animation: highlight-pulse 0.8s ease-in-out 0.35s 5;
-}
 /* Jumped to from Saved: two pulses once the glide has landed. */
 .found .pin-body,
-.found .place-label-body,
+.found .map-balloon-body,
 .route.found {
   animation: highlight-pulse 0.7s ease-in-out 0.6s 2;
 }
@@ -3996,11 +4121,11 @@ dialog .share-size { display: flex; justify-content: space-between; gap: var(--s
 /* Import: shared files go only onto maps made from the same image. */
 .share-file { --k: var(--neon-view); }
 .share-heading { margin: var(--space-16) 0 var(--space-8); font-size: var(--font-size-small); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
-#receive-destinations { margin-top: 0; }
-#receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
-#receive-destinations.single { margin-top: var(--space-16); }
-#receive-destinations.single .share-row { cursor: default; background: none; }
-#receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.receive-destinations { margin-top: 0; }
+.receive-destinations .share-row:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, #000); }
+.receive-destinations.single { margin-top: var(--space-16); }
+.receive-destinations.single .share-row { cursor: default; background: none; }
+.receive-destinations input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .receive-thumbnail {
   display: grid;
   place-items: center;
@@ -4036,4 +4161,4 @@ dialog .share-size { display: flex; justify-content: space-between; gap: var(--s
 .share-segments input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .share-segments label:has(input:checked) { color: var(--text); background: color-mix(in srgb, var(--c) 18%, #000); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
 .share-segments .share-segment-danger { --c: var(--danger); }
-dialog #receive-note { margin: var(--space-16) 0 0; }
+dialog .receive-note { margin: var(--space-16) 0 0; }

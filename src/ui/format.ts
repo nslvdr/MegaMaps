@@ -15,6 +15,17 @@ export function formatBytes(bytes: number) {
   return t("{size} GB", { size: size(1024 ** 3) });
 }
 
+/** Roughly how long a task has left, from how far it got in how long; empty
+ * until there's enough to go on, and once it's nearly done. */
+export function timeLeft(fraction: number, elapsedMs: number) {
+  if (fraction < 0.05 || fraction >= 1 || elapsedMs < 3000) return "";
+  const seconds = (elapsedMs * (1 - fraction)) / fraction / 1000;
+  if (seconds < 5) return "";
+  // Whole steps, so the estimate doesn't flicker with every update.
+  if (seconds < 60) return t("{seconds} s left", { seconds: Math.ceil(seconds / 5) * 5 });
+  return t("{minutes} min left", { minutes: Math.round(seconds / 60) });
+}
+
 /** Map names keep their file name in storage; the list hides the extension. */
 export function displayName(name: string) {
   return name.replace(/\.(jpe?g|png|webp)$/i, "") || name;

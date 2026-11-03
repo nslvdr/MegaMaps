@@ -19,7 +19,7 @@ export type OcrReply =
 const MAX_WORKERS = 3;
 const WORKER_MEMORY_GB = 2;
 
-function ocrWorkerCount(sections: number) {
+export function ocrWorkerCount(sections: number) {
   const { hardwareConcurrency, deviceMemory } = navigator as Navigator & {
     deviceMemory?: number;
   };

@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "tests", "scripts/*.ts", "vite.config.ts"]
+  "include": ["src", "tests", "bench", "scripts/*.ts", "vite.config.ts"]
 }

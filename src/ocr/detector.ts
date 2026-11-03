@@ -1,5 +1,5 @@
 import { env, InferenceSession, Tensor } from "onnxruntime-web/wasm";
-import { probabilityRegions } from "./regions";
+import { hasInk, probabilityRegions } from "./regions";
 
 export const sessionOptions: InferenceSession.SessionOptions = {
   executionProviders: ["wasm"],
@@ -53,8 +53,10 @@ export async function createTextDetector(model: string | Uint8Array) {
     async detect(source: OffscreenCanvas) {
       const { width, height } = source;
       const ctx = source.getContext("2d", { willReadFrequently: true })!;
+      const pixels = ctx.getImageData(0, 0, width, height).data;
+      if (!hasInk(pixels)) return [];
       const tensor = detectorInput(
-        ctx.getImageData(0, 0, width, height).data,
+        pixels,
         width,
         height,
         Math.ceil(width / 32) * 32,

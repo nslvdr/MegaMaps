@@ -18,11 +18,20 @@ const choices = {
   "update-install": ["auto", "ask"],
   /** The hidden map overlay: tile borders and live stats. */
   debug: ["off", "on"],
+  /** Whether this device was welcomed on its first launch. */
+  tour: ["new", "seen"],
+  /** Whether removing the example map was offered, once there was a map of one's own. */
+  "example-offer": ["new", "seen"],
 } as const;
 
 export type Preferences = { -readonly [K in keyof typeof choices]: (typeof choices)[K][number] };
 
+/** Choices storage refused to keep, such as when it is full: they last until the app closes. */
+const unsaved = new Map<string, string>();
+
 function stored(key: keyof Preferences) {
+  const kept = unsaved.get(key);
+  if (kept !== undefined) return kept;
   try {
     return localStorage.getItem(`megamaps:${key}`);
   } catch {
@@ -37,6 +46,22 @@ export function preference<K extends keyof Preferences>(key: K): Preferences[K] 
   return (value !== null && allowed.includes(value) ? value : allowed[0]) as Preferences[K];
 }
 
+/** Reset the app: every setting back to its default, so the welcome and the example map come back as on a new install. */
+export function resetPreferences() {
+  unsaved.clear();
+  for (const key of Object.keys(choices)) {
+    try {
+      localStorage.removeItem(`megamaps:${key}`);
+    } catch {}
+  }
+}
+
+/** A choice storage refuses still applies until the app closes, rather than failing what made it. */
 export function setPreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
-  localStorage.setItem(`megamaps:${key}`, value);
+  try {
+    localStorage.setItem(`megamaps:${key}`, value);
+    unsaved.delete(key);
+  } catch {
+    unsaved.set(key, value);
+  }
 }

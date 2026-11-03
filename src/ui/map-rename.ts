@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { errorMessage, t } from "../i18n";
 import { dialogHeader, keepFormOpen, showDialog } from "./dialog";
 import type { MapRecord } from "../types";
 import { icons } from "./icons";
@@ -41,7 +41,7 @@ export function initMapRename(
       await save(mapId, name);
       dialog.close();
     } catch (cause) {
-      error.textContent = cause instanceof Error ? cause.message : String(cause);
+      error.textContent = errorMessage(cause);
       error.hidden = false;
     } finally {
       saving = false;

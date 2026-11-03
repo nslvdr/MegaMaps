@@ -107,6 +107,8 @@ export async function renameMap(id: string, name: string) {
 }
 export const recordTiles = (id: string, patch: Pick<MapRecord, "decoder" | "tileBytes">) =>
   patchMap(id, patch, "Could not save the map’s tiles.");
+export const markExample = (id: string) =>
+  patchMap(id, { example: true }, t("Could not prepare the example map."));
 // The library lists the maps in use first.
 export const markOpened = (id: string, opened = Date.now()) =>
   patchMap(id, { opened }, t("Could not note when the map was opened."));

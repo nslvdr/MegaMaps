@@ -88,6 +88,19 @@ test("worker commits ready only after all tiles, and malformed imports remain re
     );
     await deleteStoredMap(failed);
     assert.ok(!(await listMaps()).some((map) => map.id === "failed"));
+
+    // A file the device stops serving keeps its kind, so the app can explain it.
+    messages.length = 0;
+    const gone = Object.assign(new File([await file.arrayBuffer()], "gone.png"), {
+      slice: () => ({ arrayBuffer: () => Promise.reject(new DOMException("The requested file could not be read", "NotReadableError")) }),
+      arrayBuffer: () => Promise.reject(new DOMException("The requested file could not be read", "NotReadableError")),
+    });
+    const unread = { ...record, id: "unread", name: gone.name };
+    await saveMap(unread);
+    await context.onmessage(new MessageEvent<ImportRequest>("message", { data: { file: gone, record: unread } }));
+    const reply = messages.at(-1);
+    assert.equal(reply?.type === "error" && reply.name, "NotReadableError");
+    await deleteStoredMap(unread);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

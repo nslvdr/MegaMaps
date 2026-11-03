@@ -45,7 +45,7 @@ const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const middle = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 /**
- * Full-screen photos: drag or arrow keys to page, pinch or the wheel to
+ * Full-screen photos: drag to page, pinch or the wheel to
  * zoom, drag to pan a zoomed photo. Every gesture follows the finger; only
  * releases animate, and touching mid-animation picks up where it is.
  */

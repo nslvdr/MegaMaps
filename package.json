@@ -11,15 +11,14 @@
     "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview --host 0.0.0.0",
     "test": "tsx --import ./tests/setup.ts --test tests/*.test.ts",
-    "fixtures": "python3 scripts/generate-fixtures.py",
-    "benchmark": "tsx scripts/benchmark.ts",
-    "benchmark:ocr": "tsx scripts/benchmark-ocr.ts"
+    "bench": "tsx bench/run.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",
     "@types/node": "^24.7.0",
     "fake-indexeddb": "^6.2.5",
     "linkedom": "^0.18.13",
+    "playwright-core": "^1.64.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",

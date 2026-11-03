@@ -1,7 +1,7 @@
 // A filesystem + native-canvas test adapter, not a browser. It exercises the
 // production scanline/tile code; it cannot prove Safari's encoder, GPU, or quotas.
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rm, stat } from "node:fs/promises";
 import {
   openSync,
   closeSync,
@@ -121,6 +121,12 @@ class Directory {
         };
       },
     };
+  }
+  async *values() {
+    for (const entry of await readdir(this.root, { withFileTypes: true }))
+      yield entry.isDirectory()
+        ? Object.assign(new Directory(path.join(this.root, entry.name)), { kind: "directory" as const })
+        : Object.assign(await this.getFileHandle(entry.name), { kind: "file" as const });
   }
   async removeEntry(name: string, options?: { recursive?: boolean }) {
     try {

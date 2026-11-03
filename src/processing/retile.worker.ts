@@ -6,7 +6,7 @@ import { buildParents, tileBand } from "./tiles";
 export type RetileRequest = { map: MapRecord };
 export type RetileReply =
   | { type: "done"; converted: boolean; tileBytes: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; name?: string };
 // Decodes a map into PNG tiles again. Each tile is replaced whole, so a
 // map stopped midway still opens, and a later run starts it again.
 onmessage = async (event: MessageEvent<RetileRequest>) => {
@@ -36,6 +36,7 @@ onmessage = async (event: MessageEvent<RetileRequest>) => {
     postMessage({
       type: "error",
       message: error instanceof Error ? error.message : String(error),
+      ...(error instanceof Error ? { name: error.name } : {}),
     } satisfies RetileReply);
   }
 };

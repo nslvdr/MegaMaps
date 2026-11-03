@@ -16,6 +16,10 @@ const lowMemory = ((navigator as Navigator & { deviceMemory?: number }).deviceMe
 export const TILE_CACHE_BUDGET = (lowMemory ? 24 : 56) * 1024 * 1024;
 /** Decoded tiles a view may need at once; the budget keeps room for their parents. */
 export const MOST_TILES = lowMemory ? 22 : 44;
+/** A screen tile that failed is read again on a later plan, after this long. Phones
+ * can fail a read for a moment (Android's NotReadableError), and a hole should not
+ * stay until the map is reopened. */
+const RETRY_MS = 3000;
 /** A full tile decoded; edge tiles are smaller. */
 const TILE_BYTES = TILE_SIZE * TILE_SIZE * 4;
 // Two decodes in flight and an explicit byte budget. Invisible requests are replaced
@@ -29,7 +33,8 @@ export class TileCache {
   private pending = new Set<string>();
   private wanted = new Set<string>();
   private queue: TileRequest[] = [];
-  private failed = new Set<string>();
+  /** When each screen tile last failed; its error shows once. */
+  private failed = new Map<string, number>();
   private parents = new Set<string>();
   private ahead = new Set<string>();
   private aheadQueue: TileRequest[] = [];
@@ -88,12 +93,13 @@ export class TileCache {
       const entry = this.entries.get(key);
       if (entry) entry.used = performance.now();
     }
+    const now = performance.now();
     this.queue = [...parents, ...tiles].filter((t) => {
-      const key = tileKey(t.level, t.x, t.y);
+      const key = tileKey(t.level, t.x, t.y), failed = this.failed.get(key);
       return (
         !this.entries.has(key) &&
         !this.pending.has(key) &&
-        !this.failed.has(key)
+        (failed === undefined || now - failed > RETRY_MS)
       );
     });
     this.ahead = new Set();
@@ -169,16 +175,18 @@ export class TileCache {
           used: performance.now(),
         });
         this.bytes += bytes;
+        this.failed.delete(key);
         // Off screen, it waits to be drawn without a repaint.
         if (shown) this.invalidate();
       }
     } catch {
       if (this.disposed || generation !== this.generation) return;
       if (this.wanted.has(key)) {
-        this.failed.add(key);
-        this.onError(
-          t("A map tile could not be read. Reopen the map or reimport the original."),
-        );
+        if (!this.failed.has(key))
+          this.onError(
+            t("A map tile could not be read. Reopen the map or reimport the original."),
+          );
+        this.failed.set(key, performance.now());
       } else if (this.parents.has(key) || this.ahead.has(key)) this.aheadFailed.add(key);
     } finally {
       this.active--;

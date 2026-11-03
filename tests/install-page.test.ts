@@ -22,6 +22,8 @@ test("only a home screen launch counts as installed", () => {
 
 function setup(userAgent: string) {
   const { document } = parseHTML(`<html><body>${installMarkup}</body></html>`);
+  // The backdrop's balloons are drawn by the viewer's own code.
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
   const page = document.querySelector<HTMLElement>("#install")!;
   const dialog = document.querySelector<HTMLDialogElement>("#install-dialog")!;
   // Linkedom omits native dialog behavior.

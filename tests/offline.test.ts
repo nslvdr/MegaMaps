@@ -14,7 +14,7 @@ test("generated service worker serves cold offline navigation, worker JS, and co
     await mkdir(path.join(root, "dist/codecs"));
     await mkdir(path.join(root, "dist/ocr"));
     const assets = {
-      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__">offline</html>',
+      "/index.html": '<html><meta name="app-build" content="__APP_BUILD__"><meta name="app-built-at" content="__APP_BUILT_AT__"><meta name="app-release" content="__APP_RELEASE__">offline</html>',
       "/assets/import.worker.js": "worker",
       "/codecs/jpeg.js": "decoder",
       "/codecs/jpeg.wasm": "wasm",
@@ -44,6 +44,13 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       /name="app-built-at" content="([^"]+)"/,
     )?.[1];
     assert.ok(builtAt && Number.isFinite(new Date(builtAt).getTime()));
+    // Named by its Paris build time; the temporary folder has no commit to add.
+    const release = assets["/index.html"].match(/name="app-release" content="([^"]+)"/)?.[1];
+    const paris = new Intl.DateTimeFormat("fr-FR", {
+      timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short",
+    }).format(new Date(builtAt));
+    const [, day, month, year, hour, minute] = paris.match(/(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/)!;
+    assert.equal(release, `${year}.${month}.${day}-${hour}.${minute}`);
     const listeners = new Map<string, (event: unknown) => void>();
     const stores = new Map<string, Map<string, Response>>();
     let network = 0,
@@ -256,9 +263,11 @@ test("generated service worker serves cold offline navigation, worker JS, and co
       ),
     );
     stores.values().next().value!.delete("/codecs/jpeg.wasm");
+    stores.values().next().value!.set("/ocr/pp-ocrv5-mobile-det.onnx", new Response(""));
     assert.deepEqual(
-      Array.from((await checkShell()).missing, (value) => String(value)),
-      ["/codecs/jpeg.wasm"],
+      Array.from((await checkShell()).missing, (value) => String(value)).sort(),
+      ["/codecs/jpeg.wasm", "/ocr/pp-ocrv5-mobile-det.onnx"],
+      "a missing file and an empty one both count as missing",
     );
     assert.equal((await checkShell()).ready, false);
   } finally {

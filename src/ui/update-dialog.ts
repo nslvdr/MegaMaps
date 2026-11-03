@@ -2,7 +2,7 @@ import { dialogHeader, showDialog } from "./dialog";
 import type { AppUpdate, DownloadProgress } from "../app-update";
 import { formatBytes } from "./format";
 import { icons } from "./icons";
-import { locale, t } from "../i18n";
+import { locale, t, errorMessage } from "../i18n";
 
 export const updateDialogMarkup = `<dialog id="update-dialog" aria-labelledby="update-title" aria-describedby="update-body">${dialogHeader("update-title", "", icons.update, "update-dismiss")}<p id="update-body"></p><ul class="update-facts" id="update-facts" hidden></ul><div class="update-progress" id="update-progress" hidden><div class="progress-track" role="progressbar" aria-labelledby="update-step" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" id="update-fill"></div></div><div class="progress-info" aria-live="polite"><span id="update-step"></span><span id="update-percent"></span></div></div><p class="dialog-note" id="update-note" hidden></p><div class="dialog-actions" id="update-actions"><button class="primary" id="update-confirm"></button></div></dialog>`;
 
@@ -93,7 +93,7 @@ export function initUpdateDialog(dialog: HTMLDialogElement, actions: UpdateActio
     view("error", {
       icon: icons.close,
       title: t("Couldn’t update Mega Maps"),
-      body: error instanceof Error ? error.message : String(error),
+      body: errorMessage(error),
       note: t("You can keep using this version and try again later. Your maps, places and routes are unchanged."),
       confirm: [icons.rotateRight, t("Try again"), () => void check()],
       dismiss: t("Close"),

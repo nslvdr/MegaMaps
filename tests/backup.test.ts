@@ -8,6 +8,7 @@ import { loadOcr, saveOcr } from "../src/storage/ocr";
 import { deleteAllData, deleteStoredMap, payloadStore } from "../src/storage/payloads";
 import { loadPhoto, savePhoto } from "../src/storage/photos";
 import { loadSetting, saveSetting } from "../src/storage/settings";
+import { preference, resetPreferences, setPreference } from "../src/preferences";
 import { defaultNavigation } from "../src/viewer/navigation";
 import type { MapRecord } from "../src/types";
 
@@ -74,6 +75,27 @@ test("a backup restores every map's places, routes, photos, view and text detect
   assert.equal(rebuilt.length, 2);
 });
 
+test("the example map comes back as the example, and only where there is none", async () => {
+  for (const map of await listMaps()) await deleteStoredMap(map);
+  await saveMap({ ...record("example", "Example quarry"), example: true });
+  await payloadStore("indexeddb").put("example", "original", image("example"));
+  await saveMap(record("own", "Own quarry"));
+  await payloadStore("indexeddb").put("own", "original", image("own"));
+  const backup = await readBackup((await createBackup()).file);
+
+  // This device made its own example, under another id.
+  for (const map of await listMaps()) await deleteStoredMap(map);
+  await saveMap({ ...record("local-example", "Example quarry"), example: true });
+  assert.deepEqual(await restoreBackup(backup, () => {}, new AbortController().signal, create), { added: 1, kept: 1 });
+  assert.deepEqual((await listMaps()).map(({ id, example }) => ({ id, example })).sort((a, b) => a.id.localeCompare(b.id)),
+    [{ id: "local-example", example: true }, { id: "own", example: undefined }]);
+
+  for (const map of await listMaps()) await deleteStoredMap(map);
+  await restoreBackup(backup, () => {}, new AbortController().signal, create);
+  assert.equal((await listMaps()).find((map) => map.id === "example")?.example, true);
+  for (const map of await listMaps()) await deleteStoredMap(map);
+});
+
 test("an in-memory copy keeps every byte and the type of a large picked file", async () => {
   const bytes = new Uint8Array(9 * 1024 * 1024 + 5).map((_, index) => index % 251);
   const copy = await inMemory(new File([bytes], "map.jpg", { type: "image/jpeg" }).slice(3, bytes.length, "image/jpeg"));
@@ -103,6 +125,7 @@ test("a backup is due once a month has passed with maps added or opened since th
   const now = 100 * 86_400_000;
   const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
   assert.equal(backupDue([], undefined, now), false, "nothing to back up yet");
+  assert.equal(backupDue([{ ...map, example: true }], undefined, now), false, "the example map holds nothing to lose");
   assert.equal(backupDue([map], undefined, now), true, "never backed up");
   assert.equal(backupDue([map], now - BACKUP_INTERVAL + 1, now), false, "the last backup is recent");
   assert.equal(backupDue([map], now - BACKUP_INTERVAL, now), true, "the map was opened after an old backup");
@@ -131,4 +154,16 @@ test("deleting everything removes every map with its data and the saved settings
   assert.equal((await loadNavigation("west")).markers.length, 0);
   assert.equal(await loadSetting("share-name"), undefined);
   assert.equal(await loadSetting("last-backup"), undefined);
+});
+
+test("resetting the settings makes the app new again but keeps the same device", () => {
+  setPreference("label-size", "large");
+  setPreference("tour", "seen");
+  localStorage.setItem("megamaps:stats-id", "device");
+  localStorage.setItem("megamaps:changelog-seen", "abc1234");
+  resetPreferences();
+  assert.equal(localStorage.getItem("megamaps:label-size"), null);
+  assert.equal(preference("tour"), "new", "the welcome and the example map come back");
+  assert.equal(localStorage.getItem("megamaps:stats-id"), "device", "stats keep counting the same device");
+  assert.equal(localStorage.getItem("megamaps:changelog-seen"), "abc1234");
 });

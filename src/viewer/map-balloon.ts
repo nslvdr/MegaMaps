@@ -1,15 +1,15 @@
 import type { Point, Size } from "./camera";
 import type { CalloutBounds, CalloutLayout } from "./callout-layout";
 import { PIN_CASING, PLACE_PIN, waterColors } from "../ui/place-icon";
-import { markerCalloutIcon } from "../ui/icons";
+import { icons, markerCalloutIcon } from "../ui/icons";
 import { placeColor, type MapMarker } from "./navigation";
 
 const NS = "http://www.w3.org/2000/svg";
 /** The spring between pin (0) and open balloon (1): it opens in about a third
  * of a second with a slight overshoot, and closes as quickly. */
 const STIFFNESS = 320, DAMPING = 25;
-/** The teardrop head's radius and its casing, in the same units as PLACE_PIN. */
-const HEAD_RADIUS = 10.5, CASING = 1.15;
+/** The casing around a closed balloon's head. */
+const CASING = 1.15;
 /** As `body` in style.css: labels are measured before they're on screen. */
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const CHIP = "#080c0c";
@@ -54,10 +54,27 @@ const set = (element: Element, attributes: Record<string, number | string>) => {
 /** A moving place's balloon is raised, larger than the others; the selected one opens over the pins beside it. */
 export type Lift = "" | "raised" | "selected";
 
-/** A place's name in a balloon that grows out of its pin: its tail ends on
- * the place and its head holds the symbol. It opens above or below its place,
+/** What a balloon's head shows, and the pin it grows out of: its head's
+ * centre is `head` pixels above the point, `radius` wide. */
+export interface BalloonSymbol {
+  color: string;
+  icon: string;
+  water?: MapMarker["water"];
+  pin: { head: number; radius: number };
+}
+/** A place's teardrop pin: its head sits above the place. */
+export const placeSymbol = (place: Pick<MapMarker, "kind" | "water" | "danger">): BalloonSymbol => ({
+  color: placeColor(place), icon: markerCalloutIcon(place.kind),
+  water: place.kind === "flooded" ? place.water : undefined,
+  pin: { head: PLACE_PIN.head, radius: 10.5 },
+});
+/** A route's round start pin, centred on its first point. */
+export const routeSymbol = (color: string): BalloonSymbol => ({ color, icon: icons.route, pin: { head: 0, radius: 8.7 } });
+
+/** A place's or route's name in a balloon that grows out of its pin: its tail
+ * ends on the point and its head holds the symbol. It opens above or below its point,
  * or else to the right or the left, or else diagonally. Names only ever use textContent. */
-export class PlaceLabel {
+export class MapBalloon {
   readonly element = document.createElementNS(NS, "g");
   private parts: Record<"textClip" | "casing" | "outline" | "fill" | "head" | "text", SVGElement> &
     Partial<Record<"headClip" | "water" | "icon", SVGElement>>;
@@ -72,15 +89,15 @@ export class PlaceLabel {
   private lift: Lift = "";
   private rendered = "";
 
-  /** `pin` is the place's pin, which the balloon takes the place of while open. */
-  constructor(private place: Pick<MapMarker, "kind" | "water" | "danger">, private pin?: SVGElement) {
-    const color = placeColor(place), id = ++clips;
-    const water = place.kind === "flooded" && place.water
-      ? `<clipPath id="place-label-head-${id}"><circle/></clipPath><rect class="water" clip-path="url(#place-label-head-${id})" fill="${waterColors[place.water]}"/>`
+  /** `pin` is the pin, which the balloon takes the place of while open. */
+  constructor(private symbol: BalloonSymbol, private pin?: SVGElement) {
+    const { color, water: level } = symbol, id = ++clips;
+    const water = level
+      ? `<clipPath id="map-balloon-head-${id}"><circle/></clipPath><rect class="water" clip-path="url(#map-balloon-head-${id})" fill="${waterColors[level]}"/>`
       : "";
-    this.element.setAttribute("class", "place-label");
-    // The body pulses with its pin when the place is found (see .found in style.css).
-    this.element.innerHTML = `<g class="place-label-body"><clipPath id="place-label-text-${id}"><rect/></clipPath><path class="casing" fill="${PIN_CASING}" stroke="${PIN_CASING}" stroke-width="7" stroke-linejoin="round"/><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${markerCalloutIcon(place.kind)}<text clip-path="url(#place-label-text-${id})" font-weight="600"/></g>`;
+    this.element.setAttribute("class", "map-balloon");
+    // The body pulses with its pin when the item is found (see .found in style.css).
+    this.element.innerHTML = `<g class="map-balloon-body"><clipPath id="map-balloon-text-${id}"><rect/></clipPath><path class="casing" fill="${PIN_CASING}" stroke="${PIN_CASING}" stroke-width="7" stroke-linejoin="round"/><path class="outline" fill="${color}" stroke="${color}" stroke-width="3" stroke-linejoin="round"/><path class="fill" fill="${CHIP}"/><circle class="head" fill="${color}"/>${water}${symbol.icon}<text clip-path="url(#map-balloon-text-${id})" font-weight="600"/></g>`;
     const part = (selector: string) => this.element.querySelector<SVGElement>(selector) ?? undefined;
     this.parts = {
       textClip: part("clipPath rect")!, casing: part(".casing")!, outline: part(".outline")!, fill: part(".fill")!,
@@ -104,7 +121,7 @@ export class PlaceLabel {
 
   /** Takes over a balloon for the same place, when overlays rebuild. */
   follow(previous: unknown) {
-    if (!(previous instanceof PlaceLabel)) return;
+    if (!(previous instanceof MapBalloon)) return;
     this.open = previous.open;
     this.side = previous.side;
     this.speed = previous.speed;
@@ -134,15 +151,7 @@ export class PlaceLabel {
       return false;
     }
     const size = this.measure(lift === "raised", Math.max(60, Math.min(220, viewport.width - 120)));
-    // The body, and the tail's line from the place to it.
-    const room = (side: Side) => {
-      const u = toward(side), along = TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2;
-      const x = tip.x + u.x * along + (u.diagonal ? side.x * (size.width - size.height) / 2 : 0), y = tip.y + u.y * along;
-      return {
-        body: { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
-        tail: { from: tip, to: { x: tip.x + u.x * TAIL, y: tip.y + u.y * TAIL } },
-      };
-    };
+    const room = (side: Side) => this.room(tip, side, size);
     const claim = (side: Side) => {
       const { body, tail } = room(side);
       return layout.claim(body, tail, own);
@@ -195,20 +204,44 @@ export class PlaceLabel {
     return this.open !== target;
   }
 
+  /** Draws it open at once on its first free side, or not at all: for a still
+   * picture of the map, such as the landing page's. */
+  still(tip: Point, layout: CalloutLayout, own: CalloutBounds[] = []) {
+    const size = this.measure(false, 220);
+    const side = SIDES.find(side => {
+      const { body, tail } = this.room(tip, side, size);
+      return layout.claim(body, tail, own);
+    });
+    if (!side) return;
+    this.element.removeAttribute("hidden");
+    this.element.setAttribute("transform", `translate(${tip.x.toFixed(1)},${tip.y.toFixed(1)})`);
+    this.render(1, side, 1, size);
+  }
+
+  /** The body on a side of its point, and the tail's line from the point to it. */
+  private room(tip: Point, side: Side, size: NonNullable<MapBalloon["size"]>) {
+    const u = toward(side), along = TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2;
+    const x = tip.x + u.x * along + (u.diagonal ? side.x * (size.width - size.height) / 2 : 0), y = tip.y + u.y * along;
+    return {
+      body: { left: x - size.width / 2, right: x + size.width / 2, top: y - size.height / 2, bottom: y + size.height / 2 },
+      tail: { from: tip, to: { x: tip.x + u.x * TAIL, y: tip.y + u.y * TAIL } },
+    };
+  }
+
   // The shape between a round head (0), a pin's head swung to the balloon's
   // side, and the open balloon (1).
-  private render(open: number, side: Side, scale: number, size: NonNullable<PlaceLabel["size"]>) {
+  private render(open: number, side: Side, scale: number, size: NonNullable<MapBalloon["size"]>) {
     const key = `${open.toFixed(3)} ${side.x} ${side.y} ${scale} ${size.width} ${size.height} ${size.text}`;
     if (key === this.rendered) return;
     this.rendered = key;
     const between = (from: number, to: number) => from + (to - from) * open;
-    const start = (HEAD_RADIUS + CASING) * scale;
+    const { pin } = this.symbol, start = (pin.radius + CASING) * scale;
     const half = between(start, size.height / 2), width = between(start * 2, size.width), flat = width / 2 - half;
     // How far the body's center, or a diagonal tail's cap, is from the place, along the tail.
-    const u = toward(side), reach = between(PLACE_PIN.head * scale, TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2);
+    const u = toward(side), reach = between(pin.head * scale, TAIL + (side.x && !u.diagonal ? size.width : size.height) / 2);
     const cx = u.x * reach + (u.diagonal ? side.x * flat : 0), cy = u.y * reach;
     const left = cx - width / 2, top = cy - half;
-    const head = { x: left + half, y: cy, r: Math.max(0, between((HEAD_RADIUS - CASING) * scale, size.height / 2 - 4)) };
+    const head = { x: left + half, y: cy, r: Math.max(0, between((pin.radius - CASING) * scale, size.height / 2 - 4)) };
     const { textClip, casing, outline, fill, head: disc, text, headClip, water, icon } = this.parts;
     // The tail runs from inside the body to the place, in the place's colour
     // like its pin; the body's dark fill is drawn over the outline, so only
@@ -228,8 +261,8 @@ export class PlaceLabel {
     set(fill, { d: body });
     set(disc, { cx: head.x, cy: head.y, r: head.r });
     if (headClip) set(headClip, { cx: head.x, cy: head.y, r: head.r });
-    if (water && this.place.water) {
-      const surface = head.y + head.r - head.r * 2 * this.place.water / 3.4;
+    if (water && this.symbol.water) {
+      const surface = head.y + head.r - head.r * 2 * this.symbol.water / 3.4;
       set(water, { x: head.x - head.r, y: surface, width: head.r * 2, height: head.y + head.r - surface });
     }
     if (icon) set(icon, { x: head.x - head.r * 0.62, y: head.y - head.r * 0.62, width: head.r * 1.24, height: head.r * 1.24 });

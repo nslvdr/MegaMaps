@@ -20,19 +20,26 @@ const project = (match: MapSearchMatch, camera: Camera) => {
 };
 
 // Every match gets a callout; screen-space layout stays legible while exploring.
+let overlays = 0;
 export class SearchOverlay {
   private matches: MapSearchMatch[] = [];
   private holes: SVGPolygonElement[][] = [];
   private placeHoles: SVGCircleElement[][] = [];
   private highlights: SVGGElement[] = [];
+  /** Each highlight's locator line, kept so frames needn't look it up. */
+  private connectors: SVGLineElement[] = [];
+  private mask!: SVGMaskElement;
   private callouts: MapCallout[] = [];
   private shown: boolean[] = [];
   private active = false;
   private selected = 0;
   constructor(private svg: SVGSVGElement) {
+    // Its own mask id, so another overlay on the page never borrows it.
+    const id = ++overlays;
     svg.innerHTML =
-      '<defs><mask id="map-search-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"><rect width="100%" height="100%" fill="white"/></mask></defs><rect width="100%" height="100%" fill="black" fill-opacity="0.55" mask="url(#map-search-mask)"/><g class="search-highlights"></g>';
+      `<defs><mask id="map-search-mask-${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"><rect width="100%" height="100%" fill="white"/></mask></defs><rect width="100%" height="100%" fill="black" fill-opacity="0.55" mask="url(#map-search-mask-${id})"/><g class="search-highlights"></g>`;
     svg.setAttribute("hidden", "");
+    this.mask = svg.querySelector("mask")!;
   }
   set(matches: MapSearchMatch[], active: boolean, selected = 0) {
     this.active = active;
@@ -50,7 +57,7 @@ export class SearchOverlay {
     this.shown = [];
     for (const hole of this.holes.flat()) hole.remove();
     for (const hole of this.placeHoles.flat()) hole.remove();
-    const mask = this.svg.querySelector("mask")!;
+    const mask = this.mask;
     this.holes = matches.map(match => match.polygons.map(() => {
       const polygon = document.createElementNS(NS, "polygon");
       polygon.setAttribute("fill", "black");
@@ -71,6 +78,7 @@ export class SearchOverlay {
     const highlights = this.svg.querySelector(".search-highlights")!;
     highlights.replaceChildren();
     this.callouts = [];
+    this.connectors = [];
     this.highlights = matches.map(match => {
       const group = document.createElementNS(NS, "g");
       group.setAttribute("class", "search-highlight");
@@ -81,6 +89,7 @@ export class SearchOverlay {
         match.marker ? placeColor(match.marker) : undefined);
       callout.setText(match.text);
       this.callouts.push(callout);
+      this.connectors.push(connector);
       group.append(connector, callout.element);
       highlights.append(group);
       return group;
@@ -108,9 +117,8 @@ export class SearchOverlay {
     const labels = layout ?? new CalloutLayout(viewport);
     if (!layout) this.reserve(camera, labels);
     this.svg.setAttribute("viewBox", `0 0 ${viewport.width} ${viewport.height}`);
-    const mask = this.svg.querySelector("mask")!;
     for (const [name, value] of Object.entries({ x: 0, y: 0, width: viewport.width, height: viewport.height }))
-      mask.setAttribute(name, String(value));
+      this.mask.setAttribute(name, String(value));
     // Prioritize the selected result, then use the remaining space for all other matches.
     const order = this.matches.map((_, index) => index);
     if (this.selected > 0 && this.selected < order.length)
@@ -121,8 +129,8 @@ export class SearchOverlay {
       // a common word would otherwise update hundreds of unseen cut-outs.
       const shown = !!target && target.bounds.right >= -8 && target.bounds.bottom >= -8 &&
         target.bounds.left <= viewport.width + 8 && target.bounds.top <= viewport.height + 8;
-      const highlight = this.highlights[index]!, callout = this.callouts[index]!;
-      const connector = highlight.querySelector("line")!;
+      const callout = this.callouts[index]!;
+      const connector = this.connectors[index]!;
       if (shown !== this.shown[index]) {
         this.shown[index] = shown;
         for (const hole of this.holes[index]!) hole.toggleAttribute("hidden", !shown);

@@ -86,6 +86,9 @@ test("OCR search matches accents, phrases, and partial words without revealing u
   assert.deepEqual(searchOcr(index, "nord")[0]?.polygons, [polygon(100)]);
   assert.equal(searchOcr(index, "nord")[0]?.text, "Église du Nord", "callouts read the whole line");
   assert.equal(searchOcr(index, "unknown").length, 0);
+  assert.deepEqual(searchOcr(index, "nord eglise")[0]?.polygons, [polygon(0), polygon(100)],
+    "words typed in another order find the line holding them all");
+  assert.equal(searchOcr(index, "nord sud").length, 0, "every word must be there");
   assert.equal(ocrLabelAt(index, { x: 60, y: 37 }), "Église du Nord", "a place dropped on a label takes its name");
   assert.equal(ocrLabelAt(index, { x: 45, y: 37 }), "Église du Nord", "between its words still counts");
   assert.equal(ocrLabelAt(index, { x: 60, y: 60 }), undefined, "open map keeps the numbered name");

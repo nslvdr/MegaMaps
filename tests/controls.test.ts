@@ -194,8 +194,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     click("open-saved");
     // Empty Saved lists show their status without offering their own button.
     for (const [id, message] of [
-      ["marker-list", "No places yet."],
-      ["route-list", "No routes yet."],
+      ["marker-list", "No places yet. Hold the map to add one."],
+      ["route-list", "No routes yet. Tap Add, then Route."],
     ] as const) {
       assert.equal(el(id).querySelector(".empty-list")!.textContent, message);
       assert.equal(el(id).querySelector("button"), null);
@@ -444,11 +444,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("reset-rotation").hidden, false);
     click("close-sheet");
     assert.equal(el("reset-rotation").hidden, true, "reset belongs to the Rotation panel");
-
-    // Highlight with nothing saved is unavailable instead of animating.
-    assert.equal((el("spotlight") as HTMLButtonElement).disabled, true);
-    click("spotlight");
-    assert.equal(stage.classList.contains("spotlight"), false);
 
     // Places: pick Place, tap the map, save the prefilled card.
     click("open-add");
@@ -886,13 +881,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(popover(), null, "deleting closes the sheet");
     assert.equal(el("toast").textContent, "Exit plan deleted");
 
-    // Layers hide/show and the highlight briefly reveals everything.
+    // Layers hide/show.
     assert.equal(el("layer-places-count").textContent, "1");
     check("layer-places", false);
     assert.equal(state.layers.places, false);
-    click("spotlight");
-    assert.equal(stage.classList.contains("spotlight"), true);
-    assert.equal(el("spotlight").classList.contains("active"), true);
 
     // Search stays usable while OCR runs, then reveals every matching location.
     t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -908,7 +900,11 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").parentElement, el("map-search").parentElement);
     assert.equal(el("search-count").hidden, true);
     assert.equal(el("sheet-dismiss").hidden, true, "search leaves the canvas available for gestures");
+    controls.updateOcr(undefined, "Detecting map text · 10%", 0.1, "4 min left");
+    assert.equal(el("ocr-percent").textContent, "10% · 4 min left", "the scan's time left shows beside its percentage");
+    assert.equal(el("ocr-progress").hidden, false);
     controls.updateOcr(undefined, "Detecting map text · 10%");
+    assert.equal(el("ocr-progress").hidden, true);
     input("map-search", "north");
     el("map-search").dispatchEvent(new window.Event("input"));
     assert.equal(highlights?.active, false, "no masking before OCR is ready");
@@ -977,6 +973,7 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     const secondPolygon = polygon.map(({ x, y }) => ({ x: x + 500, y }));
     const multiple = {
       ...index,
+      completedAt: 2,
       lines: [...index.lines, {
         text: "North entrance", confidence: 90,
         words: [{ text: "North", polygon: secondPolygon }],
@@ -995,6 +992,8 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     controls.updateOcr(multiple, "Detecting map text · 30%");
     assert.equal(highlights?.selected, 1, "OCR progress preserves the overlay selection");
     assert.equal(el("search-count").textContent, "2 / 2", "progress keeps the current match");
+    controls.updateOcr(structuredClone(multiple));
+    assert.equal(el("search-count").textContent, "2 / 2", "the same scan read again from storage keeps the current match");
     key(el("map-search"), "Enter");
     assert.deepEqual(framed.at(-1), polygon, "next wraps to the first match");
     // The count steps on once the keyboard is away.
@@ -1021,13 +1020,18 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     assert.equal(el("search-count").textContent, "No matches");
     assert.equal(el("search-count").hidden, false);
     assert.equal((el("search-count") as HTMLButtonElement).disabled, true, "nothing to step to");
+    input("map-search", "q");
+    el("map-search").dispatchEvent(new window.Event("input"));
+    t.mock.timers.tick(200);
+    assert.match(el("search-status").textContent!, /^Keep typing to search the map’s text\./,
+      "one letter searches only saved places, and says so");
     // A double search keeps the results of both searches that meet.
     input("map-search", "north; south");
     el("map-search").dispatchEvent(new window.Event("input"));
     t.mock.timers.tick(200);
     assert.equal(el("search-count").textContent, "No matches");
     const southPolygon = polygon.map(({ x, y }) => ({ x, y: y + 30 }));
-    controls.updateOcr({ ...multiple, lines: [...multiple.lines,
+    controls.updateOcr({ ...multiple, completedAt: 3, lines: [...multiple.lines,
       { text: "South", confidence: 90, words: [{ text: "South", polygon: southPolygon }] }] });
     assert.equal(el("search-count").textContent, "1 match");
     assert.deepEqual(highlights?.matches[0]?.midpoint, { x: 140, y: 225 });
@@ -1203,7 +1207,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
     controls.dispose();
     await controls.flush();
   }
-  assert.equal(stage.classList.contains("spotlight"), false);
 });
 
 test("place details read long descriptions safely", async () => {
@@ -1424,6 +1427,17 @@ test("place photos lead the details as a carousel and are removed from the edit 
     el("marker-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
     assert.equal(state.markers[0]!.photos, undefined);
     assert.equal(carousel.hidden, true);
+
+    const revoke = URL.revokeObjectURL, revoked: string[] = [];
+    URL.revokeObjectURL = (url) => { revoked.push(url); revoke(url); };
+    try {
+      await controls.dispose();
+      // Each photo is let go once its read settles, which a busy machine delays.
+      for (let waited = 0; revoked.length < 2 && waited < 2000; waited += 10) await loaded();
+    } finally {
+      URL.revokeObjectURL = revoke;
+    }
+    assert.equal(revoked.length, 2, "leaving the map with the card open lets go of its photos");
   } finally {
     await controls.dispose();
   }
@@ -2172,6 +2186,45 @@ test("a map reopened in Compass mode asks for the compass again on the first tap
     assert.equal(orientations.at(-1), -Math.PI / 2, "the map follows the phone again");
     tap();
     assert.equal(asked, 1, "only the first tap asks");
+  } finally {
+    await controls.dispose();
+  }
+});
+
+test("dark map, brightness and layers restyle the map without rebuilding its places", async () => {
+  const { window, document } = parseHTML(
+    `<html><body><section id="viewer">${viewerMarkup}</section></body></html>`,
+  );
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  Object.defineProperty(globalThis, "window", { value: window, configurable: true });
+  for (const dialog of document.querySelectorAll("dialog"))
+    Object.defineProperty(dialog, "close", { value: () => dialog.removeAttribute("open") });
+  const map: MapRecord = {
+    id: "restyle", name: "quarry.png", width: 1000, height: 1000,
+    bytes: 1, backend: "indexeddb", created: 0, status: "ready", levels: [],
+  };
+  const state = defaultNavigation(map.id);
+  let rebuilds = 0, restyles = 0;
+  const controls = new ViewerControls(document.querySelector<HTMLElement>("#viewer")!, map, state);
+  controls.attach({
+    setTool() {}, fitPoints() {}, jumpTo() {},
+    updateNavigation() { rebuilds++; },
+    restyle() { restyles++; },
+  });
+  const toggle = (id: string) => {
+    const input = document.getElementById(id) as HTMLInputElement;
+    input.checked = !input.checked;
+    input.dispatchEvent(new window.Event("change"));
+  };
+  try {
+    toggle("dark-map");
+    toggle("brightness-75");
+    toggle("layer-labels");
+    assert.equal(restyles, 3);
+    assert.equal(rebuilds, 0);
+    assert.equal(state.inverted, !defaultNavigation(map.id).inverted);
+    assert.equal(state.dimming, 0.75);
+    assert.equal(state.layers.labels, false);
   } finally {
     await controls.dispose();
   }

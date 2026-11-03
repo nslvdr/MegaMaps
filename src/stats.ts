@@ -9,14 +9,18 @@ const ENDPOINT = "https://eu.i.posthog.com/batch/";
 const QUEUE = "megamaps:stats-queue", ID = "megamaps:stats-id";
 const SESSION = "megamaps:stats-session", VERSION = "megamaps:stats-version";
 /** Older events drop first, so a long trip offline can't fill storage. */
-const MAX_QUEUED = 500, BATCH = 100;
+const MAX_QUEUED = 500, BATCH = 50;
+/** Browsers refuse a keepalive request over 64 KB, and the device and person
+ * properties added on the way out roughly double each event, so a batch's
+ * events stay well under half of that. */
+const BATCH_BYTES = 24 * 1024;
 /** Away this long, coming back starts a new session. */
 const SESSION_GAP = 30 * 60_000;
 /** A crash in a loop would otherwise fill the queue. */
 const MAX_ERRORS = 10;
 
 type Value = string | number | boolean | Value[] | { [key: string]: Value };
-type Properties = Record<string, Value>;
+export type Properties = Record<string, Value>;
 interface StatEvent { event: string; uuid: string; timestamp: string; properties: Properties }
 
 interface UserAgentData {
@@ -206,8 +210,14 @@ export async function sendStats(): Promise<void> {
     await sending;
     return sendStats();
   }
-  const batch = queued().slice(0, BATCH);
+  const waiting = queued(), batch: StatEvent[] = [];
+  let bytes = 0;
+  for (const entry of waiting.slice(0, BATCH)) {
+    bytes += JSON.stringify(entry).length;
+    if (batch.length && bytes > BATCH_BYTES) break;
+    batch.push(entry);
+  }
   if (!batch.length) return;
   sending = sendBatch(batch).finally(() => { sending = undefined; });
-  if (await sending && batch.length === BATCH) await sendStats();
+  if (await sending && batch.length < waiting.length) await sendStats();
 }

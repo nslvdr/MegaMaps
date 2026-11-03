@@ -84,6 +84,24 @@ function minimumRegion(
   return best;
 }
 
+/** Within this many levels, a section's pixels are one colour: paper and scan
+ * noise, but no ink. On two real quarry scans, empty sections span under 32 and all others 64 or more. */
+const INK_CONTRAST = 32;
+/** Whether any channel of these RGBA pixels varies enough to hold text. Blank
+ * margins and empty ground skip the detector, a third of a second each. */
+export function hasInk(pixels: Uint8ClampedArray) {
+  for (let channel = 0; channel < 3; channel++) {
+    let low = 255, high = 0;
+    for (let i = channel; i < pixels.length; i += 4) {
+      const value = pixels[i]!;
+      if (value < low) low = value;
+      if (value > high) high = value;
+    }
+    if (high - low >= INK_CONTRAST) return true;
+  }
+  return false;
+}
+
 // Decode the DB detector's probability map without shipping an OpenCV runtime.
 // Only boundary pixels survive each connected-component walk; buffers are reused.
 export function probabilityRegions(

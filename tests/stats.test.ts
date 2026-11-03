@@ -6,6 +6,7 @@ import { saveSetting } from "../src/storage/settings";
 
 let online = false;
 const sent: { batch: { event: string; properties: Record<string, unknown> }[] }[] = [];
+const sizes: number[] = [];
 let status = 200;
 Object.defineProperty(navigator, "onLine", { get: () => online, configurable: true });
 // Chrome on an Android phone: the user agent hides the model, the client hints give it.
@@ -21,6 +22,7 @@ Object.assign(globalThis, {
   document: page,
   screen: { width: 412, height: 915 },
   fetch: async (_url: string, init: RequestInit) => {
+    sizes.push((init.body as string).length);
     sent.push(JSON.parse(init.body as string));
     return new Response(null, { status });
   },
@@ -125,4 +127,15 @@ test("a launch on a new version counts as an update", async () => {
   await sendStats();
   const updated = events().find((entry) => entry.event === "app_updated");
   assert.equal(updated?.properties.from, "2026.10.27");
+});
+
+test("a long trip offline goes out in batches small enough for the browser to send", async () => {
+  online = false;
+  for (let i = 0; i < 300; i++) track("map_imported", { ok: false, error: "x".repeat(200) });
+  online = true;
+  sent.length = sizes.length = 0;
+  await sendStats();
+  assert.ok(Math.max(...sizes) < 64 * 1024, `largest batch ${Math.max(...sizes)} bytes`);
+  assert.equal(events().filter((entry) => entry.event === "map_imported").length, 300, "every event went");
+  sent.length = 0;
 });

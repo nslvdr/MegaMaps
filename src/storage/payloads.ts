@@ -1,5 +1,5 @@
 import type { Backend, MapRecord } from "../types";
-import { database, listMaps, transact, removeRecord, saveMap } from "./database";
+import { listMaps, transact, removeRecord, saveMap } from "./database";
 import { deleteNavigation } from "./navigation";
 import { deleteOcr } from "./ocr";
 import { deleteMapPhotos } from "./photos";
@@ -9,16 +9,41 @@ export interface PayloadStore {
   get(mapId: string, key: string): Promise<Blob>;
   deleteMap(mapId: string): Promise<void>;
 }
-async function directory(id?: string) {
+async function mapsFolder(create: boolean) {
   const root = await navigator.storage.getDirectory();
-  const maps = await root.getDirectoryHandle("maps", { create: true });
-  return id ? maps.getDirectoryHandle(id, { create: true }) : maps;
+  return root.getDirectoryHandle("maps", { create });
+}
+/** Each map's folder, looked up once rather than for every tile. Another
+ * context (a worker, a tab) may remove one, so a lookup that fails is redone. */
+const folders = new Map<string, Promise<FileSystemDirectoryHandle>>();
+function folder(id: string, create: boolean) {
+  let found = folders.get(id);
+  if (!found) {
+    found = mapsFolder(create).then((maps) => maps.getDirectoryHandle(id, { create }));
+    folders.set(id, found);
+    const settled = found;
+    settled.catch(() => {
+      if (folders.get(id) === settled) folders.delete(id);
+    });
+  }
+  return found;
+}
+const missing = (error: unknown) =>
+  error instanceof DOMException && error.name === "NotFoundError";
+/** Runs with the map's folder, again with a fresh one if the kept one went missing. */
+async function inFolder<T>(id: string, create: boolean, run: (dir: FileSystemDirectoryHandle) => Promise<T>) {
+  const kept = folders.get(id);
+  try {
+    return await run(await folder(id, create));
+  } catch (error) {
+    if (!kept || !missing(error)) throw error;
+    if (folders.get(id) === kept) folders.delete(id);
+    return run(await folder(id, create));
+  }
 }
 class OPFSStore implements PayloadStore {
   async put(id: string, key: string, blob: Blob) {
-    const file = await (
-      await directory(id)
-    ).getFileHandle(key, { create: true });
+    const file = await inFolder(id, true, (dir) => dir.getFileHandle(key, { create: true }));
     const writer = await file.createWritable();
     try {
       await writer.write(blob);
@@ -29,18 +54,14 @@ class OPFSStore implements PayloadStore {
     }
   }
   async get(id: string, key: string) {
-    const root = await navigator.storage.getDirectory();
-    const maps = await root.getDirectoryHandle("maps");
-    return (
-      await (await maps.getDirectoryHandle(id)).getFileHandle(key)
-    ).getFile();
+    return inFolder(id, false, async (dir) => (await dir.getFileHandle(key)).getFile());
   }
   async deleteMap(id: string) {
+    folders.delete(id);
     try {
-      await (await directory()).removeEntry(id, { recursive: true });
+      await (await mapsFolder(true)).removeEntry(id, { recursive: true });
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "NotFoundError"))
-        throw error;
+      if (!missing(error)) throw error;
     }
   }
 }
@@ -55,24 +76,9 @@ class IndexedDBStore implements PayloadStore {
     if (!blob) throw new Error(t("A stored tile is missing. Reimport this map."));
     return blob;
   }
+  // One range delete, instead of a cursor visiting each of a big map's tiles.
   async deleteMap(id: string) {
-    const db = await database();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction("payloads", "readwrite");
-      const request = tx
-        .objectStore("payloads")
-        .openKeyCursor(IDBKeyRange.bound(`${id}/`, `${id}/\uffff`));
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          tx.objectStore("payloads").delete(cursor.primaryKey);
-          cursor.continue();
-        }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => reject(tx.error);
-      tx.onerror = () => reject(tx.error);
-    });
+    await transact("payloads", "readwrite", (s) => s.delete(IDBKeyRange.bound(`${id}/`, `${id}/\uffff`)));
   }
 }
 const stores = { opfs: new OPFSStore(), indexeddb: new IndexedDBStore() };
@@ -99,7 +105,7 @@ export async function deleteStoredMap(map: MapRecord) {
   await removeRecord(map.id);
 }
 
-/** Settings' Delete everything: every map with what it holds, then the stored settings. */
+/** Reset's Delete all data: every map with what it holds, then the stored settings. */
 export async function deleteAllData() {
   for (const map of await listMaps()) await deleteStoredMap(map);
   await transact("settings", "readwrite", (store) => store.clear());

@@ -8,7 +8,7 @@ import { exportFile, matchingMaps, prepareExport, type ImportMode, type Prepared
 import { loadNavigation } from "../storage/navigation";
 import { displayName, formatBytes, plural } from "./format";
 import { icons } from "./icons";
-import { t } from "../i18n";
+import { t, errorMessage } from "../i18n";
 import { downloadFile } from "./save-file";
 import { placeIcon } from "./place-icon";
 import { track } from "../stats";
@@ -21,9 +21,9 @@ export const sharingMarkup = `
 <div id="share-picker" hidden>${dialogHeader("share-picker-title", "", icons.pin, "share-picker-close")}<button id="share-back" class="share-back">${icons.arrow}<span>${t("Share map")}</span></button><div class="share-selection-actions"><button id="share-all" class="secondary" aria-pressed="false">${icons.check}<span>${t("All")}</span></button><button id="share-none" class="secondary" aria-pressed="false">${icons.close}<span>${t("None")}</span></button></div><div id="share-items" class="share-items" role="group" aria-labelledby="share-picker-title"></div>
 <div class="dialog-actions"><button id="share-done" class="primary">${icons.check}<span>${t("Done")}</span></button></div></div></dialog>
 <dialog id="receive-dialog" class="sharing-dialog" aria-labelledby="receive-title">${dialogHeader("receive-title", t("Import shared map"), icons.download, "receive-cancel")}<p id="receive-summary"></p><p id="receive-loading" role="status">${t("Looking for a matching map…")}</p>
-<div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">${t("Add to")}</h3><div id="receive-destinations" class="share-summary" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
+<div id="receive-content" hidden><h3 id="receive-destinations-title" class="share-heading">${t("Add to")}</h3><div id="receive-destinations" class="share-summary receive-destinations" role="radiogroup" aria-labelledby="receive-destinations-title"></div>
 <div id="receive-mode-field" hidden><h3 id="receive-mode-title" class="share-heading">${t("Your places and routes")}</h3><div class="share-segments" role="radiogroup" aria-labelledby="receive-mode-title"><label><input type="radio" name="receive-mode" value="merge" checked>${icons.merge}<span>${t("Merge")}</span></label><label class="share-segment-danger"><input type="radio" name="receive-mode" value="replace">${icons.rotateRight}<span>${t("Replace")}</span></label></div></div>
-<p id="receive-note" class="dialog-note"></p><label id="receive-image-field" class="share-field" hidden>${t("Original map image")}<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>${t("Choose the exact original image used by the sender.")}</small></label></div>
+<p id="receive-note" class="dialog-note receive-note"></p><label id="receive-image-field" class="share-field" hidden>${t("Original map image")}<input id="receive-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small>${t("Choose the exact original image used by the sender.")}</small></label></div>
 <p id="receive-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><button id="receive-import" class="primary" disabled>${icons.download}<span>${t("Import")}</span></button></div></dialog>`;
 
 export interface ShareDestination { mapId?: string; image?: File; mode: ImportMode }
@@ -33,7 +33,6 @@ interface SharingOptions {
   import: (share: SharedMap, destination: ShareDestination) => Promise<ShareImportResult>;
   imported: (result: ShareImportResult, destination: ShareDestination) => Promise<void>;
 }
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 /** Owns selection, native file sharing, and the review step before any storage writes. */
 export function initSharing(root: HTMLElement, options: SharingOptions) {
