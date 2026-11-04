@@ -1,9 +1,10 @@
 import type { Point, Size as Viewport } from "./camera";
 import { CalloutLayout, leader, type CalloutBounds } from "./callout-layout";
+import { motion, reducedMotion } from "../ui/motion";
 export type { CalloutBounds } from "./callout-layout";
 
 const NS = "http://www.w3.org/2000/svg";
-const FADE = 180;
+const FADE = motion.fast;
 const node = <K extends keyof SVGElementTagNameMap>(tag: K) =>
   document.createElementNS(NS, tag);
 
@@ -109,7 +110,7 @@ export class MapCallout {
     if (!wanted && !this.opacity) return false;
     const placement = wanted ? layout.place(this.measure(viewport), bounds, anchor) : undefined;
     const now = performance.now(), elapsed = now - this.drawn;
-    const decay = Math.exp(-elapsed / 90);
+    const decay = reducedMotion() ? 0 : Math.exp(-elapsed / 90);
     let dx = this.drift.x * decay, dy = this.drift.y * decay;
     if (placement) {
       const spot = { x: placement.bounds.left - anchor.x, y: placement.bounds.top - anchor.y };
@@ -122,7 +123,7 @@ export class MapCallout {
     }
     if (Math.hypot(dx, dy) < 0.5) dx = dy = 0;
     // One that appears fades in from its first frame, however long it was hidden.
-    const step = (this.opacity ? elapsed : 16) / FADE;
+    const step = reducedMotion() ? 1 : (this.opacity ? elapsed : 16) / FADE;
     this.opacity = Math.max(0, Math.min(1, this.opacity + (placement ? step : -step)));
     this.drift = { x: dx, y: dy };
     this.drawn = now;

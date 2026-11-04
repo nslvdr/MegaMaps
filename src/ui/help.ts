@@ -1,4 +1,3 @@
-import { icons } from "./icons";
 import { language, t } from "../i18n";
 import { track } from "../stats";
 
@@ -33,27 +32,17 @@ export const describeApp = (version: string, installed: boolean) => [
   `Device: ${navigator.userAgent}`,
 ].join("\n");
 
-export const helpLink = (topic: Topic, icon: string, color: string, text: string, hint: string) =>
-  `<a class="share-row help-link" data-help="${topic}" href="${helpUrl(topic)}" target="_blank" rel="noopener"><span class="share-row-icon" style="--k:${color}">${icon}</span><span class="share-row-label">${text}<small>${hint}</small></span>${icons.externalLink}</a>`;
-
-/** The three ways to reach out, in Settings. */
-export const helpLinksMarkup = `<div class="share-summary">${
-  helpLink("question", icons.question, "var(--neon-view)", t("Ask a question"), t("Others may have asked already"))}${
-  helpLink("idea", icons.idea, "var(--neon-add)", t("Suggest a feature"), t("Vote on ideas or add yours"))}${
-  helpLink("problem", icons.bug, "var(--neon-lock)", t("Report a problem"), t("Your app version is included"))}</div>`;
+/** The app's details, filled into every problem report once the app knows them. */
+let details = "";
+export const appDetails = () => details;
 
 export const githubNote = t("Opens GitHub. Reading is free; writing needs a free account.");
 
-/** Fills in the app's details on every problem link and counts which topics people open. */
+/** Remembers the app's details for problem reports and counts which topics people open. */
 export function initHelp(root: HTMLElement, app: string) {
-  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[data-help="problem"]'))
-    link.href = helpUrl("problem", app);
+  details = app;
   root.addEventListener("click", (event) => {
     const link = (event.target as Element).closest<HTMLAnchorElement>("a[data-help]");
     if (link) track("help_opened", { topic: link.dataset.help!, from: link.closest("[id]")?.id ?? "" });
   });
-  return {
-    /** An error dialog's link that reports this very problem. */
-    report: (link: HTMLAnchorElement, problem: Problem) => { link.href = helpUrl("problem", app, problem); },
-  };
 }

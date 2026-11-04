@@ -1,32 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHTML } from "linkedom";
-import { initMapRename, mapRenameMarkup } from "../src/ui/map-rename";
+import { $, cancel, click, render, settle, submit, type } from "./dom";
+import MapRename from "../src/ui/MapRename.svelte";
 
 function setup(save: (id: string, name: string) => Promise<void>) {
-  const { window, document } = parseHTML(mapRenameMarkup);
-  const dialog = document.querySelector<HTMLDialogElement>("dialog")!;
-  const input = dialog.querySelector<HTMLInputElement>("input")!;
-  // Linkedom omits native dialog and text-selection behavior.
-  Object.defineProperties(dialog, {
-    open: { get: () => dialog.hasAttribute("open") },
-    showModal: { value: () => dialog.setAttribute("open", "") },
-    close: { value: () => {
-      dialog.removeAttribute("open");
-      dialog.dispatchEvent(new window.Event("close"));
-    } },
-  });
-  Object.defineProperty(input, "select", { value: () => {}, configurable: true });
+  const { instance } = render(MapRename, { save });
   return {
-    dialog, input,
-    error: dialog.querySelector<HTMLElement>(".dialog-error")!,
-    open: initMapRename(dialog, save),
-    cancel: () => dialog.querySelector("#rename-map-cancel")!.dispatchEvent(new window.Event("click")),
-    escape: () => dialog.dispatchEvent(new window.Event("cancel", { cancelable: true })),
-    submit: () => dialog.querySelector("form")!.dispatchEvent(new window.Event("submit", { cancelable: true })),
+    open: instance.open,
+    dialog: $<HTMLDialogElement>("rename-map-dialog"),
+    input: $<HTMLInputElement>("rename-map-name"),
+    error: $("rename-map-error"),
+    submit: () => submit($("rename-map-dialog").querySelector("form")!),
   };
 }
-const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 test("opening rename brings up the keyboard with the name selected to type over", (t) => {
   const ui = setup(async () => {});
@@ -50,29 +36,27 @@ test("rename dialog cancels without saving, rejects blank names and waits for on
     return new Promise<void>((resolve) => { finish = resolve; });
   });
   ui.open({ id: "first", name: "First map" });
-  assert.ok(ui.dialog.querySelector(".dialog-header #rename-map-cancel"));
-  assert.equal(ui.dialog.querySelector(".dialog-actions #rename-map-cancel"), null);
   assert.equal(ui.input.value, "First map");
-  ui.input.value = "Discard this";
-  assert.equal(ui.escape(), false, "a close request keeps the typed name");
+  type(ui.input, "Discard this");
+  assert.equal(cancel(ui.dialog), false, "a close request keeps the typed name");
   assert.equal(ui.dialog.open, true);
-  ui.cancel();
+  click("rename-map-cancel");
   assert.equal(ui.dialog.open, false);
   assert.deepEqual(calls, []);
 
   ui.open({ id: "second", name: "Second map" });
-  ui.input.value = "   ";
+  type(ui.input, "   ");
   ui.submit();
   assert.equal(ui.error.hidden, false);
   assert.deepEqual(calls, []);
-  ui.input.value = "  Survey <2026>  ";
+  type(ui.input, "  Survey <2026>  ");
   ui.submit();
   ui.submit();
   assert.deepEqual(calls, [["second", "Survey <2026>"]]);
   assert.equal(ui.dialog.open, true);
   assert.equal(ui.input.disabled, true);
-  assert.equal(ui.dialog.querySelector<HTMLButtonElement>("#rename-map-cancel")!.disabled, true, "the header cross is blocked while saving");
-  assert.equal(ui.escape(), false, "close requests are blocked during persistence");
+  assert.equal($<HTMLButtonElement>("rename-map-cancel").disabled, true, "the header cross is blocked while saving");
+  assert.equal(cancel(ui.dialog), false, "close requests are blocked during persistence");
   finish();
   await settle();
   assert.equal(ui.dialog.open, false);
@@ -85,7 +69,7 @@ test("failed rename keeps the edited name and allows retry", async () => {
     if (++attempts === 1) throw new Error("Storage unavailable");
   });
   ui.open({ id: "map", name: "Old name" });
-  ui.input.value = "New name";
+  type(ui.input, "New name");
   ui.submit();
   await settle();
   assert.equal(ui.dialog.open, true);

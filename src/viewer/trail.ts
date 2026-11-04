@@ -34,12 +34,30 @@ export const isTrailPoint = (value: unknown): value is TrailPoint => {
 /** A finished trip, kept to look back on: every point marked, and when it ended. */
 export interface Trip {
   id: string;
+  /** Set when the user renames it; until then it goes by its date. */
+  name?: string;
   points: TrailPoint[];
   ended: number;
 }
 export const isTrip = (value: unknown): value is Trip => {
   if (typeof value !== "object" || value === null) return false;
-  const { id, points, ended } = value as Record<string, unknown>;
-  return typeof id === "string" && Number.isFinite(ended) &&
+  const { id, name, points, ended } = value as Record<string, unknown>;
+  return typeof id === "string" && (name === undefined || typeof name === "string") && Number.isFinite(ended) &&
     Array.isArray(points) && points.length > 1 && points.every(isTrailPoint);
 };
+
+/** How near a place a mark has to be to take its name. */
+const NEAR_METRES = 15;
+/** The name of the place nearest each point, if one is near enough. Without a
+ * scale there is no telling what is near. */
+export function placesNear(points: Point[], places: { point: Point; label: string }[], metresPerPixel?: number) {
+  return points.map((point) => {
+    if (!metresPerPixel) return undefined;
+    let nearest: string | undefined, best = NEAR_METRES / metresPerPixel;
+    for (const place of places) {
+      const distance = Math.hypot(place.point.x - point.x, place.point.y - point.y);
+      if (distance <= best) [nearest, best] = [place.label, distance];
+    }
+    return nearest;
+  });
+}

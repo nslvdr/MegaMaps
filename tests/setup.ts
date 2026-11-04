@@ -8,3 +8,6 @@ globalThis.localStorage = {
   key: (index: number) => [...items.keys()][index] ?? null,
   get length() { return items.size; },
 };
+// Components compile on import, as the app's build does.
+import { register } from "node:module";
+register("./svelte-hooks.ts", import.meta.url);

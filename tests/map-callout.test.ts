@@ -194,7 +194,7 @@ test("with the four sides taken, a balloon opens diagonally, past the corner, it
   const left = 300 + Number(body.getAttribute("x")), bottom = 300 + Number(body.getAttribute("y")) + Number(body.getAttribute("height"));
   assert.ok(left > 300 && bottom < 300, "its body sits up and to the right of the place");
   assert.ok(taken.every(rect => !boundsOverlap(rect, balloonBox(balloon))), "it stays clear of what is taken");
-  assert.match(balloon.querySelector(".outline")!.getAttribute("d")!, / 0 0C/, "its tail still ends on the place");
+  assert.match(balloon.querySelector(".rim")!.getAttribute("d")!, / 0 0C/, "its tail still ends on the place");
   overlay.dispose();
 });
 
@@ -682,5 +682,25 @@ test("the trip's current position is drawn over every place, route and tool", ()
   overlay.setMeasure([here, { x: 150, y: 50 }]);
   overlay.rebuild(state);
   assert.ok(svg.lastElementChild!.classList.contains("trail-here"));
+  overlay.dispose();
+});
+
+test("only a place just added pops in: opening the map and redrawing leave pins still", () => {
+  const { document } = parseHTML('<html><body><svg class="map-overlay"></svg></body></html>');
+  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
+  const svg = document.querySelector<SVGSVGElement>("svg")!;
+  const state = defaultNavigation("added");
+  const place = (id: string, x: number) => ({ id, kind: "entrance" as const, label: id, description: "", point: { x, y: 300 }, created: 0 });
+  state.markers = [place("gate", 100)];
+  const overlay = new NavigationOverlay(svg);
+  const added = () => [...svg.querySelectorAll('[data-layer="places"]:not(.place-labels) .pin-body')]
+    .flatMap((pin, index) => pin.classList.contains("added") ? [state.markers[index]!.id] : []);
+  overlay.rebuild(state);
+  assert.deepEqual(added(), [], "the map opens with its places already there");
+  state.markers = [...state.markers, place("shaft", 300)];
+  overlay.rebuild(state);
+  assert.deepEqual(added(), ["shaft"]);
+  overlay.rebuild(state);
+  assert.deepEqual(added(), [], "it pops in once");
   overlay.dispose();
 });

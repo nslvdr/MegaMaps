@@ -76,7 +76,8 @@ export class PhotoViewer {
   show(images: HTMLImageElement[], index: number) {
     this.track.replaceChildren(...images.map((image) => {
       const slide = this.dialog.ownerDocument.createElement("div");
-      slide.className = "photo-viewer-slide";
+      slide.className = "min-w-0 flex-[0_0_100%] overflow-hidden";
+      image.className = "block size-full origin-top-left object-contain [-webkit-user-drag:none] group-data-settling/viewer:transition-transform group-data-settling/viewer:duration-base group-data-settling/viewer:ease-out";
       image.draggable = false;
       image.addEventListener("load", () => this.slides()[this.index] === slide && this.render(), { once: true });
       slide.append(image);

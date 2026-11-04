@@ -14,6 +14,28 @@ export type Release = {
 /** Newest first. */
 export const changelog: Release[] = [
   {
+    date: "2026-11-04",
+    commit: "1f435e3",
+    added: [
+      "Finished trips show distance, time, pace and places, with a logbook of marks, a name of their own and Save as route.",
+      "The Trail panel explains what a trip is for and how it works.",
+      "The bottom bar shows how long a trip has run.",
+    ],
+    changed: [
+      "The bottom bar is now Saved, Search, Trail, Measure and Add.",
+      "Open panels take the bottom bar’s place, and show more on tall screens.",
+      "A running trip shows distance and time first, with End trip and Mark here within thumb’s reach.",
+      "Only the field you’re typing in moves for the keyboard, and the page dims around it.",
+      "Screens, panels and new places animate as they open, with the same timing everywhere.",
+      "A new place’s name starts empty and hints its kind; left empty, it takes that name.",
+    ],
+    fixed: [
+      "On Android, sharing a map or saving a backup no longer fails with “Permission denied”: the file goes to your downloads instead.",
+      "JPEG maps up to 16 megapixels import in browsers with WebAssembly turned off, and larger ones say what to do.",
+      "What’s new always shows how much is left to read.",
+    ],
+  },
+  {
     date: "2026-11-03",
     commit: "7a030a9",
     added: [

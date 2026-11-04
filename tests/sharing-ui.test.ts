@@ -1,8 +1,10 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHTML } from "linkedom";
-import { initSharing, sharingMarkup, type ShareDestination } from "../src/ui/sharing";
+import { mount } from "svelte";
+import { $, cancel, click, document, fire, flushSync, pick, settle } from "./dom";
+import ShareDialog from "../src/ui/ShareDialog.svelte";
+import ReceiveDialog, { type ShareDestination } from "../src/ui/ReceiveDialog.svelte";
 import { defaultNavigation } from "../src/viewer/navigation";
 import { saveMap } from "../src/storage/database";
 import { saveNavigation } from "../src/storage/navigation";
@@ -10,23 +12,7 @@ import { payloadStore } from "../src/storage/payloads";
 import { encodeShare, fingerprint, readShare, type SharedMap, type ShareManifest } from "../src/sharing/format";
 import type { MapRecord } from "../src/types";
 
-const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
 async function setup() {
-  const { document, window } = parseHTML(`<html><body><main>${sharingMarkup}</main></body></html>`);
-  const root = document.querySelector("main")!;
-  const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-  for (const dialog of root.querySelectorAll("dialog")) {
-    Object.defineProperties(dialog, {
-      open: { get: () => dialog.hasAttribute("open") },
-      showModal: { value: () => dialog.setAttribute("open", "") },
-      close: { value: () => {
-        dialog.removeAttribute("open");
-        dialog.dispatchEvent(new window.Event("close"));
-      } },
-    });
-  }
-  // Linkedom lacks file picker state.
-  Object.defineProperty(el("receive-image"), "files", { value: [], writable: true });
   Object.defineProperty(globalThis, "navigator", { value: { canShare: () => false }, configurable: true });
   const header = new Uint8Array(33);
   header.set([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -50,7 +36,11 @@ async function setup() {
   const imported: string[] = [];
   let fail = false;
   let hold: (() => void) | undefined;
-  const ui = initSharing(root, {
+  // Both dialogs on one page, as in the app.
+  const target = document.createElement("div");
+  document.body.replaceChildren(target);
+  const share = mount(ShareDialog, { target });
+  const receive = mount(ReceiveDialog, { target, props: {
     maps: async () => [map],
     import: async (share, destination) => {
       calls.push({ share, destination });
@@ -59,22 +49,22 @@ async function setup() {
       return { map, added: 2, skipped: 0 };
     },
     imported: async (result) => { imported.push(result.map.id); },
-  });
-  return { ui, el, map, state, manifest, original, calls, imported,
+  } });
+  flushSync();
+  const ui = {
+    openExport: async (...args: Parameters<typeof share.openExport>) => { await share.openExport(...args); await settle(); },
+    openImport: async (file: Blob) => { await receive.openImport(file); await settle(); },
+  };
+  return { ui, el: $, map, state, manifest, original, calls, imported,
     fail: (value: boolean) => { fail = value; }, finish: () => hold?.(),
-    click: (id: string) => el(id).dispatchEvent(new window.Event("click")),
-    change: (id: string) => el(id).dispatchEvent(new window.Event("change")),
-    escape: (id: string) => el(id).dispatchEvent(new window.Event("cancel", { cancelable: true })),
-    choose: (name: string, value: string) => {
-      for (const input of document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)) input.checked = input.value === value;
-      document.querySelector(`input[name="${name}"][value="${value}"]`)!.dispatchEvent(new window.Event("change", { bubbles: true }));
-    },
-    rows: () => [...el("receive-destinations").querySelectorAll<HTMLInputElement>("input")].map((input) => input.value),
+    click, change: (id: string) => fire(id, "change"), escape: cancel,
+    choose: (name: string, value: string) => pick(document.querySelector<HTMLInputElement>(`input[name="${name}"][value="${value}"]`)!),
+    rows: () => [...$("receive-destinations").querySelectorAll<HTMLInputElement>("input")].map((input) => input.value),
   };
 }
 
 test("share dialog summarizes the file, picks items per kind, toggles the image, and shares the prepared file", async () => {
-  const { ui, el, map, state, click, change, escape } = await setup();
+  const { ui, el, map, state, click, escape } = await setup();
   await ui.openExport(map, state, { kind: "marker", id: "place" });
   assert.equal(el<HTMLDialogElement>("share-dialog").open, true);
   assert.equal(el("share-places-count").textContent, "All 1");
@@ -100,8 +90,7 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.equal(el("share-dialog").getAttribute("aria-labelledby"), "share-title");
   assert.equal(el("share-places-count").textContent, "None");
   assert.equal(el<HTMLButtonElement>("share-send").disabled, true);
-  el<HTMLInputElement>("share-image").checked = true;
-  change("share-image");
+  pick("share-image");
   assert.equal(el<HTMLButtonElement>("share-send").disabled, false, "image-only export is supported");
   assert.match(el("share-size").textContent!, /With map image/);
   click("share-routes");
@@ -127,6 +116,30 @@ test("share dialog summarizes the file, picks items per kind, toggles the image,
   assert.equal(decoded.manifest.routes.length, 1);
   assert.ok(decoded.image);
   assert.equal(el<HTMLDialogElement>("share-dialog").open, false, "a completed share closes the dialog");
+});
+
+test("a file Chrome refuses to share is saved instead, with the dialog left open to say so", async () => {
+  const { ui, el, map, state, click } = await setup();
+  await ui.openExport(map, state);
+  Object.defineProperty(globalThis, "navigator", { value: {
+    canShare: () => true, share: async () => { throw new DOMException("Permission denied", "NotAllowedError"); },
+  }, configurable: true });
+  const saved: string[] = [];
+  const { createObjectURL } = URL;
+  const anchorClick = HTMLAnchorElement.prototype.click;
+  URL.createObjectURL = () => "blob:share";
+  HTMLAnchorElement.prototype.click = function () { saved.push(this.download); };
+  try {
+    click("share-send");
+    await settle();
+  } finally {
+    URL.createObjectURL = createObjectURL;
+    HTMLAnchorElement.prototype.click = anchorClick;
+  }
+  assert.equal(saved.length, 1);
+  assert.match(saved[0]!, /\.megamap$/);
+  assert.equal(el<HTMLDialogElement>("share-dialog").open, true);
+  assert.match(el("share-size").textContent!, /File saved/);
 });
 
 test("share dialog with no annotations offers the image only", async () => {
@@ -166,11 +179,11 @@ test("import dialog merges into a matching map by default and warns before repla
   assert.equal(el("receive-mode-field").hidden, false);
   assert.match(el("receive-note").textContent!, /Keeps your 1 place and 1 route/);
   assert.equal(el("receive-import").textContent, "Merge into Survey <west>");
-  assert.equal(el("receive-import").classList.contains("danger"), false);
+  assert.equal(el("receive-import").dataset.variant === "danger", false);
   choose("receive-mode", "replace");
   assert.match(el("receive-note").textContent!, /Deletes your 1 place and 1 route.*can’t be undone/);
   assert.equal(el("receive-import").textContent, "Replace on Survey <west>");
-  assert.equal(el("receive-import").classList.contains("danger"), true);
+  assert.equal(el("receive-import").dataset.variant === "danger", true);
   click("receive-import");
   assert.deepEqual(calls[0]!.destination, { mapId: map.id, mode: "replace" });
   finish();
@@ -222,7 +235,7 @@ test("embedded shares can merge into a matching map or import an independent cop
   choose("receive-destination", "new");
   assert.equal(el("receive-mode-field").hidden, true);
   assert.equal(el("receive-image-field").hidden, true);
-  assert.equal(el("receive-import").classList.contains("danger"), false);
+  assert.equal(el("receive-import").dataset.variant === "danger", false);
   assert.equal(el<HTMLButtonElement>("receive-import").disabled, false);
   click("receive-import");
   assert.equal(calls[1]!.destination.mapId, undefined);

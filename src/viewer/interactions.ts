@@ -1,4 +1,5 @@
 import { zoomAt, transformAt, type Camera, type Point } from "./camera";
+import { reducedMotion } from "../ui/motion";
 interface Pointer extends Point {
   start: Point;
   moved: boolean;
@@ -281,7 +282,9 @@ export function attachInteractions(
       points.size ||
       hadPinch ||
       !pointer.moved ||
-      performance.now() - lastMove > 80
+      performance.now() - lastMove > 80 ||
+      // With less motion asked for, the map stops where the finger let go.
+      reducedMotion()
     )
       return;
     let time = performance.now();

@@ -10,6 +10,7 @@ import {
   type NavigationState,
 } from "./navigation";
 import { trailAge, trailAgeChange } from "./trail";
+import { motion } from "../ui/motion";
 const NS = "http://www.w3.org/2000/svg";
 const node = <K extends keyof SVGElementTagNameMap>(
   tag: K,
@@ -64,11 +65,11 @@ const ARROW_GAP = 40;
 // Screen-space SVG keeps lines/labels legible without another raster surface.
 // Text is assigned through textContent; imported/user names never become markup.
 // Visibility is CSS-driven (svg classes) so toggling layers needs no rebuild.
-// Covers the camera glide plus two pulses (see .found in style.css).
-const FOUND_MS = 2200;
-/** The Measure control's neon, as --neon-measure in style.css. */
+// Covers the camera glide plus two pulses (see .found in map.css).
+const FOUND_MS = motion.slow + 2 * motion.pulse + motion.fast;
+/** The Measure control's neon, as --neon-measure in app.css. */
 const MEASURE_COLOR = "#fff04d";
-/** The Trail control's neon, as --neon-trail in style.css. */
+/** The Trail control's neon, as --neon-trail in app.css. */
 const TRAIL_COLOR = "#ff2a2a";
 /** A chevron halfway along each segment long enough on screen, pointing from
  * its first point to its second. */
@@ -111,7 +112,11 @@ export class NavigationOverlay {
   private measure?: Point[];
   /** A finished trip being looked back on. */
   private trip?: Point[];
+  /** The mark of that trip being read about. */
+  private tripMark?: Point;
   private state?: NavigationState;
+  /** Places drawn so far: one missing from it was just added and pops in. */
+  private placed?: Set<string>;
   constructor(private svg: SVGSVGElement) {}
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
   setEditing(routeId?: string, markerId?: string) {
@@ -159,8 +164,9 @@ export class NavigationOverlay {
     this.measure = points;
     if (this.state) this.rebuild(this.state);
   }
-  setTrip(points?: Point[]) {
+  setTrip(points?: Point[], mark?: Point) {
     this.trip = points;
+    this.tripMark = mark;
     if (this.state) this.rebuild(this.state);
   }
   // Search owns matching place labels, avoiding duplicate callouts at the same pin.
@@ -251,6 +257,11 @@ export class NavigationOverlay {
         icon.setAttribute("stroke", stroke);
         icon.setAttribute("stroke-width", "3.6");
       }
+      if (this.tripMark)
+        pin(trip, this.tripMark).body.append(
+          node("circle", { r: "14", fill: "none", stroke: "#fff", "stroke-width": "2.5" }),
+          node("circle", { r: "6", fill: TRAIL_COLOR, stroke: CASING, "stroke-width": "2" }),
+        );
     }
     // Lines first so every pin and label sits above them.
     const routes = group("routes");
@@ -319,12 +330,14 @@ export class NavigationOverlay {
       if (marker.id === this.moving) element.classList.add("moving");
       else if (marker.id === this.found) element.classList.add("found");
       if (marker.id === this.selected) element.classList.add("selected");
+      if (this.placed && !this.placed.has(marker.id)) body.classList.add("added");
       this.selectable.push({ id: marker.id, element });
       placeBody(body, marker.kind, marker);
       const balloon = new MapBalloon(placeSymbol(marker), body);
       if (marker.id === this.found) balloon.element.classList.add("found");
       label(balloons, marker.label, marker.point, balloon, "places", marker.id);
     }
+    this.placed = new Set(state.markers.map((marker) => marker.id));
     // Shown even with the places layer hidden: it is what the user is adding.
     if (this.preview) {
       const preview = node("g", { class: "place-preview" });

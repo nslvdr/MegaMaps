@@ -16,7 +16,7 @@ test("cards say when a map was last opened, or added if never opened", () => {
 });
 
 test("default names count per kind and skip past numbers still in use", () => {
-  assert.equal(nextName("Entrance", ["Landmark 1"]), "Entrance 1");
+  assert.equal(nextName("Route", ["Landmark 1"]), "Route 1");
   assert.equal(nextName("Landmark", ["Landmark 1", "Landmark 3"]), "Landmark 4", "a gap left by a deletion is not reused");
   assert.equal(nextName("Route", ["Route 2", "Routes 9", "Route 1b", "Old route"]), "Route 3");
 });

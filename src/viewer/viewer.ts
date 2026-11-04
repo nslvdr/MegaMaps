@@ -44,6 +44,7 @@ import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
 import type { MapSearchMatch } from "./map-search";
+import { motion, reducedMotion } from "../ui/motion";
 /** How long the scale holds still before a sharper level loads. */
 const ZOOM_SETTLE_MS = 150;
 export interface ViewerOptions {
@@ -375,8 +376,8 @@ export class Viewer {
     this.invalidate();
   }
   /** A finished trip, drawn over the map while its summary is open. */
-  showTrip(points?: Point[]) {
-    this.overlay?.setTrip(points);
+  showTrip(points?: Point[], mark?: Point) {
+    this.overlay?.setTrip(points, mark);
     this.invalidate();
   }
   pulse(id: string) {
@@ -711,7 +712,7 @@ export class Viewer {
   private animate(target: Camera) {
     this.stopAnimation();
     target = constrain(target, this.map, this.visible());
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reducedMotion()) {
       this.setCamera(target);
       return;
     }
@@ -719,7 +720,7 @@ export class Viewer {
     const start = { ...this.camera },
       startTime = performance.now();
     const tick = (now: number) => {
-      const t = Math.min(1, (now - startTime) / 240),
+      const t = Math.min(1, (now - startTime) / motion.base),
         ease = 1 - (1 - t) ** 3;
       const scale = Math.exp(
         Math.log(start.scale) +
@@ -762,14 +763,14 @@ export class Viewer {
     const center = { x: this.width / 2, y: this.visible().height / 2 },
       turn = (rotation: number) =>
         this.setCamera(transformAt(this.camera, this.camera.scale, rotation, center));
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reducedMotion()) {
       turn(0);
       return;
     }
     const delta = -Math.atan2(Math.sin(from), Math.cos(from)),
       startTime = performance.now();
     const tick = (now: number) => {
-      const t = Math.min(1, (now - startTime) / 240);
+      const t = Math.min(1, (now - startTime) / motion.base);
       turn(t < 1 ? from + delta * (1 - (1 - t) ** 3) : 0);
       if (t < 1) this.animation = requestAnimationFrame(tick);
     };

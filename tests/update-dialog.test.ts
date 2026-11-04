@@ -1,43 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHTML } from "linkedom";
+import { $, cancel, click, flushSync, render, settle } from "./dom";
 import type { AppUpdate } from "../src/app-update";
-import { initUpdateDialog, updateDialogMarkup, type UpdateActions, type UpdateStep } from "../src/ui/update-dialog";
+import UpdateDialog, { type UpdateActions, type UpdateStep } from "../src/ui/UpdateDialog.svelte";
 
 function setup(actions: Partial<UpdateActions>) {
-  const { window, document } = parseHTML(updateDialogMarkup);
-  const dialog = document.querySelector<HTMLDialogElement>("dialog")!;
-  // Linkedom omits native dialog behavior.
-  Object.defineProperties(dialog, {
-    open: { get: () => dialog.hasAttribute("open") },
-    showModal: { value: () => dialog.setAttribute("open", "") },
-    close: { value: () => {
-      dialog.removeAttribute("open");
-      dialog.dispatchEvent(new window.Event("close"));
-    } },
-  });
   let restarted = 0;
-  const updates = initUpdateDialog(dialog, {
+  const { instance } = render(UpdateDialog, {
     find: async () => undefined,
     install: async () => true,
     ...actions,
     restart: () => { restarted++; },
   });
-  const text = (id: string) => dialog.querySelector(`#${id}`)!.textContent;
-  const visible = (id: string) => !dialog.querySelector(`#${id}`)!.hasAttribute("hidden");
+  const dialog = $<HTMLDialogElement>("update-dialog");
+  const updates = { ...instance, open: () => { instance.open(); flushSync(); }, start: (update: AppUpdate) => { instance.start(update); flushSync(); } };
   return {
-    dialog, updates, text, visible,
+    dialog, updates,
+    text: (id: string) => $(id).textContent,
+    visible: (id: string) => !$(id).hasAttribute("hidden"),
     restarted: () => restarted,
-    confirm: () => dialog.querySelector("#update-confirm")!.dispatchEvent(new window.Event("click")),
-    dismiss: () => dialog.querySelector("#update-dismiss")!.dispatchEvent(new window.Event("click")),
-    escape: () => {
-      const event = new window.Event("cancel", { cancelable: true });
-      dialog.dispatchEvent(event);
-      if (!event.defaultPrevented) dialog.close();
-    },
+    confirm: () => click("update-confirm"),
+    dismiss: () => click("update-dismiss"),
+    escape: () => { if (cancel(dialog)) dialog.close(); },
   };
 }
-const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 const available: AppUpdate = { version: "two", size: 20 * 1024 * 1024, downloaded: false };
 
 test("an available update is described and only downloaded once the user agrees", async () => {
@@ -45,8 +31,7 @@ test("an available update is described and only downloaded once the user agrees"
   const app = setup({ find: async () => available, install: async () => { installs++; return true; } });
   app.updates.open();
   assert.equal(app.dialog.dataset.state, "checking");
-  assert.ok(app.dialog.querySelector(".dialog-header #update-dismiss"), "the cross lives beside the title");
-  assert.equal(app.dialog.querySelector("#update-actions #update-dismiss"), null);
+  assert.equal($("update-actions").querySelector("#update-dismiss"), null, "the cross lives beside the title");
   assert.ok(app.visible("update-progress"));
   await settle();
   assert.equal(app.dialog.dataset.state, "available");
@@ -65,7 +50,7 @@ test("agreeing shows download, install and save progress, then restarts", async 
   let finish: (installed: boolean) => void = () => {};
   const app = setup({
     find: async () => available,
-    install: (progress) => { report = progress; return new Promise((resolve) => { finish = resolve; }); },
+    install: (progress) => { report = (step) => { progress(step); flushSync(); }; return new Promise((resolve) => { finish = resolve; }); },
   });
   app.updates.open();
   await settle();
@@ -137,7 +122,7 @@ test("an automatic update installs without asking and restarts once ready", asyn
   assert.equal(app.dialog.dataset.state, "installing");
   assert.equal(finds, 0, "the found update is used as is");
   assert.equal(app.visible("update-actions"), false, "nothing to agree to");
-  assert.equal(app.updates.busy, true);
+  assert.equal(app.updates.isBusy(), true);
   finish(true);
   await settle();
   assert.equal(app.dialog.dataset.state, "restarting");

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHTML } from "linkedom";
+import { $, fire, flushSync, render } from "./dom";
 import type { Release } from "../src/changelog";
-import { initWhatsNew, unseenReleases, whatsNewMarkup } from "../src/ui/whats-new";
+import WhatsNew, { unseenReleases } from "../src/ui/WhatsNew.svelte";
 
 const releases: Release[] = [
   { date: "2026-11-20", commit: "ccc", fixed: ["The page behind a dialog no longer scrolls."] },
@@ -12,11 +12,8 @@ const releases: Release[] = [
 
 function setup() {
   localStorage.removeItem("megamaps:changelog-seen");
-  const { document } = parseHTML(whatsNewMarkup);
-  const dialog = document.querySelector<HTMLDialogElement>("dialog")!;
-  // Linkedom omits native dialog behavior.
-  Object.defineProperty(dialog, "showModal", { value: () => dialog.setAttribute("open", "") });
-  const whatsNew = initWhatsNew(dialog, releases);
+  const { instance: whatsNew } = render(WhatsNew, { releases });
+  const dialog = $<HTMLDialogElement>("whats-new");
   const sections = () => [...dialog.querySelectorAll("section")].map((section) => [
     section.querySelector("h3")!.textContent,
     [...section.querySelectorAll("li")].map((item) => item.textContent),
@@ -42,7 +39,7 @@ test("everything new shows once, new features first, without empty sections", ()
     ["Changes", ["Map size limit: 300 → 600 megapixels."]],
     ["Bug fixes", ["The page behind a dialog no longer scrolls."]],
   ]);
-  dialog.removeAttribute("open");
+  dialog.close();
   whatsNew.atLaunch(true);
   assert.ok(!dialog.hasAttribute("open"), "the next launch has nothing new");
 });
@@ -62,7 +59,7 @@ test("Settings shows every release under its date and leaves the launch's marker
   whatsNew.openAll();
   assert.ok(dialog.hasAttribute("open"));
   assert.deepEqual([...dialog.querySelectorAll("article")].map((release) => [
-    release.querySelector(".whats-new-date")!.textContent,
+    release.querySelector("p")!.textContent,
     [...release.querySelectorAll("h3")].map((heading) => heading.textContent),
   ]), [
     ["November 20, 2026", ["Bug fixes"]],
@@ -70,4 +67,29 @@ test("Settings shows every release under its date and leaves the launch's marker
     ["November 1, 2026", ["New features"]],
   ]);
   assert.equal(localStorage.getItem("megamaps:changelog-seen"), "bbb");
+});
+
+test("a drawn scroll indicator shows while there is more to read and follows the scroll", () => {
+  const { whatsNew } = setup();
+  const body = $("whats-new-sections");
+  const scroll = body.nextElementSibling as HTMLElement;
+  // The test page has no layout.
+  let scrollHeight = 400;
+  Object.defineProperty(body, "clientHeight", { value: 400 });
+  Object.defineProperty(body, "scrollHeight", { get: () => scrollHeight });
+  Object.defineProperty(scroll, "clientHeight", { value: 400 });
+
+  whatsNew.openAll();
+  flushSync();
+  assert.ok(scroll.hidden, "everything fits");
+
+  scrollHeight = 1600;
+  whatsNew.openAll();
+  flushSync();
+  assert.ok(!scroll.hidden);
+  const thumb = scroll.querySelector("span")!;
+  assert.equal(thumb.style.height, "100px");
+  body.scrollTop = 1200;
+  fire(body, "scroll");
+  assert.equal(thumb.style.transform, "translateY(300px)");
 });

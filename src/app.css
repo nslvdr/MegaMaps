@@ -1,0 +1,542 @@
+/* Tailwind does the styling; components carry their own classes. This file
+   holds what every component shares: the theme, a few element defaults, the
+   motion every surface uses, and the keyframes. */
+@layer theme, base, components, utilities;
+@import "tailwindcss";
+@import "./viewer/map.css" layer(components);
+
+@source not "../tests";
+
+:root {
+  --bg: #000;
+  --line: #ffffff14;
+  --text: #f2f4f6;
+  --muted: #9aa2ab;
+  --accent: var(--neon-add);
+  --danger: #ff8f7a;
+  /* Shared by the map controls and the library. */
+  --neon-saved: #2ef2ff;
+  --neon-view: #ff4fd8;
+  --neon-add: #b6ff3b;
+  --neon-lock: #ff9a3c;
+  --neon-measure: #fff04d;
+  --neon-trail: #ff2a2a;
+  --kind-route: #38d6ff;
+  --kind-place: #ff9a5c;
+  /* Motion, mirrored in src/ui/motion.ts: press for a finger going down, fast
+     for changes of state and anything leaving, base for anything arriving,
+     slow only for emphasis, and pulse for one blink. Arrivals ease out,
+     departures ease in. */
+  --motion-press: 80ms;
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 400ms;
+  --motion-pulse: 1s;
+  /* Where the field being typed in sits. Until the keyboard has been measured,
+     about where it will be. */
+  --above-keyboard: calc(var(--keyboard-inset, 50dvh) + 8px);
+  /* Where the map's bottom surfaces rise from. */
+  --rise-from: translateY(16px) scale(0.98);
+  --header-line-height: 28px;
+  /* One footprint for the library, dialogs, panels, and their controls. */
+  --edge-l: max(12px, env(safe-area-inset-left));
+  --edge-r: max(12px, env(safe-area-inset-right));
+  --surface-max-width: 520px;
+  --surface-width: min(var(--surface-max-width), calc(100vw - var(--edge-l) - var(--edge-r)));
+  --surface-left: max(var(--edge-l), calc((100vw - var(--surface-max-width) + var(--edge-l) - var(--edge-r)) / 2));
+  --surface-padding: 20px 20px max(20px, env(safe-area-inset-bottom));
+  --home-top: calc(20px + env(safe-area-inset-top));
+  /* Fills over flat black controls. */
+  --glass-line: rgb(255 255 255 / 0.16);
+  --fill: rgb(255 255 255 / 0.07);
+  --fill-strong: rgb(255 255 255 / 0.13);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+  font-size: var(--text-body);
+}
+
+/* Only this theme exists: three type sizes, the app's colours, pixel spacing
+   (p-12 is 12px), and the motion tokens as durations. */
+@theme static {
+  --*: initial;
+  --spacing: 1px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --text-small: 14px;
+  --text-body: 16px;
+  --text-heading: 24px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-strong: 650;
+  --font-weight-bold: 700;
+  --font-weight-black: 800;
+  --leading-tight: 1.3;
+  --leading-snug: 1.35;
+  --leading-compact: 1.4;
+  --leading-cozy: 1.45;
+  --leading-normal: 1.5;
+  --leading-roomy: 1.55;
+  --leading-relaxed: 1.6;
+  --tracking-tighter: -0.6px;
+  --tracking-tight: -0.4px;
+  --tracking-caps: 0.07em;
+  --tracking-label: 0.6px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  --breakpoint-phone: 600px;
+  --breakpoint-wide: 720px;
+  --shadow-glass: 0 10px 30px rgb(0 0 0 / 0.3);
+  --shadow-panel: 0 20px 60px rgb(0 0 0 / 0.5);
+  --shadow-dialog: 0 20px 80px #000c;
+  --shadow-popover: 0 18px 44px rgb(0 0 0 / 0.65);
+  --shadow-menu: 0 8px 24px #000a;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --transition-duration-press: var(--motion-press);
+  --transition-duration-fast: var(--motion-fast);
+  --transition-duration-base: var(--motion-base);
+  --transition-duration-slow: var(--motion-slow);
+  --animate-pulse: pulse var(--motion-pulse) ease-in-out infinite;
+  --animate-spin: spin 1s linear infinite;
+  --animate-sweep: sweep 1.3s ease-in-out infinite;
+  --animate-enter: enter var(--motion-base) var(--ease-out);
+  /* The install demo's ring, tapping whatever the current step touches. */
+  --animate-tap: tap 1.4s 0.5s var(--ease-out) infinite;
+}
+/* Colours read the app's variables, so a component can retint itself by
+   setting one: --accent for dialogs and buttons, --c for a control's neon,
+   --k for a kind of thing, --level for a water or danger step. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-danger: var(--danger);
+  --color-neon-saved: var(--neon-saved);
+  --color-neon-view: var(--neon-view);
+  --color-neon-add: var(--neon-add);
+  --color-neon-lock: var(--neon-lock);
+  --color-neon-measure: var(--neon-measure);
+  --color-neon-trail: var(--neon-trail);
+  --color-kind-route: var(--kind-route);
+  --color-kind-place: var(--kind-place);
+  --color-accent: var(--accent);
+  --color-c: var(--c);
+  --color-k: var(--k);
+  --color-level: var(--level);
+  --color-glass-line: var(--glass-line);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
+  --color-black: #000;
+  --color-white: #fff;
+  --color-panel: #0d0e11;
+}
+
+/* A colour mixed into black: tint-accent/14 is an opaque, dark tint that
+   stays the same over the map as over the page. */
+@utility tint-* {
+  background-color: color-mix(in srgb, --value(--color-*) calc(--modifier(integer) * 1%), #000);
+}
+
+/* What comes and goes over the map arrives from its --enter-from and leaves
+   the way it came, faster. Setting `hidden` plays both: display waits for the
+   exit, as it does for dialogs. Leaving, it already lets taps through. */
+@utility motion {
+  transition:
+    opacity var(--motion-fast) var(--ease-in),
+    transform var(--motion-fast) var(--ease-in),
+    border-color var(--motion-fast),
+    display var(--motion-fast) allow-discrete;
+  &:not([hidden]) {
+    transition-duration: var(--motion-base);
+    transition-timing-function: var(--ease-out);
+  }
+  &[hidden] {
+    display: none;
+    opacity: 0;
+    transform: var(--enter-from, none);
+    pointer-events: none;
+  }
+  @starting-style {
+    &:not([hidden]) {
+      opacity: 0;
+      transform: var(--enter-from, none);
+    }
+  }
+}
+
+/* A lighter scrim for a card about a spot on the map, clear around that spot
+   (--spot-x, --spot-y), so its pin keeps its colour. Fades by opacity:
+   gradients don't interpolate. */
+@utility spot-scrim {
+  &::backdrop {
+    background: radial-gradient(circle at var(--spot-x, 50%) var(--spot-y, -200px), transparent 34px, rgb(0 0 0 / 0.35) 80px);
+    opacity: 0;
+    transition:
+      opacity var(--motion-fast),
+      overlay var(--motion-fast) allow-discrete,
+      display var(--motion-fast) allow-discrete;
+  }
+  &[open]::backdrop {
+    opacity: 1;
+    transition-duration: var(--motion-base);
+  }
+  @starting-style {
+    &[open]::backdrop {
+      opacity: 0;
+    }
+  }
+}
+
+/* A 44px touch target around a smaller control. */
+@utility hit-* {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: calc(--value(integer) * -1px);
+  }
+}
+
+@layer base {
+  /* No double-tap page zoom anywhere; the map and photos handle their own. */
+  html {
+    line-height: normal;
+    touch-action: manipulation;
+  }
+  body {
+    background: var(--bg);
+  }
+  /* Anything the viewer doesn't cover stays the map's black, and the page
+     behind an open map never scrolls. */
+  html:has(body.viewing),
+  body.viewing {
+    background: #000;
+  }
+  body.viewing {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* Text fields keep normal selection, so a name or query can be edited by
+     long-press and copied; iOS otherwise inherits none from the map. */
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  button,
+  a,
+  input,
+  label {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      transform var(--motion-press),
+      background-color var(--motion-fast),
+      border-color var(--motion-fast),
+      color var(--motion-fast),
+      opacity var(--motion-fast);
+  }
+  button:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  /* Touch only: nothing draws a keyboard focus ring. */
+  :focus {
+    outline: none;
+  }
+  svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  [hidden]:not(.motion) {
+    display: none !important;
+  }
+  h2 {
+    font-size: var(--text-heading);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 650;
+  }
+  h3 {
+    font-size: var(--text-body);
+    font-weight: 700;
+    margin: 16px 0 8px;
+  }
+  small {
+    font-size: var(--text-small);
+  }
+  /* What a dialog says: its title, its paragraphs, and its form fields. */
+  dialog h2 {
+    line-height: 1.3;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+  }
+  dialog p {
+    color: var(--muted);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+  }
+  dialog form > label {
+    display: block;
+    color: var(--muted);
+    font-size: var(--text-small);
+    margin: 16px 0;
+  }
+  dialog input:not([type="checkbox"], [type="radio"]),
+  dialog select,
+  dialog textarea {
+    display: block;
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid #ffffff26;
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-body);
+    padding: 12px 16px;
+    margin-top: 8px;
+    min-height: 50px;
+    transition:
+      border-color var(--motion-fast),
+      box-shadow var(--motion-fast);
+  }
+  dialog :is(input, select, textarea):focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  /* Notes grow with the text from three lines, then scroll past ten. */
+  dialog textarea {
+    field-sizing: content;
+    min-height: calc(3lh + 2 * 12px + 2px);
+    max-height: calc(10lh + 2 * 12px + 2px);
+    resize: none;
+  }
+  dialog :is(input, textarea)::placeholder {
+    color: var(--muted);
+  }
+  /* iOS sizes native date inputs to their own content, ignoring width: 100%. */
+  dialog input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+  dialog input[type="date"]::-webkit-date-and-time-value {
+    text-align: start;
+  }
+  /* While a modal is open the page behind it never scrolls, even when a drag
+     starts on the backdrop or on a part of the modal that doesn't scroll. */
+  html:has(dialog:modal) {
+    overflow: hidden;
+  }
+  /* Phones: a card floating just above the home indicator, within thumb
+     reach. Wider screens: centered. Dialogs rise in and fade out. */
+  dialog {
+    --accent: var(--neon-add);
+    --enter-from: translateY(10px) scale(0.98);
+    width: var(--surface-width);
+    max-width: var(--surface-width);
+    left: var(--edge-l);
+    right: var(--edge-r);
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin: auto;
+    padding: var(--surface-padding);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--bg);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--text);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-dialog);
+    opacity: 0;
+    transform: var(--enter-from);
+    transition:
+      opacity var(--motion-fast) var(--ease-in),
+      transform var(--motion-fast) var(--ease-in),
+      overlay var(--motion-fast) allow-discrete,
+      display var(--motion-fast) allow-discrete;
+  }
+  dialog[open] {
+    opacity: 1;
+    transform: none;
+    transition-duration: var(--motion-base);
+    transition-timing-function: var(--ease-out);
+  }
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      transform: var(--enter-from);
+    }
+  }
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0);
+    transition:
+      background-color var(--motion-fast),
+      overlay var(--motion-fast) allow-discrete,
+      display var(--motion-fast) allow-discrete;
+  }
+  dialog[open]::backdrop {
+    background: rgb(0 0 0 / 0.72);
+    transition-duration: var(--motion-base);
+  }
+  @starting-style {
+    dialog[open]::backdrop {
+      background: rgb(0 0 0 / 0);
+    }
+  }
+  @media (max-width: 599px) {
+    dialog {
+      --enter-from: translateY(32px) scale(0.98);
+      margin-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+  }
+  /* Native scroll indicators appear only when content overflows. */
+  .scroller,
+  dialog {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+  :is(.scroller, dialog)::-webkit-scrollbar {
+    width: 6px;
+  }
+  :is(.scroller, dialog)::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: var(--radius-pill);
+  }
+  :is(.scroller, dialog)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* Rows of thumbnails and the north wheel scroll without a bar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Everything arrives the same way: faded out, at its own --enter-from. */
+/* The field being typed in, just above the keyboard. Nothing else moves for the
+   keyboard. In a form the page dims and only the field stays lit, its name inside
+   its box. */
+[data-typing] {
+  --enter-from: var(--rise-from);
+  position: fixed;
+  z-index: 30;
+  left: var(--edge-l);
+  right: var(--edge-r);
+  bottom: var(--above-keyboard);
+  width: var(--surface-width);
+  margin: 0 auto;
+  animation: var(--animate-enter);
+  transition: bottom var(--motion-fast);
+}
+label[data-typing] {
+  display: block;
+  min-height: 0;
+  padding: 8px 16px;
+  color: var(--accent);
+  font-size: var(--text-small);
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+label[data-typing] :is(input, textarea) {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  margin-top: 2px;
+  padding: 0;
+  color: var(--text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Notes grow with the text, up to what the room above the keyboard allows. */
+label[data-typing] textarea {
+  max-height: 5lh;
+}
+/* A settings row keeps only its name: the field needs the room. */
+label[data-typing] > span:has(> svg),
+label[data-typing] small {
+  display: none;
+}
+#settings [data-typing] {
+  --accent: var(--neon-view);
+}
+[data-scrim] {
+  --enter-from: none;
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgb(0 0 0 / 0.72);
+}
+
+@keyframes tap {
+  0% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+  30%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: var(--enter-from, none);
+  }
+}
+/* One blink, for anything asking to be looked at. */
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

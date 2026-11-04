@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHTML } from "linkedom";
-import { initInstallPage, installMarkup, isApple, isInstalled } from "../src/ui/install-page";
+import { $, click, flushSync, render, window } from "./dom";
+import InstallPage, { isApple, isInstalled } from "../src/ui/InstallPage.svelte";
 
 const iPhone = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
 const iPad = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
@@ -20,65 +20,63 @@ test("only a home screen launch counts as installed", () => {
   assert.equal(isApple({ userAgent: iPad, maxTouchPoints: 0 }), false);
 });
 
-function setup(userAgent: string) {
-  const { document } = parseHTML(`<html><body>${installMarkup}</body></html>`);
-  // The backdrop's balloons are drawn by the viewer's own code.
-  Object.defineProperty(globalThis, "document", { value: document, configurable: true });
-  const page = document.querySelector<HTMLElement>("#install")!;
-  const dialog = document.querySelector<HTMLDialogElement>("#install-dialog")!;
-  // Linkedom omits native dialog behavior.
-  Object.defineProperty(dialog, "showModal", { value: () => dialog.setAttribute("open", "") });
-  const events = new EventTarget();
-  initInstallPage(page, dialog, { userAgent, maxTouchPoints: 5 }, events, "maps.example");
-  const part = (id: string) => dialog.querySelector<HTMLElement>(`#${id}`)!;
-  const steps = () => [...dialog.querySelectorAll("#install-steps .share-row-label")].map((label) => label.firstChild!.textContent);
-  return { page, dialog, events, steps, part };
+function setup(t: test.TestContext, userAgent: string) {
+  const events = new window.EventTarget() as unknown as EventTarget;
+  const { destroy } = render(InstallPage, { browser: { userAgent, maxTouchPoints: 5 }, events, host: "maps.example" });
+  t.after(destroy);
+  const items = () => [...$("install-steps").children];
+  // Each step's label, without the hint under it.
+  const steps = () => items().map((item) => item.children[1]!.firstChild!.textContent);
+  const current = () => items().findIndex((item) => item.hasAttribute("aria-current"));
+  return { dialog: $<HTMLDialogElement>("install-dialog"), events, steps, items, current };
 }
 
 test("Install opens Safari's Add to Home Screen steps on an iPhone, acted out step by step", (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
-  const { page, dialog, steps, part } = setup(iPhone);
-  assert.equal(page.hidden, false);
-  page.querySelector<HTMLButtonElement>(".install-open")!.click();
-  assert.ok(dialog.hasAttribute("open"));
+  const { dialog, steps, items, current } = setup(t, iPhone);
+  click("install-open");
+  assert.ok(dialog.open);
   assert.deepEqual(steps(), ["Tap Share", "Choose Add to Home Screen", "Open Mega Maps from your home screen"]);
-  assert.ok(part("install-demo").querySelector(".demo-sheet"), "the demo shows Safari's share sheet");
-  assert.match(part("install-note").textContent!, /Safari and the app don’t share maps/);
+  assert.match($("install-demo").textContent!, /Add to Home Screen/, "the demo shows Safari's share sheet");
+  assert.match($("install-note").textContent!, /Safari and the app don’t share maps/);
 
-  const current = () => [...dialog.querySelectorAll("#install-steps li")].findIndex((item) => item.hasAttribute("aria-current"));
-  assert.equal(part("install-demo").dataset.step, "0");
+  assert.equal($("install-demo").dataset.step, "0");
   assert.equal(current(), 0);
   t.mock.timers.tick(2600);
-  assert.equal(part("install-demo").dataset.step, "1");
+  flushSync();
+  assert.equal($("install-demo").dataset.step, "1");
   assert.equal(current(), 1);
   // Tapping a step jumps there.
-  dialog.querySelectorAll<HTMLElement>("#install-steps li")[2]!.click();
-  assert.equal(part("install-demo").dataset.step, "2");
+  click(items()[2]!);
+  assert.equal($("install-demo").dataset.step, "2");
   assert.equal(current(), 2);
   t.mock.timers.tick(2600);
-  assert.equal(part("install-demo").dataset.step, "0", "the demo loops");
+  flushSync();
+  assert.equal($("install-demo").dataset.step, "0", "the demo loops");
 });
 
-test("Chrome's install sheet replaces the manual steps until it's used", () => {
-  const { events, steps, part } = setup(android);
+test("Chrome's install sheet replaces the manual steps until it's used", (t) => {
+  const { events, steps } = setup(t, android);
   assert.deepEqual(steps(), ["Open the browser menu", "Choose Install app", "Open Mega Maps from your home screen"]);
-  assert.ok(part("install-demo").querySelector(".demo-menu"), "the demo shows Chrome's menu");
+  assert.match($("install-demo").textContent!, /Install app/, "the demo shows Chrome's menu");
 
   let prompted = 0;
   const offer = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt: async () => { prompted++; } });
   events.dispatchEvent(offer);
+  flushSync();
   assert.equal(offer.defaultPrevented, true, "Chrome's own banner stays hidden");
-  assert.equal(part("install-now").hidden, false);
-  assert.equal(part("install-demo").hidden, true);
+  assert.equal($("install-now").hidden, false);
+  assert.equal($("install-demo").hidden, true);
   assert.deepEqual(steps(), ["Open Mega Maps from your home screen"]);
 
-  part("install-now").click();
+  click("install-now");
   assert.equal(prompted, 1);
   // Dismissed: the sheet can't open twice, so the manual steps return.
-  assert.equal(part("install-now").hidden, true);
+  assert.equal($("install-now").hidden, true);
   assert.equal(steps().length, 3);
 
   events.dispatchEvent(new Event("appinstalled"));
+  flushSync();
   assert.deepEqual(steps(), ["Open Mega Maps from your home screen"]);
-  assert.match(part("install-note").textContent!, /^Installed\. Open Mega Maps/);
+  assert.match($("install-note").textContent!, /^Installed\. Open Mega Maps/);
 });

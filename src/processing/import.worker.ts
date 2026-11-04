@@ -88,7 +88,9 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
     async function native() {
       if (header.width * header.height > NATIVE_PIXEL_LIMIT)
         throw new Error(
-          t("WebP and interlaced PNG are limited to 16 megapixels in this version. For larger maps use JPEG or non-interlaced PNG."),
+          header.format === "jpeg"
+            ? t("This browser has WebAssembly turned off, which limits JPEG maps to 16 megapixels. Allow it for this site in the browser’s security settings, use another browser, or import a non-interlaced PNG.")
+            : t("WebP and interlaced PNG are limited to 16 megapixels in this version. For larger maps use JPEG or non-interlaced PNG."),
         );
       decoder = "size-limited native bitmap";
       const bitmap = await createImageBitmap(file);
@@ -108,7 +110,8 @@ onmessage = async (event: MessageEvent<{ file: File; record: MapRecord }>) => {
         bitmap.close();
       }
     }
-    if (header.format === "jpeg")
+    // libjpeg runs on WebAssembly, which some browsers switch off for security.
+    if (header.format === "jpeg" && typeof WebAssembly !== "undefined")
       await decodeJPEG(file, header, record.id, record.backend, consume);
     else if (header.format === "png") {
       try {

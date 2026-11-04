@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { trailAge, trailAgeChange } from "../src/viewer/trail";
+import { isTrip, placesNear, trailAge, trailAgeChange } from "../src/viewer/trail";
 import { wheelChoice } from "../src/ui/hold-wheel";
 import { arrows } from "../src/viewer/overlays";
 import { normalizeNavigation } from "../src/viewer/navigation";
@@ -24,6 +24,20 @@ test("saves without a trail start empty and malformed points are dropped", () =>
   const viewed = { ...good, view: { center: { x: 4, y: 5 }, scale: 0.5 } };
   assert.deepEqual(normalizeNavigation({ mapId: "m", trail: [viewed, { ...good, view: { scale: 1 } }] }).trail, [viewed],
     "a point keeps the view it was marked in, and one with a broken view is dropped");
+});
+
+test("a mark takes the name of the nearest place within 15 m, and only on a map with a scale", () => {
+  const places = [{ point: { x: 100, y: 0 }, label: "Lac" }, { point: { x: 120, y: 0 }, label: "Salle Z" }];
+  const marks = [{ x: 105, y: 0 }, { x: 114, y: 0 }, { x: 150, y: 0 }, { x: 151, y: 0 }];
+  assert.deepEqual(placesNear(marks, places, 1), ["Lac", "Salle Z", undefined, undefined]);
+  assert.deepEqual(placesNear(marks, places), [undefined, undefined, undefined, undefined]);
+});
+
+test("a saved trip keeps its name, and one with a broken name is dropped", () => {
+  const trip = { id: "t", ended: 2, points: [{ x: 0, y: 0, time: 0 }, { x: 1, y: 1, time: 1 }] };
+  assert.equal(isTrip(trip), true);
+  assert.equal(isTrip({ ...trip, name: "Loop" }), true);
+  assert.equal(isTrip({ ...trip, name: 4 }), false);
 });
 
 test("the long-press wheel is three thirds: up-left a place, up-right back, down the trail", () => {

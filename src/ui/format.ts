@@ -51,8 +51,8 @@ export function lastUsed(map: { created: number; opened?: number }, now = Date.n
     : days < 7 ? t("Added {days} days ago", { days }) : t("Added {date}", { date });
 }
 
-/** "Entrance 3": one past the highest number already given to this kind, so
- *  names count per kind and a deletion never makes a duplicate. */
+/** "Route 3": one past the highest number already given to this base, so
+ *  names count up and a deletion never makes a duplicate. */
 export function nextName(base: string, names: Iterable<string>) {
   let highest = 0;
   for (const name of names) {
@@ -86,6 +86,10 @@ export function timeAgo(time: number, now = Date.now()) {
     : minutes < 48 * 60 ? relative.format(-Math.round(minutes / 60), "hour")
     : relative.format(-Math.round(minutes / 1440), "day");
 }
+
+/** "Nov 01": a day whose year is shown beside it, or doesn't matter. */
+export const dayDate = (time: number) =>
+  new Date(time).toLocaleDateString(locale, { month: "short", day: "2-digit" });
 
 /** A log entry's day, with its year: logs reach back further than this year. */
 export const logDate = (time: number) =>

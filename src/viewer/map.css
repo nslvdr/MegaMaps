@@ -1,0 +1,212 @@
+/* What the map code draws itself, in SVG: pins, routes, the trail, labels,
+   callouts and the debug overlay. Components style themselves; these
+   elements are made in src/viewer, so their look lives here. */
+/* The example map, darkened like in the app and dimmed so the text reads over it. */
+.landing-map {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.28;
+}
+.landing-map svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.landing-map > svg:first-child {
+  filter: var(--plan-dark);
+}
+/* The hidden debug overlay's stats, turned on by holding Check for updates. */
+.map-debug {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--hud-top) + 44px + 12px);
+  left: var(--edge-l);
+  margin: 0;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: #000b;
+  color: var(--neon-add);
+  font: var(--text-small) / 1.4 ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  pointer-events: none;
+}
+/* The debug overlay's outlines of what each label's spot was weighed against. */
+.map-debug-layout {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  fill: none;
+  stroke-width: 1;
+}
+.map-debug-layout .pin {
+  stroke: var(--neon-saved);
+}
+.map-debug-layout .taken {
+  stroke: var(--neon-add);
+}
+.map-debug-layout .refused {
+  stroke: var(--neon-trail);
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+.map-debug-layout line {
+  stroke: var(--neon-measure);
+  stroke-width: 2;
+}
+.search-match-connector {
+  stroke: var(--neon-saved);
+  stroke-width: 1px;
+  opacity: 0.55;
+}
+.map-balloon {
+  pointer-events: none;
+}
+.map-balloon text {
+  fill: var(--text);
+  font-family: inherit;
+}
+.map-callout {
+  color: var(--callout-color, var(--neon-saved));
+}
+.map-callout-connector {
+  stroke: currentColor;
+  stroke-width: 1px;
+}
+.map-callout > rect {
+  fill: #080c0c;
+  stroke: #445354;
+  stroke-width: 1px;
+}
+.map-callout > text {
+  fill: var(--text);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+.map-callout-icon {
+  width: 16px;
+  height: 16px;
+}
+:root[data-labels="large"] .map-callout > text {
+  font-size: var(--text-body);
+}
+:root[data-labels="large"] .map-callout-icon {
+  width: 18px;
+  height: 18px;
+}
+/* ---------- Overlay symbols ---------- */
+/* Editing: the route's points grow into draggable handles; a place being
+   moved is lifted. */
+.route.editing .route-dot-casing {
+  stroke-width: 18px;
+}
+.route.editing .route-dot {
+  stroke-width: 12px;
+}
+.moving .pin-body {
+  filter: drop-shadow(0 0 8px rgb(255 255 255 / 0.7));
+  animation: lifted var(--motion-pulse) ease-in-out infinite;
+}
+/* The place or route being read stands out from the others. */
+.route.selected .route-casing {
+  stroke-width: 13px;
+}
+.route.selected .route-line {
+  stroke-width: 7px;
+}
+.selected .pin-body {
+  transform: scale(1.5);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+@starting-style {
+  .selected .pin-body {
+    transform: none;
+  }
+}
+/* A place just added drops onto its spot. `scale` adds to the selected pin's
+   transform rather than replacing it. */
+.pin-body.added {
+  animation: pin-drop var(--motion-slow) var(--ease-out);
+}
+@keyframes pin-drop {
+  from {
+    scale: 0;
+  }
+  60% {
+    scale: 1.2;
+  }
+}
+@keyframes lifted {
+  0%,
+  100% {
+    transform: scale(1.35);
+  }
+  50% {
+    transform: scale(1.55);
+  }
+}
+.map-overlay.hide-routes [data-layer="routes"],
+.map-overlay.hide-places [data-layer="places"],
+.map-overlay.hide-labels .overlay-label {
+  display: none;
+}
+/* Jumped to from Saved: two pulses once the glide has landed. */
+.found .pin-body,
+.found .map-balloon-body,
+.route.found {
+  animation: pulse var(--motion-pulse) ease-in-out var(--motion-slow) 2;
+}
+
+/* The trail: faint dashes through each point marked, and the last one, where
+   the user said they were, pulsing while it is recent. */
+.trail-line {
+  opacity: 0.3;
+}
+.trail-dot {
+  opacity: 0.4;
+}
+.trail-arrow {
+  opacity: 0.6;
+}
+.trail-mark {
+  fill: var(--neon-trail);
+  stroke: #000;
+  stroke-width: 2.5;
+}
+.trail-pulse {
+  fill: none;
+  stroke: var(--neon-trail);
+  stroke-width: 2.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* A few pulses each time it's drawn, then rest: a pulse inside the map's SVG
+   repaints it every frame, which went on for up to an hour. */
+.trail-here[data-age="fresh"] .trail-pulse {
+  animation: trail-pulse 2s ease-out 3;
+}
+.trail-here[data-age="aging"] .trail-pulse {
+  stroke-opacity: 0.5;
+  animation: trail-pulse 4s ease-out 2;
+}
+.trail-here[data-age="old"] .trail-mark {
+  opacity: 0.5;
+}
+@keyframes trail-pulse {
+  from {
+    opacity: 0.9;
+    transform: scale(0.45);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
