@@ -1,3 +1,4 @@
+import { newId } from "../new-id";
 import { database, inMemory, transact } from "./database";
 import type { NavigationState } from "../viewer/navigation";
 
@@ -11,7 +12,7 @@ const range = (mapId: string) => IDBKeyRange.bound(`${mapId}/`, `${mapId}/￿`);
 const PRUNE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export async function savePhoto(mapId: string, blob: Blob) {
-  const id = crypto.randomUUID();
+  const id = newId();
   await transact("photos", "readwrite", (s) => s.put({ blob, created: Date.now() } satisfies StoredPhoto, key(mapId, id)));
   return id;
 }

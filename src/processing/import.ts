@@ -1,3 +1,4 @@
+import { newId } from "../new-id";
 import { language, t } from "../i18n";
 import type { ImportProgress, MapRecord, WorkerReply } from "../types";
 import { mapSize, readHeader } from "./headers";
@@ -9,7 +10,7 @@ export async function importMap(
   onProgress: (p: ImportProgress) => void,
   signal: AbortSignal,
   /** Restored backups keep their map's identity, so restoring twice adds nothing. */
-  id: string = crypto.randomUUID(),
+  id: string = newId(),
 ) {
   if (signal.aborted) throw new DOMException(t("Import cancelled."), "AbortError");
   onProgress({ fraction: 0, message: t("Reading image metadata…") });

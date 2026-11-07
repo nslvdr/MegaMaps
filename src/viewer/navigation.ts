@@ -3,6 +3,7 @@ import type { Camera, Point, Size } from "./camera";
 import { screenToWorld, cameraAt } from "./camera";
 import { isTrailPoint, isTrip, type TrailPoint, type Trip } from "./trail";
 import type { Geo } from "./geo";
+import { isVectorLayer, type VectorLayer } from "../vectors/layer";
 export interface SavedView {
   center: Point;
   scale: number;
@@ -120,6 +121,8 @@ export interface NavigationState {
   measuredScale?: number;
   /** Streets show through the map; only once it is lined up. */
   streets?: boolean;
+  /** Lines imported from GeoPackage or GeoJSON files. Kept on this device and in backups, never shared. */
+  vectors?: VectorLayer[];
 }
 /** Slightly dimmed by default so routes and places stand out from the map. */
 export const DEFAULT_DIMMING = 0.85;
@@ -222,7 +225,8 @@ export function normalizeNavigation(stored: StoredNavigation): NavigationState {
   );
   const trail = Array.isArray(stored.trail) ? stored.trail.filter(isTrailPoint) : [];
   const trips = Array.isArray(stored.trips) ? stored.trips.filter(isTrip) : [];
-  return { ...defaults, ...current, markers, routes, trail, trips, layers };
+  const vectors = Array.isArray(stored.vectors) ? stored.vectors.filter(isVectorLayer) : undefined;
+  return { ...defaults, ...current, markers, routes, trail, trips, layers, ...(vectors ? { vectors } : {}) };
 }
 // Distinct, high-contrast colors on both black and light maps.
 export const routeColors = ["#38d6ff", "#ff6bd6", "#ffd23f", "#7dff8a", "#b18cff"];

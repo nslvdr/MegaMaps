@@ -1,11 +1,12 @@
 <script lang="ts">
   import { t } from "../../i18n";
   import { icons } from "../icons";
+  import HeaderButton from "../kit/HeaderButton.svelte";
   import Icon from "../kit/Icon.svelte";
   import Switch from "../kit/Switch.svelte";
   import { BRIGHTNESS_LEVELS, brightnessPercent, layerNames } from "../../viewer/navigation";
   import type { ViewerControls } from "../viewer-controls.svelte";
-  import { panelCard, panelHeading, panelRow, rowHint, rowIcon, rowText } from "./styles";
+  import { fieldHelp, panelCard, panelHeading, panelRow, rowHint, rowIcon, rowText } from "./styles";
 
   // View settings: the map's look, then which layers show on it.
   let { controls, hidden }: { controls: ViewerControls; hidden: boolean } = $props();
@@ -19,6 +20,14 @@
     routes: { label: t("Routes"), icon: icons.route, neon: "[--c:var(--kind-route)]" },
     places: { label: t("Places"), icon: icons.pin, neon: "[--c:var(--kind-place)]" },
     labels: { label: t("Names"), icon: icons.text, neon: "[--c:var(--neon-saved)]" },
+  };
+  const lines = $derived((controls.tick, controls.vectorRows()));
+  let lineInput = $state<HTMLInputElement>();
+  // Recognised by content: phones often don't know a .gpkg's type, so no filter on the picker.
+  const pickedLines = (event: Event & { currentTarget: HTMLInputElement }) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (file) void controls.importVectors(file);
   };
   // Native radios and switches keep a full-size touch target under the tile.
   const fill = "absolute inset-0 m-0 size-full cursor-pointer opacity-0";
@@ -75,4 +84,22 @@
         class="min-h-44 basis-full cursor-pointer rounded-sm border border-c/40 text-small font-semibold text-c tint-c/12">{t("Calibrate")}</button>
     </div>
   </div>
+  <h3 class={panelHeading}>{t("Lines")}</h3>
+  {#if lines.length}
+    <div id="line-layers" class={[panelCard, "mb-12"]}>
+      {#each lines as line (line.id)}
+        <div class={panelRow}>
+          <span class={rowIcon}><Icon svg={icons.lines} /></span>
+          <span class={rowText}><strong>{line.name}</strong><small class={rowHint}>{line.count}</small></span>
+          <HeaderButton icon={icons.trash} label={t("Delete")} onclick={() => controls.deleteVector(line.id)} />
+          <Switch checked={line.visible} onchange={() => controls.setVectorVisible(line.id, !line.visible)} />
+        </div>
+      {/each}
+    </div>
+  {/if}
+  <button type="button" id="import-lines" disabled={!view.streets.placed} onclick={() => lineInput?.click()}
+    class="flex min-h-44 w-full cursor-pointer items-center justify-center gap-8 rounded-sm border border-c/40 text-small font-semibold text-c tint-c/12 disabled:cursor-default disabled:opacity-50 [&>svg]:size-20"
+    ><Icon svg={icons.importLines} />{t("Import lines (.gpkg, .geojson)")}</button>
+  {#if !view.streets.placed}<p id="lines-hint" class={fieldHelp}>{view.streets.status}</p>{/if}
+  <input bind:this={lineInput} type="file" id="lines-input" hidden onchange={pickedLines} />
 </div>

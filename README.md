@@ -21,6 +21,8 @@ L’app publiée est disponible sur [app.mega-maps.fr](https://app.mega-maps.fr)
 - **Lieux.** 12 types de repères : entrée, puits, passage, salle, danger, inondé, ossuaire, sculpture, graffiti, outils, squat et point d’intérêt. Chaque lieu peut avoir une description, des photos, une hauteur d’eau ou un niveau de danger, et un historique des visites, notes et modifications.
 - **Itinéraires.** Un itinéraire tracé sur la carte indique sa longueur et un temps de marche estimé, une fois l’échelle réglée.
 - **Parcours.** Des points marqués pendant la marche enregistrent le chemin parcouru. Un appui long sur la carte ouvre une roue : en haut à gauche pour ajouter un lieu, vers le bas pour marquer la position, en haut à droite pour revenir au dernier point.
+- **Lignes importées.** Les galeries tracées dans QGIS (`.gpkg`, `.geojson`) se dessinent sur une carte calibrée. Elles se trouvent dans Affichage.
+- **Position d’une autre app.** Sur Android, une app de position installée, comme sPDR, envoie sa position, qui s’affiche sur la carte, et reçoit les repères marqués. Le bouton se trouve dans Parcours.
 - **Recherche de texte.** La reconnaissance de texte, faite sur l’appareil, lit les inscriptions du plan. La recherche porte sur ces inscriptions et sur les lieux enregistrés. Deux termes séparés par un point-virgule, comme `Allée 25; Allée 55`, désignent l’endroit où ils se croisent.
 - **Mesures.** L’échelle se règle une fois à partir d’une longueur connue, puis les distances se mesurent directement sur la carte.
 - **Rotation.** La carte peut tourner librement, rester verrouillée ou suivre la boussole du téléphone, une fois le nord indiqué.

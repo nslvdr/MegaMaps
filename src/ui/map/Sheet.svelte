@@ -31,6 +31,7 @@
   const icon = $derived(panel === "display" ? icons.sun : panel === "trail" ? icons.trail
     : panel === "rotation" ? rotationModes[mode].icon : panel === "add" ? icons.add : icons.saved);
   const top = $derived(panel === "display" || panel === "rotation");
+  const link = $derived(controls.linkView());
   const started = $derived(panel === "trail" ? (controls.tick, controls.tripStarted()) : undefined);
 </script>
 
@@ -47,6 +48,13 @@
   <DialogHeader id="sheet-title" title={looks[panel].title} {icon} class="shrink-0 [&_h2]:text-c"
     subtitle={started ? tripStart : undefined} close={{ id: "close-sheet", onclick: () => controls.sheet(undefined) }}>
     {#snippet actions()}
+      {#if panel === "trail" && controls.canLink}
+        <!-- Green once there's an app answering. -->
+        <span class={["contents", link?.connected && "[--accent:var(--neon-link)]"]}>
+          <HeaderButton id="position-link" icon={icons.link} expanded={!!link} label={link ? t("Disconnect from sPDR") : t("Connect to sPDR")}
+            onclick={() => controls.toggleLink()} />
+        </span>
+      {/if}
       {#if panel === "saved" && controls.onShare}
         <HeaderButton id="share-saved" icon={icons.share} label={t("Share map or selected items")} onclick={() => controls.onShare?.()} />
       {/if}

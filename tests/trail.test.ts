@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isTrip, placesNear, trailAge, trailAgeChange } from "../src/viewer/trail";
+import { isTrip, placesNear, trailAge, trailAgeChange, trailRuns } from "../src/viewer/trail";
 import { wheelChoice } from "../src/ui/hold-wheel";
 import { arrows } from "../src/viewer/overlays";
 import { normalizeNavigation } from "../src/viewer/navigation";
@@ -66,4 +66,15 @@ test("past trips load only whole: an id, an end, and at least two good points", 
     trip, { id: "b", points: points.slice(0, 1), ended: 7 }, { id: "c", points: [points[0], { x: 1 }], ended: 7 },
     { points, ended: 7 }, { id: "d", points }, null,
   ] }).trips, [trip]);
+});
+
+test("the trail splits into marks and recorded stretches that stay joined", () => {
+  const at = (x: number, live?: true) => ({ x, y: 0, time: x, ...(live ? { live } : {}) });
+  const runs = trailRuns([at(0), at(1), at(2, true), at(3, true), at(4)]);
+  assert.deepEqual(runs.map((run) => [run.live, run.points.map((point) => point.x)]), [
+    [false, [0, 1]],
+    [true, [1, 2, 3]],
+    [false, [3, 4]],
+  ]);
+  assert.deepEqual(trailRuns([at(0)]), [], "a single point has no stretch");
 });

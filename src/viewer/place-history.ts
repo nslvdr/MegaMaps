@@ -1,3 +1,4 @@
+import { newId } from "../new-id";
 import { dangerLevel, type MapMarker, type PlaceChange } from "./navigation";
 
 /** The order changes read in, whatever order they were made in. */
@@ -61,7 +62,7 @@ export function recordEdit(place: MapMarker, changes: PlaceChange[], now = Date.
     }
     changes = [...byField.values()].sort((a, b) => fields.indexOf(a.field) - fields.indexOf(b.field));
   }
-  if (changes.length) log.push({ id: crypto.randomUUID(), date: now, changes });
+  if (changes.length) log.push({ id: newId(), date: now, changes });
   if (log.length) place.log = log;
   else delete place.log;
 }

@@ -21,6 +21,7 @@
   --neon-lock: #ff9a3c;
   --neon-measure: #fff04d;
   --neon-trail: #ff2a2a;
+  --neon-link: #7dff8a;
   --kind-route: #38d6ff;
   --kind-place: #ff9a5c;
   /* Motion, mirrored in src/ui/motion.ts: press for a finger going down, fast
@@ -126,6 +127,7 @@
   --color-neon-lock: var(--neon-lock);
   --color-neon-measure: var(--neon-measure);
   --color-neon-trail: var(--neon-trail);
+  --color-neon-link: var(--neon-link);
   --color-kind-route: var(--kind-route);
   --color-kind-place: var(--kind-place);
   --color-accent: var(--accent);

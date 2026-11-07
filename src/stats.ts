@@ -1,3 +1,4 @@
+import { newId } from "./new-id";
 import { loadSetting } from "./storage/settings";
 
 // Usage counts for PostHog: which features are used, on what device and by which
@@ -89,7 +90,7 @@ function save(events: StatEvent[]) {
 /** A random id per device, so returning visits count as one person. */
 function deviceId() {
   let id = localStorage.getItem(ID);
-  if (!id) localStorage.setItem(ID, id = crypto.randomUUID());
+  if (!id) localStorage.setItem(ID, id = newId());
   return id;
 }
 
@@ -166,7 +167,7 @@ export function track(event: string, properties: Properties = {}) {
   if (version === undefined) return;
   try {
     // Online is read now, not when sent, to tell use underground from use above it.
-    const entry = { event, uuid: crypto.randomUUID(), timestamp: new Date().toISOString(),
+    const entry = { event, uuid: newId(), timestamp: new Date().toISOString(),
       properties: { ...properties, distinct_id: deviceId(), app_version: version, online: navigator.onLine,
         ...(session ? { $session_id: session.id } : {}) } };
     save([...queued(), entry].slice(-MAX_QUEUED));

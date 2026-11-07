@@ -25,6 +25,7 @@
   const count = $derived((controls.tick, controls.state.trips.length));
   // Newest first: where you just were is what you came for.
   const marks = $derived.by(() => (controls.tick, !hidden && trip && marksOpen ? controls.tripMarks(controls.state.trail, false).reverse() : []));
+  const link = $derived(controls.linkView());
   const tone = "var(--neon-trail)";
   let howOpen = $state(false);
   const steps = [
@@ -45,6 +46,29 @@
 {/snippet}
 
 <div id="sheet-trail" {hidden}>
+  {#if link}
+    <div id="link-card" class={["mb-12 rounded-md border p-12", link.connected ? "border-neon-link/45" : "border-line"]}>
+      <div class="flex items-center gap-12">
+        <Icon svg={icons.link} class={link.connected ? "size-20 flex-none text-neon-link" : "size-20 flex-none text-muted"} />
+        <p class="m-0 min-w-0 flex-1"><strong id="link-title" class="block text-body font-semibold">{link.title}</strong>
+          <small id="link-hint" class="block text-small leading-compact text-muted tabular-nums">{link.hint}</small></p>
+      </div>
+      {#if link.send}
+        <Button id="link-send-lines" class="mt-12 w-full" variant="quiet" icon={icons.send} disabled={link.sending}
+          label={link.sending ? t("Sending to sPDR…") : link.send} onclick={() => controls.sendLines()} />
+      {/if}
+      <Actions row class="mt-12!">
+        {#if !link.connected}
+          <Button id="link-open" variant="quiet" icon={icons.open} label={t("Open sPDR")} onclick={() => controls.openLinkedApp()} />
+        {:else if link.running}
+          <Button id="link-stop" variant="quiet" icon={icons.stop} label={t("Stop")} onclick={() => controls.stopLinked()} />
+        {:else}
+          <Button id="link-start" variant="quiet" icon={icons.start} label={t("Start tracking")} onclick={() => controls.startLinked()} />
+        {/if}
+        <Button id="link-off" variant="quiet" icon={icons.unlink} label={t("Disconnect")} onclick={() => controls.toggleLink()} />
+      </Actions>
+    </div>
+  {/if}
   {#if trip}
     <p class="m-0 flex min-h-48 flex-wrap items-center justify-between gap-x-12 rounded-md border border-line px-12 text-heading leading-tight font-bold tabular-nums">
       <span class="flex items-center gap-8"><Icon svg={icons.measure} class="size-20 text-c" /><span id="trip-walked">{trip.distance}</span></span>

@@ -9,6 +9,8 @@ export interface Settings {
   "last-backup": number;
   /** Where the last map lined up with the streets is, so the next one starts there. */
   "streets-place": LonLat;
+  /** The link to a position app is on, so it comes back after the app is reopened. */
+  "position-link": boolean;
 }
 export const loadSetting = <K extends keyof Settings>(key: K) =>
   transact<Settings[K] | undefined>("settings", "readonly", (s) => s.get(key));

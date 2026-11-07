@@ -70,6 +70,25 @@ Ils sont enregistrés carte par carte dans IndexedDB (`src/storage/navigation.ts
 
 Plusieurs fenêtres peuvent ouvrir la même bibliothèque. Elles se préviennent des changements par un `BroadcastChannel`, et chaque écriture vérifie, dans la même transaction, que la carte existe toujours : un enregistrement tardif ne peut pas faire revenir une carte supprimée.
 
+## Lignes importées
+
+Affichage › Lignes lit un GeoPackage ou un GeoJSON (lignes et contours de polygones ; les points sont ignorés). `src/vectors/sqlite.ts` parcourt lui-même les pages du fichier SQLite : pas de moteur de base de données à embarquer. Les lignes sont gardées en Web Mercator dans la navigation de la carte, et suivent donc un nouveau calibrage. Elles vont dans les sauvegardes, pas dans les partages.
+
+Seuls WGS 84 et Web Mercator sont lus. Des coordonnées qui dépassent les limites des degrés sont lues comme des mètres Web Mercator, car QGIS peut écrire des mètres sous une étiquette EPSG:4326.
+
+## Liaison avec une app de position
+
+Une page web ne peut pas écouter de connexions : le petit serveur est donc dans l’autre app, sur `127.0.0.1:47823`, et `src/link/position-link.ts` l’interroge chaque seconde. Une fois activée, la liaison réessaie jusqu’à ce qu’on la coupe et garde la dernière position.
+
+| Requête | Réponse |
+|---|---|
+| `GET /v1/state` | `{"app","running","hasGraph","steps","position":{"lat","lon","accuracy","heading","confidence","relocalising"}\|null}` |
+| `POST /v1/start`, `/v1/stop` | `{"ok":true}`, ou 409 `{"error":"open-app"}` |
+| `POST /v1/position` `{"lat","lon","accuracy"}` | `{"ok":true}`, ou 409 `{"error":"no-graph"\|"not-near"}` |
+| `POST /v1/graph` GeoJSON | `{"edges","metres"}`, ou 409 `{"error":"bad-graph"}` |
+
+Toute app qui répond ainsi fonctionne. Elle doit autoriser l’origine de la page (CORS) et refuser les autres, sinon n’importe quel site ouvert sur le téléphone pourrait lire la position. Tant que l’autre app suit l’utilisateur, ses positions s’ajoutent au parcours en cours tous les 10 m, ce qui en démarre un au besoin. Le tracé est plein et orange, et la position actuelle reste le seul grand point. Terminer un parcours en cours de suivi n’en relance pas d’autre avant l’arrêt de l’app ou un nouveau repère. Un repère marqué pendant la liaison est envoyé comme position, à ±10 m. Le bouton Envoyer de la fiche de liaison transmet les lignes affichées, qui remplacent celles envoyées avant.
+
 ## Recherche de texte (OCR)
 
 Après l’import d’une carte, l’app propose de lire le texte imprimé dessus, entièrement sur l’appareil (`src/ocr/`). Aucune lecture ne démarre sans un oui : la détection peut aussi être lancée plus tard depuis les paramètres avancés de la carte.

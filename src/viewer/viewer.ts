@@ -44,6 +44,8 @@ import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
 import { compose, invert, type Spot } from "./geo";
+import { paintVectors } from "./vector-paint";
+import type { LivePosition } from "./overlays";
 import { paintSpot, StreetPane } from "./street-pane";
 import { DARK_STREETS, STREETS_STRENGTH, StreetTiles } from "./street-tiles";
 import type { MapSearchMatch } from "./map-search";
@@ -633,7 +635,7 @@ export class Viewer {
     }
     // Places and labels answer before the red dot, and the dot before a route's line.
     const here = this.navigation.trail.at(-1);
-    if (!label && here && this.options?.onTrailMark && this.near(here, screen) < 24) {
+    if (!label && here && !this.overlay?.hidesHere(here) && this.options?.onTrailMark && this.near(here, screen) < 24) {
       this.options.onTrailMark();
       return true;
     }
@@ -852,6 +854,11 @@ export class Viewer {
     }));
   }
   /** Repaints the map and its labels on the next frame. */
+  /** Where another app says the user is. */
+  setLive(live?: LivePosition) {
+    this.overlay?.setLive(live);
+    this.invalidate();
+  }
   private invalidate() {
     this.stale = true;
     this.requestFrame();
@@ -1003,6 +1010,10 @@ export class Viewer {
       ctx.globalAlpha = 1 - this.navigation.dimming;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
+    }
+    if (this.navigation.geo && this.navigation.vectors?.length) {
+      ctx.setTransform(world);
+      paintVectors(ctx, this.navigation.vectors, this.navigation.geo, this.camera.scale);
     }
     if (this.spot && (this.tool === "match" || this.tool === "check")) {
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

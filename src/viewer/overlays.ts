@@ -9,7 +9,7 @@ import {
   type MapMarker,
   type NavigationState,
 } from "./navigation";
-import { trailAge, trailAgeChange } from "./trail";
+import { trailAge, trailAgeChange, trailRuns, type TrailPoint } from "./trail";
 import { motion } from "../ui/motion";
 const NS = "http://www.w3.org/2000/svg";
 const node = <K extends keyof SVGElementTagNameMap>(
@@ -93,7 +93,35 @@ type OverlayCallout = {
   /** Build order, which breaks priority ties the same way on every sort. */
   order: number; markerId?: string; routeId?: string;
 };
+/** A position reported by another app. `radius` is its accuracy in image pixels. */
+export interface LivePosition {
+  point: Point;
+  radius: number;
+  /** The app stopped, or can't be reached: this is where it last said. */
+  stale: boolean;
+  /** A point in the direction it says the user is going. */
+  ahead?: Point;
+}
+/** The live position's orange, as .live-mark in map.css; imported lines are cyan, so it stands out on them. */
+const LIVE_COLOR = "#ff8a1f";
+const DIRECTION_LENGTH = 44;
+const DIRECTION_CHEVRON = 12;
+/** From the dot, a line of steady length with a chevron at its tip, the way `to` lies from `from`. */
+export function directionPath(from: Point, to: Point) {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  if (!Number.isFinite(angle)) return "";
+  const at = (x: number, y: number) => `${x.toFixed(1)},${y.toFixed(1)}`;
+  const tip = { x: Math.cos(angle) * DIRECTION_LENGTH, y: Math.sin(angle) * DIRECTION_LENGTH };
+  const barb = (turn: number) => at(tip.x + Math.cos(angle + turn) * DIRECTION_CHEVRON, tip.y + Math.sin(angle + turn) * DIRECTION_CHEVRON);
+  return `M0,0L${at(tip.x, tip.y)}M${barb(2.5)}L${at(tip.x, tip.y)}L${barb(-2.5)}`;
+}
 export class NavigationOverlay {
+  private live?: LivePosition;
+  private liveElement?: SVGGElement;
+  private liveAccuracy?: SVGCircleElement;
+  private liveDirection: SVGPathElement[] = [];
+  /** The trail's last point and its red dot, which steps aside for the live dot it would trail behind. */
+  private here?: { point: TrailPoint; element: SVGGElement };
   private points: { element: SVGGElement; point: Point; outside?: boolean }[] = [];
   private paths: PathItem[] = [];
   private callouts: OverlayCallout[] = [];
@@ -118,6 +146,13 @@ export class NavigationOverlay {
   /** Places drawn so far: one missing from it was just added and pops in. */
   private placed?: Set<string>;
   constructor(private svg: SVGSVGElement) {}
+  setLive(live?: LivePosition) {
+    this.live = live;
+  }
+  /** While the live dot leads a recording, the point before it isn't where the user is. */
+  hidesHere(point: TrailPoint) {
+    return !!this.live && !!point.live;
+  }
   /** Highlights the route being drawn (its points become handles) or the place being moved. */
   setEditing(routeId?: string, markerId?: string) {
     this.editing = routeId;
@@ -232,10 +267,21 @@ export class NavigationOverlay {
     clearTimeout(this.ageTimer);
     const trail = node("g", { class: "trail" });
     this.svg.append(trail);
-    path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", "stroke-dasharray": "3 7", class: "trail-line" });
-    path(trail, state.trail, { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, "dots");
-    // Which way the user went, to find the way back.
-    path(trail, state.trail, { stroke: "#fff", "stroke-width": "2", class: "trail-arrow" }, "arrows");
+    const runs = trailRuns(state.trail);
+    for (const run of runs.filter((run) => !run.live)) {
+      path(trail, run.points, { stroke: "#fff", "stroke-width": "2", "stroke-dasharray": "3 7", class: "trail-line" });
+      // Which way the user went, to find the way back.
+      path(trail, run.points, { stroke: "#fff", "stroke-width": "2", class: "trail-arrow" }, "arrows");
+    }
+    path(trail, state.trail.filter((point) => !point.live), { stroke: "#fff", "stroke-width": "5", class: "trail-dot" }, "dots");
+    // What a position app recorded is solid, its past positions small and dark beside the large dot of the current one.
+    for (const run of runs.filter((run) => run.live)) {
+      path(trail, run.points, { stroke: "#000", "stroke-width": "6", class: "track-casing" });
+      path(trail, run.points, { stroke: LIVE_COLOR, "stroke-width": "3.5", class: "track-line" });
+    }
+    const recorded = state.trail.filter((point) => point.live);
+    path(trail, recorded, { stroke: LIVE_COLOR, "stroke-width": "8", class: "track-dot-ring" }, "dots");
+    path(trail, recorded, { stroke: "#3a1c00", "stroke-width": "5", class: "track-dot" }, "dots");
     // A past trip, whatever the layers: bright and whole, from start to end.
     if (this.trip) {
       const trip = node("g", { class: "trip" });
@@ -355,10 +401,18 @@ export class NavigationOverlay {
       path(tape, this.measure, { stroke: CASING, "stroke-width": "18" }, "dots");
       path(tape, this.measure, { stroke: MEASURE_COLOR, "stroke-width": "12" }, "dots");
     }
+    // Another app's estimate, under the user's own mark, which outranks it.
+    this.liveAccuracy = node("circle", { class: "live-accuracy" });
+    this.liveElement = node("g", { class: "live-here" });
+    this.liveDirection = [node("path", { class: "live-direction-casing" }), node("path", { class: "live-direction" })];
+    this.liveElement.append(this.liveAccuracy, ...this.liveDirection, node("circle", { r: "8", class: "live-mark" }));
+    this.svg.append(this.liveElement);
     // Where the user is, over everything else: the trail beneath it is only a record.
     const here = state.trail.at(-1);
+    this.here = undefined;
     if (here) {
       const element = node("g", { class: "trail-here" });
+      this.here = { point: here, element };
       element.append(node("circle", { r: "18", class: "trail-pulse" }), node("circle", { r: "8", class: "trail-mark" }));
       this.svg.append(element);
       this.points.push({ element, point: here });
@@ -440,6 +494,18 @@ export class NavigationOverlay {
         pin.element.style.display = outside ? "none" : "";
       }
       if (!outside) pin.element.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
+    }
+    this.here?.element.setAttribute("visibility", this.hidesHere(this.here.point) ? "hidden" : "visible");
+    if (this.liveElement) {
+      this.liveElement.style.display = this.live ? "" : "none";
+      if (this.live) {
+        const p = worldToScreen(camera, this.live.point);
+        this.liveElement.setAttribute("transform", `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
+        this.liveAccuracy?.setAttribute("r", (this.live.radius * camera.scale).toFixed(1));
+        this.liveElement.classList.toggle("stale", this.live.stale);
+        const direction = this.live.ahead ? directionPath(p, worldToScreen(camera, this.live.ahead)) : "";
+        for (const path of this.liveDirection) path.setAttribute("d", direction);
+      }
     }
     // Open balloons, which another balloon on the same point goes around like a pin.
     const balloons: CalloutBounds[] = [];

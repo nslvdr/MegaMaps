@@ -28,6 +28,11 @@ export function toMercator({ lon, lat }: LonLat): Point {
 export function toLonLat({ x, y }: Point): LonLat {
   return { lon: x * 360 - 180, lat: (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI };
 }
+/** A nearby point the way a bearing goes, in Mercator: enough to tell a direction on any map. */
+export function aheadOf(place: LonLat, bearing: number): Point {
+  const { x, y } = toMercator(place), radians = (bearing * Math.PI) / 180;
+  return { x: x + Math.sin(radians) * 1e-6, y: y - Math.cos(radians) * 1e-6 };
+}
 /** Metres a Mercator unit covers where `point` is; it shrinks toward the poles. */
 const metresPerUnit = (point: Point) => EARTH_CIRCUMFERENCE * Math.cos((toLonLat(point).lat * Math.PI) / 180);
 /** Real metres one image pixel covers, at the map's center. */

@@ -6,6 +6,19 @@ export interface TrailPoint extends Point {
   time: number;
   /** What the map showed as it was marked, so the user can come back to it. */
   view?: { center: Point; scale: number };
+  /** Recorded from a position app rather than marked by the user. */
+  live?: true;
+}
+/** The trail cut into what the user marked and what a position app recorded. A
+ * stretch belongs to the point it arrives at, so the two stay joined. */
+export function trailRuns(points: TrailPoint[]) {
+  const runs: { live: boolean; points: TrailPoint[] }[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const live = !!points[i]!.live, run = runs.at(-1);
+    if (run?.live === live) run.points.push(points[i]!);
+    else runs.push({ live, points: [points[i - 1]!, points[i]!] });
+  }
+  return runs;
 }
 /** The last point pulses briskly when drawn, slower once aging, then rests dimmed: an old position is a guess. */
 const FRESH_MS = 15 * 60 * 1000;

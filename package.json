@@ -11,7 +11,8 @@
     "deploy": "npm run build && wrangler deploy",
     "preview": "vite preview --host 0.0.0.0",
     "test": "tsx --conditions=browser --import ./tests/setup.ts --test tests/*.test.ts",
-    "bench": "tsx bench/run.ts"
+    "bench": "tsx bench/run.ts",
+    "mbtiles": "tsx --conditions=browser --import ./scripts/node-locale.ts scripts/mbtiles-to-megamap.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

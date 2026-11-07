@@ -175,6 +175,33 @@
 .trail-arrow {
   opacity: 0.6;
 }
+.live-accuracy {
+  fill: rgb(255 138 31 / 0.2);
+  stroke: rgb(255 138 31 / 0.6);
+  stroke-width: 1;
+}
+.live-mark {
+  fill: #ff8a1f;
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+.live-direction,
+.live-direction-casing {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.live-direction {
+  stroke: #fff;
+  stroke-width: 3;
+}
+.live-direction-casing {
+  stroke: #000;
+  stroke-width: 5.5;
+}
+.live-here.stale {
+  opacity: 0.5;
+}
 .trail-mark {
   fill: var(--neon-trail);
   stroke: #000;

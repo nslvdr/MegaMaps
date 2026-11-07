@@ -248,3 +248,15 @@ test("malformed, oversized, and truncated pixel data fail explicitly", async () 
     /Truncated/,
   );
 });
+
+test("IDs don't need a secure context, where randomUUID is missing", async () => {
+  const { newId } = await import("../src/new-id");
+  const real = crypto.randomUUID;
+  Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+  try {
+    assert.match(newId(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.notEqual(newId(), newId());
+  } finally {
+    Object.defineProperty(crypto, "randomUUID", { value: real, configurable: true });
+  }
+});

@@ -38,6 +38,14 @@ Ces tests ne peuvent pas mesurer les limites mémoire de Safari, l’usage du GP
 
 Le stockage du navigateur appartient à une origine : chaque port ou worktree démarre donc avec une bibliothèque vide. Pour éviter d’importer sans cesse les mêmes cartes, le serveur de dev restaure les fichiers `.megabackup` de `~/.megamaps-dev/` (ou du dossier indiqué par `MEGAMAPS_DEV_DATA`) qui manquent à l’origine actuelle. Enregistrez une sauvegarde depuis les Réglages et placez-la dans ce dossier.
 
+## Convertir un raster `.mbtiles`
+
+```sh
+npm run mbtiles -- atlas.mbtiles --around galleries.gpkg
+```
+
+Écrit un `.megamap` déjà calibré, à importer comme un fichier partagé. Une carte tient en 600 mégapixels : `--around` recadre autour des lignes d’un fichier (`--margin`, 100 m par défaut), et sans `--zoom` le script prend le zoom le plus net qui tient. Il faut Node 22.13+, comme pour les tests qui utilisent `node:sqlite`.
+
 ## Tester sur un téléphone
 
 Un téléphone qui ouvre l’adresse locale de votre ordinateur en simple `http://` n’a pas de contexte sécurisé : les service workers et OPFS n’y sont pas disponibles. Pour les tester, servez le build de production en HTTPS avec un certificat auquel le téléphone fait confiance (par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert)) :
@@ -46,6 +54,8 @@ Un téléphone qui ouvre l’adresse locale de votre ordinateur en simple `http:
 npm run build
 MAP_VIEWER_HTTPS_CERT=cert.pem MAP_VIEWER_HTTPS_KEY=key.pem npm run preview
 ```
+
+Avec un téléphone Android branché en USB, `adb reverse tcp:5173 tcp:5173` puis `http://localhost:5173` donne un contexte sécurisé sans certificat. C’est aussi l’adresse à utiliser pour la liaison avec sPDR, qui refuse les pages servies depuis une adresse du réseau local.
 
 Ne committez jamais de certificats ni de clés. `.gitignore` exclut déjà les fichiers `*.pem`, `*.key` et `.env`.
 

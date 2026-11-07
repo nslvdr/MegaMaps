@@ -1,3 +1,4 @@
+import { newId } from "../new-id";
 import { flushSync } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { showDialog } from "./dialog";
@@ -33,7 +34,7 @@ import { lastUpdated, placeChanges, recordEdit } from "../viewer/place-history";
 import { allowCompass, compassNeedsPermission, speedDelays, watchCompass, type CompassSpeed } from "../viewer/compass";
 import { icons } from "./icons";
 import { dayDate, logDate, nextName, plural, timeAgo, updatedAgo } from "./format";
-import { locale, t } from "../i18n";
+import { errorMessage, locale, t } from "../i18n";
 import { preference, setPreference } from "../preferences";
 import { orderPlaces, orderRoutes, placeOrders, routeOrders } from "./saved-order";
 import { placeIcon } from "./place-icon";
@@ -43,7 +44,9 @@ import { normalizeText, ocrLabelAt, type OcrIndex } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
 import { track } from "../stats";
 import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
-import { geoMetresPerPixel, geoNorth, pinGeo, placeGeo, spotsGeo, spotsTooClose, toLonLat, toMercator, type Geo, type Spot } from "../viewer/geo";
+import { aheadOf, geoMetresPerPixel, geoNorth, invert, pinGeo, placeGeo, spotsGeo, spotsTooClose, toLonLat, toMercator, type Geo, type Spot } from "../viewer/geo";
+import { canLink, LinkRefused, OPEN_SPDR_URL, PositionLink } from "../link/position-link";
+import { readVectorFile, shownLinesGeoJson, type VectorLayer } from "../vectors/layer";
 import { loadSetting, saveSetting } from "../storage/settings";
 
 export const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
@@ -105,6 +108,11 @@ const COMPASS_WAIT_MS = 3000;
 const COMPASS_STEP = 2;
 /** …and waits for readings to hold within this many degrees of their average. */
 const COMPASS_HOLD = 15;
+/** How loosely a mark corrects a linked app: the user is near there, not on the spot. */
+const MARK_ACCURACY_METRES = 10;
+/** How far a position app's estimate moves before it adds to the trip. */
+const LIVE_SPACING_METRES = 10;
+const MAX_VECTOR_BYTES = 64 * 2 ** 20;
 /** What one step of the Calibrate rulers changes: the map's size by a twentieth of a percent, its turn by a twentieth of a degree. */
 const SCALE_STEP = 0.0005, TURN_STEP = (0.05 * Math.PI) / 180;
 /** Height of one north wheel row, as the wheel draws it. */
@@ -120,7 +128,7 @@ const darkMessages: Record<DarkMode["kind"], string> = {
 // map's saved navigation is read again each time `tick` moves.
 export class ViewerControls {
   private viewer?: Pick<Viewer, "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"> &
-    Partial<Pick<Viewer, "setMeasure" | "moveStreets" | "streetsCenter" | "streetsScale" | "markSpot" | "restyle" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
+    Partial<Pick<Viewer, "setLive" | "setMeasure" | "moveStreets" | "streetsCenter" | "streetsScale" | "markSpot" | "restyle" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
   /** Bumped whenever the saved navigation changes, so whatever shows it is worked out again. */
   tick = $state(0);
   tool = $state<Tool>("browse");
@@ -284,6 +292,9 @@ export class ViewerControls {
     this.bind();
     this.refresh();
     if (state.rotationMode === "compass") this.resumeCompass();
+    if (this.canLink) void loadSetting("position-link").then((on) => {
+      if (on && !this.controller.signal.aborted) this.link.connect();
+    }).catch(() => {});
   }
   private static newVisit() {
     return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false };
@@ -442,6 +453,7 @@ export class ViewerControls {
     this.close("mark-dialog");
     this.state.trail.push(mark);
     this.changed();
+    this.sendMark(mark);
     // With trip_ended, tells trips left running from Trail opened only to look.
     if (this.state.trail.length === 1) track("trip_started");
     this.showToast(this.state.trail.length > 1 ? t("Trail point added") : t("Trip started"), "done", () => {
@@ -521,9 +533,10 @@ export class ViewerControls {
   endTrip() {
     const points = this.state.trail;
     if (!points.length) return;
-    const trip = points.length > 1 ? { id: crypto.randomUUID(), points, ended: Date.now() } : undefined;
+    const trip = points.length > 1 ? { id: newId(), points, ended: Date.now() } : undefined;
     this.close("mark-dialog");
     this.state.trail = [];
+    this.liveTripEnded = this.link.status === "connected" && !!this.link.state?.running;
     if (trip) {
       this.state.trips.push(trip);
       track("trip_ended", { minutes: Math.round((trip.ended - points[0]!.time) / 60_000), points: points.length });
@@ -858,7 +871,7 @@ export class ViewerControls {
     const place = this.viewedItem();
     const text = this.entryText.trim(), day = this.entryDate;
     if (!place || !("label" in place) || !day) return;
-    place.log = [...place.log ?? [], { id: crypto.randomUUID(), date: dayTime(day), ...(text ? { text } : {}) }];
+    place.log = [...place.log ?? [], { id: newId(), date: dayTime(day), ...(text ? { text } : {}) }];
     this.close("entry-dialog");
     this.changed();
     this.showDetails(place);
@@ -1009,7 +1022,7 @@ export class ViewerControls {
   /** Start drawing immediately; the default name can be changed from Saved. */
   addRoute() {
     const route: PlannedRoute = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: nextName(t("Route"), this.state.routes.map((r) => r.name)),
       points: [],
       created: Date.now(),
@@ -1349,7 +1362,7 @@ export class ViewerControls {
     const created = existing?.created ?? Date.now();
     const kind = this.formKind;
     const marker: MapMarker = {
-      id: existing?.id ?? crypto.randomUUID(),
+      id: existing?.id ?? newId(),
       point: this.markerPoint,
       label,
       description: this.formDescription.trim(),
@@ -1645,6 +1658,159 @@ export class ViewerControls {
   setStreets(on: boolean) {
     this.state.streets = on;
     this.changed(true);
+  }
+  // The link to a position app on this phone, such as sPDR.
+  readonly canLink = canLink(navigator);
+  private linkTick = $state(0);
+  private link = new PositionLink(() => {
+    this.linkTick++;
+    this.showLivePosition();
+    this.recordLivePosition();
+  });
+  /** The user ended a trip with the app still running: no new one starts until it stops or they mark. */
+  private liveTripEnded = false;
+  /** While the app runs, its positions grow the trip like marks, with nothing to acknowledge. */
+  private recordLivePosition() {
+    const { status, state } = this.link, at = state?.position, geo = this.state.geo, trail = this.state.trail;
+    if (status === "connected" && !state?.running) this.liveTripEnded = false;
+    if (trail.length) this.liveTripEnded = false;
+    if (status !== "connected" || !state?.running || !at || at.relocalising || !geo || this.liveTripEnded) return;
+    // Being lined up, the map isn't where it will be; a mark being read or moved must stay the last.
+    if (this.tool === "match" || this.tool === "check" || this.movingMark || this.isOpen("mark-dialog")) return;
+    const point = worldToScreen(invert(geo), toMercator(at)), last = trail.at(-1);
+    if (!insideImage(point, this.map)) return;
+    if (last && Math.hypot(point.x - last.x, point.y - last.y) * geoMetresPerPixel(geo, this.map) < LIVE_SPACING_METRES) return;
+    const view = this.markedView();
+    this.state.trail.push({ ...point, time: Date.now(), live: true, ...(view && { view }) });
+    if (trail.length === 1) track("trip_started");
+    this.changed();
+  }
+  private showLivePosition() {
+    const at = this.link.state?.position, geo = this.state.geo;
+    this.viewer?.setLive?.(at && geo ? {
+      point: worldToScreen(invert(geo), toMercator(at)),
+      radius: at.accuracy / geoMetresPerPixel(geo, this.map),
+      stale: this.link.status !== "connected" || !this.link.state?.running,
+      ...(at.heading !== undefined ? { ahead: worldToScreen(invert(geo), aheadOf(at, at.heading)) } : {}),
+    } : undefined);
+  }
+  /** The link's state in words, or nothing while it is off. */
+  linkView() {
+    void this.linkTick;
+    void this.tick;
+    const { status, state } = this.link;
+    if (status === "off") return undefined;
+    const connected = status === "connected", at = state?.position;
+    const title = !state ? t("Waiting for sPDR")
+      : !connected ? t("{app} · connection lost", { app: state.app })
+      : state.running ? t("{app} · running", { app: state.app }) : t("{app} · stopped", { app: state.app });
+    const position = at && [
+      t("±{metres} m", { metres: Math.round(at.accuracy) }),
+      ...(at.confidence !== undefined ? [t("confidence {percent}%", { percent: Math.round(at.confidence * 100) })] : []),
+      plural(state!.steps, "step"),
+    ].join(" · ");
+    const hint = !state ? t("Open sPDR on this phone. The link connects by itself.")
+      : !connected ? t("Showing the last position it gave.")
+      : at?.relocalising ? t("{app} is searching for your position.", { app: state.app })
+      : position && !this.state.geo ? t("Calibrate this map to see the position on it.")
+      : position ?? (state.hasGraph ? t("Set your position in {app} to start.", { app: state.app })
+        : t("{app} has no galleries loaded.", { app: state.app }));
+    const shown = (this.state.vectors ?? []).filter((layer) => layer.visible).reduce((total, layer) => total + layer.lines.length, 0);
+    return { connected, title, hint, running: connected && !!state?.running, sending: this.sendingLines,
+      send: connected && shown ? t("Send {lines} to sPDR", { lines: plural(shown, "line") }) : undefined };
+  }
+  private sendingLines = $state(false);
+  /** Gives sPDR the lines shown on this map to follow, in place of those sent before. */
+  async sendLines() {
+    if (this.sendingLines) return;
+    this.sendingLines = true;
+    const layers = this.state.vectors ?? [];
+    const count = layers.filter((layer) => layer.visible).reduce((total, layer) => total + layer.lines.length, 0);
+    try {
+      const metres = await this.link.sendLines(shownLinesGeoJson(layers));
+      this.showToast(metres === undefined ? t("{lines} sent to sPDR", { lines: plural(count, "line") })
+        : t("{lines} sent to sPDR · {distance}", { lines: plural(count, "line"), distance: formatDistance(metres) }), "done");
+    } catch (error) {
+      this.showToast(error instanceof LinkRefused && error.message === "bad-graph"
+        ? t("sPDR couldn’t build galleries from these lines.") : t("sPDR didn’t answer."), "error");
+    } finally {
+      this.sendingLines = false;
+    }
+  }
+  toggleLink() {
+    const on = this.link.status === "off";
+    if (on) this.link.connect();
+    else this.link.disconnect();
+    void saveSetting("position-link", on).catch(() => {});
+  }
+  openLinkedApp() {
+    location.href = OPEN_SPDR_URL;
+  }
+  /** Android lets only a visible app start tracking, so that can mean going there. */
+  async startLinked() {
+    try {
+      await this.link.start();
+    } catch (error) {
+      if (error instanceof LinkRefused && error.message === "open-app") {
+        this.showToast(t("Press Start in sPDR."), "quiet");
+        this.openLinkedApp();
+      } else this.showToast(t("sPDR didn’t answer."), "error");
+    }
+  }
+  async stopLinked() {
+    await this.link.stop().catch(() => this.showToast(t("sPDR didn’t answer."), "error"));
+  }
+  /** A mark is the user saying where they are, which corrects the other app too, loosely. */
+  private sendMark(point: Point) {
+    const geo = this.state.geo;
+    if (this.link.status !== "connected" || !geo) return;
+    const { lat, lon } = toLonLat(worldToScreen(geo, point));
+    void this.link.sendPosition(lat, lon, MARK_ACCURACY_METRES).catch((error: unknown) => {
+      const code = error instanceof LinkRefused ? error.message : "";
+      this.showToast(code === "not-near" ? t("sPDR didn’t use this mark: no gallery within 100 m.")
+        : code === "no-graph" ? t("sPDR didn’t use this mark: it has no galleries loaded.")
+        : t("sPDR didn’t answer."), "error");
+    });
+  }
+  vectorRows() {
+    return (this.state.vectors ?? []).map(({ id, name, visible, lines }) => ({ id, name, visible, count: plural(lines.length, "line") }));
+  }
+  async importVectors(file: File) {
+    let layer: VectorLayer;
+    try {
+      if (file.size > MAX_VECTOR_BYTES) throw new Error(t("This file is too large: {megabytes} MB at most.", { megabytes: MAX_VECTOR_BYTES / 2 ** 20 }));
+      layer = readVectorFile(new Uint8Array(await file.arrayBuffer()), file.name, newId());
+    } catch (error) {
+      this.showToast(errorMessage(error), "error");
+      return;
+    }
+    this.state.vectors = [...this.state.vectors ?? [], layer];
+    this.changed();
+    this.showToast(this.vectorsOnMap(layer) ? t("{name} added · {lines}", { name: layer.name, lines: plural(layer.lines.length, "line") })
+      : t("{name} added, but its lines fall outside this map.", { name: layer.name }), this.vectorsOnMap(layer) ? "done" : "error");
+  }
+  private vectorsOnMap({ lines }: VectorLayer) {
+    const geo = this.state.geo;
+    if (!geo) return false;
+    const toImage = invert(geo);
+    return lines.some((line) => {
+      for (let i = 0; i < line.length; i += 2)
+        if (insideImage(worldToScreen(toImage, { x: line[i]!, y: line[i + 1]! }), this.map)) return true;
+      return false;
+    });
+  }
+  setVectorVisible(id: string, visible: boolean) {
+    this.state.vectors = this.state.vectors?.map((layer) => layer.id === id ? Object.assign(layer, { visible }) : layer);
+    this.changed();
+  }
+  deleteVector(id: string) {
+    const before = this.state.vectors ?? [];
+    this.state.vectors = before.filter((layer) => layer.id !== id);
+    this.changed();
+    this.showToast(t("Lines removed"), "removed", () => {
+      this.state.vectors = before;
+      this.changed();
+    });
   }
   /** What the rulers are at, in words. */
   private rulerValues() {
@@ -2106,6 +2272,7 @@ export class ViewerControls {
     clearTimeout(this.discardTimer);
     clearTimeout(this.tripClockTimer);
     this.stopCompass();
+    this.link.disconnect();
     this.hideToast();
     const saved = this.flush();
     this.controller.abort();

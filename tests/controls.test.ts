@@ -11,6 +11,7 @@ import { savePhoto } from "../src/storage/photos";
 import { worldToScreen, type Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
 import type { MapSearchMatch } from "../src/viewer/map-search";
+import { toLonLat, type Geo } from "../src/viewer/geo";
 
 type Viewer = Parameters<ViewerControls["attach"]>[0];
 
@@ -1987,4 +1988,55 @@ test("calibrating matches a spot, then a second one or the rulers", async (t) =>
   assert.equal(other.geo?.scale, 2 ** -24, "as big as it shows beside the streets");
   click("tool-cancel");
   assert.equal(other.geo, undefined, "× leaves the map as it was");
+});
+
+/** A map one metre per pixel or so, in Paris, and an app whose position the test moves. */
+function linkedApp(t: TestContext, state: NavigationState) {
+  const geo: Geo = { x: 0.5064, y: 0.3441, scale: 1 / 26_400_000, rotation: 0 };
+  state.geo = geo;
+  const app = { running: true, relocalising: false, at: { x: 100, y: 100 } };
+  const fetchBefore = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const { lon, lat } = toLonLat({ x: geo.x + app.at.x * geo.scale, y: geo.y + app.at.y * geo.scale });
+    return new Response(JSON.stringify({ app: "sPDR", running: app.running, hasGraph: true, steps: 1,
+      position: { lat, lon, accuracy: 5, heading: 0, confidence: 1, relocalising: app.relocalising } }));
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = fetchBefore; });
+  return app;
+}
+const nextPoll = () => new Promise((done) => setTimeout(done, 1050));
+
+test("a running position app grows the trip every 10 m, as recorded points, and ending it holds until it stops", async (t) => {
+  const state = defaultNavigation("linked");
+  const app = linkedApp(t, state);
+  const controls = openMap(t, mapRecord("linked"), state);
+  controls.toggleLink();
+  t.after(() => { if (controls.linkView()) controls.toggleLink(); });
+  await new Promise((done) => setTimeout(done, 30));
+  assert.equal(state.trail.length, 1, "the first position starts a trip");
+  assert.equal(state.trail[0]!.live, true);
+
+  app.at = { x: 104, y: 100 };
+  await nextPoll();
+  assert.equal(state.trail.length, 1, "4 m isn't enough to add one");
+  app.at = { x: 130, y: 100 };
+  app.relocalising = true;
+  await nextPoll();
+  assert.equal(state.trail.length, 1, "nor is a position the app itself doubts");
+  app.relocalising = false;
+  await nextPoll();
+  assert.equal(state.trail.length, 2);
+  assert.ok(Math.abs(state.trail[1]!.x - 130) < 0.5);
+
+  controls.endTrip();
+  assert.equal(state.trips.length, 1, "a recorded walk is kept like any trip");
+  app.at = { x: 300, y: 100 };
+  await nextPoll();
+  assert.equal(state.trail.length, 0, "ending it doesn't start another under the user's feet");
+  app.running = false;
+  await nextPoll();
+  app.running = true;
+  await nextPoll();
+  assert.equal(state.trail.length, 1, "the next run starts a new trip");
+  controls.toggleLink();
 });
