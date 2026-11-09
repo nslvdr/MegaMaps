@@ -9,7 +9,7 @@ const ENDPOINT = "https://eu.i.posthog.com/batch/";
 const QUEUE = "megamaps:stats-queue", ID = "megamaps:stats-id";
 const SESSION = "megamaps:stats-session", VERSION = "megamaps:stats-version";
 /** Older events drop first, so a long trip offline can't fill storage. */
-const MAX_QUEUED = 500, BATCH = 50;
+const MAX_QUEUED = 1024, BATCH = 50;
 /** Browsers refuse a keepalive request over 64 KB, and the device and person
  * properties added on the way out roughly double each event, so a batch's
  * events stay well under half of that. */
@@ -44,6 +44,8 @@ export interface Session {
   shown?: number;
   /** Time on screen before the app was last hidden, in ms. */
   visible?: number;
+  /** When the last event was counted, so a session the app died in still has an end. */
+  seen?: number;
   /** Counts by event name, plus a few the summary needs; missing on sessions from older versions. */
   tally?: Record<string, number>;
 }
@@ -180,6 +182,8 @@ export function startStats(appVersion: string) {
     localStorage.setItem(VERSION, appVersion);
     session = JSON.parse(localStorage.getItem(SESSION) ?? "null") ?? undefined;
   } catch {}
+  // Still on screen means the app was killed without being hidden: its last event ends it.
+  if (session?.shown !== undefined) hideSession(Math.max(session.shown, session.seen ?? 0));
   resumeSession(Date.now());
   // The first launch on a device is the install: the app never counts a browser tab.
   if (firstLaunch) track("app_installed");
@@ -218,6 +222,7 @@ export function track(event: string, properties: Properties = {}) {
   if (version === undefined) return;
   if (session?.tally) {
     count(session.tally, event, properties);
+    session.seen = Date.now();
     keepSession();
   }
   if (!enqueue(event, properties, Date.now(), session?.id)) return;

@@ -141,6 +141,26 @@ test("a session that ended is summed up in one event, dated when it ended", asyn
   });
 });
 
+test("a session the app was killed in, still on screen, ends at its last event", async (t) => {
+  online = true;
+  // Later than the earlier tests' mocked clocks reached.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 24 * 60 * 60_000 });
+  track("measure_used");
+  const last = Date.now();
+  t.mock.timers.tick(2 * 60_000);
+  await sendStats();
+  sent.length = 0;
+  // Killed without a visibilitychange, then launched again a day later.
+  t.mock.timers.tick(24 * 60 * 60_000);
+  startStats("2026.10.27");
+  await sendStats();
+  const summary = events().find((entry) => entry.event === "session_ended")!;
+  assert.equal(summary.timestamp, new Date(last).toISOString());
+  track("measure_used");
+  await sendStats();
+  assert.notEqual(events().at(-1)!.properties.$session_id, summary.properties.$session_id);
+});
+
 test("uncaught errors go to error tracking, up to a limit", async () => {
   online = true;
   sent.length = 0;
