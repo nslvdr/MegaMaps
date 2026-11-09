@@ -130,7 +130,7 @@ test("the activity card counts the user's own trips and places, not the example 
   const { instance, destroy } = render(Settings, options);
   t.after(destroy);
   await instance.refresh();
-  for (let turn = 0; turn < 100 && !document.getElementById("settings-activity"); turn++) await settle();
+  for (let turn = 0; turn < 100 && document.getElementById("settings-activity")?.ariaBusy !== "false"; turn++) await settle();
   assert.equal($("settings-activity-trips").textContent, "1");
   assert.equal($("settings-activity-time").textContent, "1 h 00");
 });

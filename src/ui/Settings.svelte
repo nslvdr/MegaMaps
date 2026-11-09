@@ -51,7 +51,8 @@
   let backupNote = $state(""), backupError = $state<string>();
   let storage = $state(""), total = $state(""), protection = $state("");
   let usage = $state<Awaited<ReturnType<typeof storageUse>>>();
-  let activity = $state<ActivitySummary>();
+  // Undefined while loading, null when the trips couldn't be read.
+  let activity = $state<ActivitySummary | null>();
   // The storage bar's parts, each in the colour of what it holds.
   const parts = $derived(usage ? [
     { id: "maps", label: t("Maps"), bytes: usage.maps, color: "var(--neon-view)" },
@@ -145,8 +146,8 @@
   async function showActivity(current: number, maps: Awaited<ReturnType<typeof listMaps>>) {
     const own = maps.filter((map) => !map.example);
     const navigations = await Promise.all(own.map((map) => loadNavigation(map.id))).catch(() => undefined);
-    if (current !== version || !navigations) return;
-    activity = summarizeActivity(own.map((map, index) => ({ name: map.name, navigation: navigations[index]! })));
+    if (current !== version) return;
+    activity = navigations ? summarizeActivity(own.map((map, index) => ({ name: map.name, navigation: navigations[index]! }))) : null;
   }
 
   // Each choice is kept as it changes; a new language rebuilds every screen, so the app starts again in it.
@@ -342,7 +343,7 @@
 
 <!-- The hub: what the user has done, then the backup, since it's what loses data when missed, then a row for each page. -->
 <Page id="settings" title={t("Settings")} hidden={shown !== "settings"} back={() => { shown = undefined; back(); }}>
-  {#if activity}<Activity {activity} />{/if}
+  {#if activity !== null}<Activity {activity} />{/if}
   <Rows>
     <Row id="settings-backup" icon={icons.backup} tone="var(--neon-saved)" label={t("Save a backup")} hint={backupHint}
       hintId="settings-backup-status" dot={backupDot} arrow disabled={!backupReady} onclick={() => void saveBackup()} />
