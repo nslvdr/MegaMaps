@@ -286,12 +286,12 @@ export class ViewerControls {
     if (state.rotationMode === "compass") this.resumeCompass();
   }
   private static newVisit() {
-    return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false };
+    return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false, trail_marked: 0 };
   }
   /** Leaving the app ends a visit as well as going back, since phones rarely go back. */
   private endVisit() {
     const { started, ...used } = this.visit;
-    track("map_viewed", { seconds: Math.round((Date.now() - started) / 1000), ...used });
+    track("map_viewed", { seconds: Math.round((Date.now() - started) / 1000), example: !!this.map.example, ...used });
   }
   private open(item: MapMarker | PlannedRoute, from: "map" | "saved") {
     if ("label" in item) track("place_opened", { kind: item.kind, photos: item.photos?.length ?? 0, from });
@@ -441,6 +441,7 @@ export class ViewerControls {
     // A card about the old last mark would now be about the wrong one.
     this.close("mark-dialog");
     this.state.trail.push(mark);
+    this.visit.trail_marked++;
     this.changed();
     // With trip_ended, tells trips left running from Trail opened only to look.
     if (this.state.trail.length === 1) track("trip_started");
