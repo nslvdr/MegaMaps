@@ -5,7 +5,7 @@ import { payloadStore, deleteStoredMap } from "../src/storage/payloads";
 import { listMaps, saveMap, renameMap, removeRecord, markOpened } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { photoBytes, savePhoto } from "../src/storage/photos";
-import { storedBytes } from "../src/storage/usage";
+import { storageUse, storedBytes } from "../src/storage/usage";
 import { installPlatform } from "./node-platform";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -89,6 +89,19 @@ test("a map's photo storage counts only its own photos", async () => {
   await savePhoto("caves", new Blob(["neighbour"]));
   assert.equal(await photoBytes("cave"), 8);
   assert.equal(await photoBytes("empty"), 0);
+});
+
+test("storage is split into maps, photos, and places with detected text", async () => {
+  const before = await storageUse();
+  await payloadStore("indexeddb").put("split", "original", new Blob(["123456"]));
+  await savePhoto("split", new Blob(["1234"]));
+  await saveMap({ id: "split", name: "Split", width: 1, height: 1, bytes: 0, backend: "indexeddb",
+    levels: [], created: 1, status: "ready" } satisfies MapRecord);
+  await saveNavigation(defaultNavigation("split"));
+  const after = await storageUse();
+  assert.equal(after.maps - before.maps, 6);
+  assert.equal(after.photos - before.photos, 4);
+  assert.ok(after.notes > before.notes, "saved places count as notes");
 });
 
 test("stored bytes add up every map file on the device and every stored blob", async () => {

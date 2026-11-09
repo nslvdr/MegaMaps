@@ -481,7 +481,7 @@ label[data-typing] > span:has(> svg),
 label[data-typing] small {
   display: none;
 }
-#settings [data-typing] {
+#settings-general [data-typing] {
   --accent: var(--neon-view);
 }
 [data-scrim] {

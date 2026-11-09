@@ -652,7 +652,7 @@ async function reset() {
 // A dot on Settings while a backup is due.
 async function showBackupReminder() {
   const [lastBackup, kept] = await Promise.all([loadSetting("last-backup").catch(() => undefined), storageProtected()]);
-  app.backupDue = backupDue(maps, lastBackup, Date.now(), kept !== false);
+  app.backupDue = backupDue(maps, lastBackup, Date.now(), kept !== false, preference("backup-reminder"));
 }
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;
@@ -823,8 +823,8 @@ function rerunOcr() {
     .finally(() => void renderOcrSettings());
 }
 initKeyboardInset();
-initFieldLift("dialog, #settings, [data-bar]");
-initTapAway("dialog, #settings");
+initFieldLift("dialog, #settings-general, [data-bar]");
+initTapAway("dialog, #settings-general");
 lockPageZoom();
 void registerOfflineShell().then(refreshFooter);
 async function start() {
@@ -833,9 +833,9 @@ async function start() {
     for (const map of await listMaps())
       if (map.status !== "ready") await deleteStoredMap(map);
   }).catch(() => {}); // Another tab may legitimately be importing; don't touch its files.
-  // Reopening on the last map skips building the library beneath it, whose
+  // Reopening on the last map (unless Settings starts in the library) skips building the library beneath it, whose
   // previews and counts would compete with the map for storage.
-  const resume = await lastMap();
+  const resume = preference("start-page") === "map" ? await lastMap() : undefined;
   if (resume) app.page = "";
   await refresh();
   // Ask on every launch: Chrome may grant it later, once the app is installed or used more.

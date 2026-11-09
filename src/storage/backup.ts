@@ -1,6 +1,7 @@
 import { errorMessage, t } from "../i18n";
 import type { ImportProgress, MapRecord } from "../types";
 import { MAX_FILE_BYTES } from "../types";
+import type { Preferences } from "../preferences";
 import { readOcrIndex, type OcrIndex } from "../ocr/index";
 import { readHeader } from "../processing/headers";
 import { importMap } from "../processing/import";
@@ -62,14 +63,17 @@ export function backupSummary(manifest: BackupManifest) {
   };
 }
 
-/** A month after the last backup (or none), once a map was added or opened since;
- * a week when the browser may clear the library to free space. The example map
- * holds nothing to lose, so the first map of one's own is what asks for one. */
+/** A month after the last backup (or none), or the Backup reminder's interval, once a
+ * map was added or opened since; at most a week when the browser may clear the library
+ * to free space, whatever the reminder says. The example map holds nothing to lose,
+ * so the first map of one's own is what asks for one. */
 export const BACKUP_INTERVAL = 30 * 86_400_000;
 export const UNPROTECTED_BACKUP_INTERVAL = 7 * 86_400_000;
-export function backupDue(maps: { created: number; opened?: number; example?: true }[], lastBackup = 0, now = Date.now(), kept = true) {
-  return maps.some((map) => !map.example && (map.opened ?? map.created) > lastBackup)
-    && now - lastBackup >= (kept ? BACKUP_INTERVAL : UNPROTECTED_BACKUP_INTERVAL);
+const intervals: Record<Preferences["backup-reminder"], number> = { month: BACKUP_INTERVAL, week: UNPROTECTED_BACKUP_INTERVAL, off: Infinity };
+export function backupDue(maps: { created: number; opened?: number; example?: true }[], lastBackup = 0, now = Date.now(), kept = true,
+  reminder: Preferences["backup-reminder"] = "month") {
+  const interval = kept ? intervals[reminder] : Math.min(intervals[reminder], UNPROTECTED_BACKUP_INTERVAL);
+  return maps.some((map) => !map.example && (map.opened ?? map.created) > lastBackup) && now - lastBackup >= interval;
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");

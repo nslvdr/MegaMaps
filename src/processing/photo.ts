@@ -1,17 +1,18 @@
 import { t } from "../i18n";
-/** Long edge of a stored place photo: sharp on a phone, a few hundred KB to share. */
-const PHOTO_EDGE = 1600;
+import { preference, type Preferences } from "../preferences";
+/** Long edge of a stored place photo for each Photo size; standard is sharp on a phone and a few hundred KB to share. */
+export const PHOTO_EDGES: Record<Preferences["photo-size"], number> = { small: 1024, standard: 1600, large: 2400 };
 
 /**
  * Camera photos are re-encoded as upright JPEGs. Shrinking keeps storage and
  * shares small, and re-encoding drops EXIF, including the GPS position.
  */
-export async function preparePhoto(file: Blob) {
+export async function preparePhoto(file: Blob, edge = PHOTO_EDGES[preference("photo-size")]) {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => {
     throw new Error(t("This photo could not be read. Choose a JPEG, PNG, WebP or HEIC image."));
   });
   try {
-    const scale = Math.min(1, PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, edge / Math.max(bitmap.width, bitmap.height));
     const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
     canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });

@@ -7,6 +7,7 @@ import type { DarkMode } from "../viewer/appearance";
 import { NavigationPersistence, loadNavigation } from "../storage/navigation";
 import { loadPhoto, savePhoto } from "../storage/photos";
 import { preparePhoto } from "../processing/photo";
+import { keepScreenOn, screenWanted } from "./wake-lock";
 import { PhotoViewer } from "./photo-viewer";
 import { preserveUnseenImports } from "../sharing/annotations";
 import type { Viewer, ViewerOptions } from "../viewer/viewer";
@@ -415,6 +416,7 @@ export class ViewerControls {
     if ((this.rowMenu === "routes-order" && this.state.routes.length < 2) ||
         (this.rowMenu === "places-order" && this.state.markers.length < 2)) this.rowMenu = undefined;
     this.renderTripClock();
+    keepScreenOn(screenWanted(preference("screen-awake"), this.state.trail.length > 0));
     this.tick++;
     this.viewer?.refreshLabels?.();
   }
@@ -2107,6 +2109,7 @@ export class ViewerControls {
     clearTimeout(this.discardTimer);
     clearTimeout(this.tripClockTimer);
     this.stopCompass();
+    keepScreenOn(false);
     this.hideToast();
     const saved = this.flush();
     this.controller.abort();
