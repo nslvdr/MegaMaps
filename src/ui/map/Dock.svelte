@@ -13,7 +13,7 @@
   // shows the time since it started. A task's card, the search bar or an open
   // panel takes the pill's place, so each gets the room the pill held.
   // Settings picks the look: in a black bar (standard), the buttons straight on
-  // the map (floating), or touching segments 3px apart between round ends (segmented).
+  // the map (floating), or touching segments 3px apart, the ends round only outside (segmented).
   let { controls }: { controls: ViewerControls } = $props();
 
   const editing = $derived(controls.tool !== "browse");
@@ -28,7 +28,9 @@
   // Search and Measure during a trip: round, or a square segment.
   const round = $derived(look === "segmented" ? ["grid w-48 flex-none", height, corner] : circle);
   const pill = $derived(["grid flex-1", height, corner]);
-  const solid = $derived([button, circle, "bg-c text-black enabled:hover:bg-[color-mix(in_srgb,var(--c)_85%,#fff)] enabled:active:bg-[color-mix(in_srgb,var(--c)_75%,#fff)]"]);
+  // Saved and Add: round, or in segments round outside with a segment's corner inside.
+  const end = (side: "l" | "r") => look === "segmented" ? [circle, side === "l" ? "rounded-r-[6px]" : "rounded-l-[6px]"] : circle;
+  const solid = (side: "l" | "r") => [button, end(side), "bg-c text-black enabled:hover:bg-[color-mix(in_srgb,var(--c)_85%,#fff)] enabled:active:bg-[color-mix(in_srgb,var(--c)_75%,#fff)]"];
   const tinted = (shape: ClassValue) => [button, shape, "tint-c/14 inset-ring inset-ring-c/45 enabled:active:tint-c/24"];
 </script>
 
@@ -37,7 +39,7 @@
     bar ? "gap-8 rounded-lg border border-glass-line bg-black p-4 shadow-glass"
       : [look === "segmented" ? "gap-3" : "gap-8", "drop-shadow-[0_10px_30px_rgb(0_0_0/0.3)]"]]}>
   <button type="button" id="open-saved" aria-label={t("Saved")} title={t("Saved")} aria-controls="sheet" aria-expanded={controls.openSheet === "saved"}
-    disabled={editing} onclick={() => controls.toggleSheet("saved")} class={[solid, "[--c:var(--neon-saved)]"]}
+    disabled={editing} onclick={() => controls.toggleSheet("saved")} class={[solid("l"), "[--c:var(--neon-saved)]"]}
     ><Icon svg={icons.saved} class="size-full" /></button>
   <button type="button" id="open-search" aria-label={t("Search")} title={t("Search")} aria-controls="search-field" aria-expanded={controls.openSheet === "search"}
     disabled={editing} onclick={() => controls.openSearch()} class={[tinted(clock ? round : pill), "[--c:var(--neon-saved)]"]}
@@ -51,6 +53,6 @@
     disabled={editing && !measuring} onclick={() => controls.toggleMeasure()} class={[tinted(clock ? round : pill), "[--c:var(--neon-measure)]"]}
     ><Icon svg={icons.measure} class={clock ? "size-full text-c" : "h-full w-28 text-c"} /></button>
   <button type="button" id="open-add" aria-label={t("Add")} title={t("Add")} aria-controls="sheet" aria-expanded={controls.openSheet === "add"}
-    disabled={editing} onclick={() => controls.toggleSheet("add")} class={[solid, "[--c:var(--neon-add)]"]}
+    disabled={editing} onclick={() => controls.toggleSheet("add")} class={[solid("r"), "[--c:var(--neon-add)]"]}
     ><Icon svg={icons.add} class="size-full" /></button>
 </nav>
