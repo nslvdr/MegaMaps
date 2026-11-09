@@ -35,7 +35,19 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let device: Promise<Properties> | undefined;
 /** Person properties the app knows, such as how many maps it holds. */
 let traits: Properties = {};
-let session: { id: string; hidden?: number } | undefined;
+/** What a session did so far, kept with it so the summary survives the app being closed. */
+export interface Session {
+  id: string;
+  /** When the app was hidden, while it is away. */
+  hidden?: number;
+  /** When the app came on screen, while it is on screen. */
+  shown?: number;
+  /** Time on screen before the app was last hidden, in ms. */
+  visible?: number;
+  /** Counts by event name, plus a few the summary needs; missing on sessions from older versions. */
+  tally?: Record<string, number>;
+}
+let session: Session | undefined;
 let errors = 0;
 
 /** PostHog's own property names, so its device and browser breakdowns pick them up. */
@@ -112,9 +124,50 @@ function keepSession() {
 function resumeSession(now: number) {
   const away = session?.hidden === undefined ? 0 : now - session.hidden;
   const fresh = !session || away > SESSION_GAP;
-  session = fresh ? { id: uuidv7() } : { id: session!.id };
+  if (fresh && session?.tally) endSession(session, now);
+  session = fresh ? { id: uuidv7(), shown: now, visible: 0, tally: {} } : { ...session!, hidden: undefined, shown: now };
   keepSession();
   return fresh;
+}
+function hideSession(now: number) {
+  const { shown, visible = 0 } = session!;
+  session = { ...session!, shown: undefined, hidden: now, visible: visible + (shown === undefined ? 0 : now - shown) };
+  keepSession();
+}
+
+/** Adds an event to the session's tally. */
+function count(tally: Record<string, number>, event: string, properties: Properties) {
+  const add = (key: string, amount = 1) => void (tally[key] = (tally[key] ?? 0) + amount);
+  add("events");
+  if (!navigator.onLine) add("offline");
+  add(event);
+  if (event === "map_viewed") {
+    add(properties.example ? "example_seconds" : "own_map_seconds", Number(properties.seconds) || 0);
+    add("trail_marked", Number(properties.trail_marked) || 0);
+  }
+}
+
+/** One use of the app in one row, so usage reads without stitching events together. */
+export function summarize({ visible = 0, tally = {} }: Session): Properties {
+  const n = (key: string) => tally[key] ?? 0;
+  const offline = n("events") ? n("offline") / n("events") : 0;
+  const edits = n("place_added") + n("place_edited") + n("place_moved") + n("place_deleted") + n("route_saved");
+  return {
+    seconds: Math.round(visible / 1000),
+    // Marking the trail only happens in the field, and underground the phone is offline.
+    context: n("trail_marked") || n("trip_ended") || offline >= 0.5 ? "on_site" : "at_home",
+    // A minute on one of their own maps, beyond trying the example.
+    real_use: n("own_map_seconds") >= 60,
+    own_map_seconds: n("own_map_seconds"), example_seconds: n("example_seconds"),
+    places_opened: n("place_opened"), places_added: n("place_added"), edits,
+    trail_marked: n("trail_marked"), trips_ended: n("trip_ended"), searches: n("search_used"),
+    offline_share: Math.round(offline * 100) / 100,
+  };
+}
+/** Sent once the session is over, which is only known when the app comes back to it,
+ *  so it carries the time it really ended. */
+function endSession(ended: Session, now: number) {
+  enqueue("session_ended", summarize(ended), ended.hidden ?? now, ended.id);
 }
 
 /** Only the released, installed app counts; tests, the dev server and browser tabs never start it. */
@@ -136,8 +189,7 @@ export function startStats(appVersion: string) {
   addEventListener("unhandledrejection", (event) => reportError(event.reason));
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      session = { id: session!.id, hidden: Date.now() };
-      keepSession();
+      hideSession(Date.now());
       void sendStats();
     } else if (resumeSession(Date.now())) track("app_resumed");
   });
@@ -164,19 +216,29 @@ export function failure(error: unknown) {
 
 export function track(event: string, properties: Properties = {}) {
   if (version === undefined) return;
-  try {
-    // Online is read now, not when sent, to tell use underground from use above it.
-    const entry = { event, uuid: crypto.randomUUID(), timestamp: new Date().toISOString(),
-      properties: { ...properties, distinct_id: deviceId(), app_version: version, online: navigator.onLine,
-        ...(session ? { $session_id: session.id } : {}) } };
-    save([...queued(), entry].slice(-MAX_QUEUED));
-  } catch {
-    return; // Storage may be full or blocked; stats never get in the way.
+  if (session?.tally) {
+    count(session.tally, event, properties);
+    keepSession();
   }
+  if (!enqueue(event, properties, Date.now(), session?.id)) return;
   clearTimeout(timer);
   // A hidden app may be suspended before a timer fires.
   if (document.hidden) void sendStats();
   else timer = setTimeout(() => void sendStats(), 5000);
+}
+
+/** Queues an event; false when storage refuses it. */
+function enqueue(event: string, properties: Properties, time: number, sessionId?: string) {
+  try {
+    // Online is read now, not when sent, to tell use underground from use above it.
+    const entry = { event, uuid: crypto.randomUUID(), timestamp: new Date(time).toISOString(),
+      properties: { ...properties, distinct_id: deviceId(), app_version: version!, online: navigator.onLine,
+        ...(sessionId ? { $session_id: sessionId } : {}) } };
+    save([...queued(), entry].slice(-MAX_QUEUED));
+    return true;
+  } catch {
+    return false; // Storage may be full or blocked; stats never get in the way.
+  }
 }
 
 /** Sends one batch; true once the server has taken it or refused it for good. */
