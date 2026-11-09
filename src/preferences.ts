@@ -12,6 +12,8 @@ const choices = {
   "compass-follow": ["auto", "tap"],
   /** How soon Auto follows a new heading, slower to faster. */
   "compass-speed": ["mid", "high", "live"],
+  /** How the map's bottom menu is drawn: in its black bar, as floating buttons, or as touching segments. */
+  "dock-style": ["standard", "floating", "segmented"],
   /** Pace for travel times, in km/h. */
   "walking-speed": ["4", "2", "3", "5"],
   /** When the screen stays on with a map open: while a trip runs, always, or never. */

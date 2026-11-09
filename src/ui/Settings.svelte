@@ -14,6 +14,7 @@
   import Activity from "./Activity.svelte";
   import { storageProtected } from "../storage/protection";
   import { storageUse } from "../storage/usage";
+  import { dockStyle } from "./dock-style.svelte";
   import { loadSetting, saveSetting } from "../storage/settings";
   import { track } from "../stats";
   import HelpLinks from "./HelpLinks.svelte";
@@ -159,6 +160,7 @@
     setPreference(key, value);
     if (key === "label-size") setLabelSize(value as Preferences["label-size"]);
     if (key === "backup-reminder") void refresh();
+    if (key === "dock-style") dockStyle.value = value as Preferences["dock-style"];
   }
   // Language names stay in their own language, so either can be found.
   type Choice = { key: keyof Preferences; icon: string; label: string; hint?: string; options: [string, string][] };
@@ -169,6 +171,8 @@
     labelDistance: choice("label-distance", icons.labelDistance, t("Show labels within"),
       [...["100", "200", "500", "1000"].map((metres): [string, string] => [metres, formatDistance(Number(metres))]), ["always", t("Always")]],
       t("Keeps pins clear from afar")),
+    dock: choice("dock-style", icons.dockStyle, t("Menu bar"),
+      [["standard", t("Standard")], ["floating", t("Floating")], ["segmented", t("Segmented")]]),
     walkingSpeed: choice("walking-speed", icons.walkingSpeed, t("Walking speed"),
       ["2", "3", "4", "5"].map((speed) => [speed, t("{speed} km/h", { speed })]), t("For route travel times")),
     screen: choice("screen-awake", icons.sun, t("Keep screen on"),
@@ -348,7 +352,7 @@
   <p id="backup-error" class="mx-12 mt-8 text-small leading-roomy text-danger" role="alert" hidden={backupError === undefined}>{backupError}</p>
 
   <Rows>
-    <Row id="settings-open-map" icon={icons.map} label={t("Map")} hint={t("Labels, walking speed, screen")} arrow onclick={() => show("map")} />
+    <Row id="settings-open-map" icon={icons.map} label={t("Map")} hint={t("Labels, menu bar, walking speed, screen")} arrow onclick={() => show("map")} />
     <Row id="settings-open-data" icon={icons.storage} tone="var(--neon-saved)" label={t("Backup & storage")}
       hint={storage} hintId="settings-storage-status" arrow onclick={() => show("data")} />
     <Row id="settings-open-general" icon={icons.user} tone="var(--neon-add)" label={t("General")}
@@ -369,6 +373,8 @@
 <Page id="settings-map" title={t("Map")} hidden={shown !== "map"} back={() => show("settings")}>
   {@render heading(t("Labels"))}
   <Rows class="mt-0!">{@render select(choices.labelSize)}{@render select(choices.labelDistance)}</Rows>
+  {@render heading(t("Controls"))}
+  <Rows class="mt-0!">{@render select(choices.dock)}</Rows>
   {@render heading(t("On site"))}
   <Rows class="mt-0!">{@render select(choices.walkingSpeed)}{@render select(choices.screen)}</Rows>
 </Page>
