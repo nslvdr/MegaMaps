@@ -56,6 +56,7 @@ export const fr = {
   "Automatically": "Automatiquement",
   "A–Z": "A–Z",
   "Back": "Retour",
+  "Back up": "Sauvegarder",
   "Back to library": "Retour à la bibliothèque",
   "Background deepened to black": "Fond assombri en noir",
   "Backup & storage": "Sauvegarde et stockage",
@@ -222,6 +223,7 @@ export const fr = {
   "Reset now": "Réinitialiser maintenant",
   "Reset the app": "Réinitialiser l’app",
   "Start over": "Repartir de zéro",
+  "to back up": "à sauvegarder",
   "Town or street": "Ville ou rue",
   "Use rulers": "Utiliser les règles",
   "Try the example first": "Essayer d’abord l’exemple",
@@ -776,4 +778,5 @@ export const frNouns = {
   trip: ["parcours", "parcours"],
   week: ["semaine", "semaines"],
   day: ["jour", "jours"],
+  change: ["changement", "changements"],
 } as const;
