@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BACKUP_INTERVAL, UNPROTECTED_BACKUP_INTERVAL, backupDue, createBackup, isBackupFile, readBackup, restoreBackup } from "../src/storage/backup";
+import { BACKUP_INTERVAL, DISMISSED_CHANGES, UNPROTECTED_BACKUP_INTERVAL, backupBannerShown, backupDue, backupSnapshot, backupStatus,
+  createBackup, recordBackup, unsavedChanges, isBackupFile, readBackup, restoreBackup } from "../src/storage/backup";
 import { inMemory, listMaps, saveMap } from "../src/storage/database";
 import { loadNavigation, saveNavigation } from "../src/storage/navigation";
 import { loadOcr, saveOcr } from "../src/storage/ocr";
@@ -121,32 +122,65 @@ test("damaged, truncated and foreign files are refused before anything is writte
   await assert.rejects(readBackup(json({ format: "megamaps-backup", version: 1, createdAt: 1, maps: [badPoint] })), /damaged/);
 });
 
-test("a backup is due once a month has passed with maps added or opened since the last one", () => {
+test("a backup is due once a month has passed with changes since the last one", () => {
   const now = 100 * 86_400_000;
-  const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
-  assert.equal(backupDue([], undefined, now), false, "nothing to back up yet");
-  assert.equal(backupDue([{ ...map, example: true }], undefined, now), false, "the example map holds nothing to lose");
-  assert.equal(backupDue([map], undefined, now), true, "never backed up");
-  assert.equal(backupDue([map], now - BACKUP_INTERVAL + 1, now), false, "the last backup is recent");
-  assert.equal(backupDue([map], now - BACKUP_INTERVAL, now), true, "the map was opened after an old backup");
-  assert.equal(backupDue([{ created: map.created }], now - BACKUP_INTERVAL, now), false, "nothing changed since the old backup");
+  assert.equal(backupDue(0, undefined, now), false, "nothing to back up");
+  assert.equal(backupDue(3, undefined, now), true, "never backed up");
+  assert.equal(backupDue(3, now - BACKUP_INTERVAL + 1, now), false, "the last backup is recent");
+  assert.equal(backupDue(3, now - BACKUP_INTERVAL, now), true);
+  assert.equal(backupDue(0, now - BACKUP_INTERVAL, now), false, "nothing changed since the old backup");
 });
 
 test("a backup is due weekly while the browser may clear the library", () => {
   const now = 100 * 86_400_000;
-  const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, false), true);
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL + 1, now, false), false, "the last backup is recent");
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, true), false, "protected storage waits a month");
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL, now, false), true);
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL + 1, now, false), false, "the last backup is recent");
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL, now, true), false, "protected storage waits a month");
 });
 
 test("the Backup reminder sets how often a backup is due, but never past a week while the library may be cleared", () => {
   const now = 100 * 86_400_000;
-  const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, true, "week"), true);
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL + 1, now, true, "week"), false);
-  assert.equal(backupDue([map], undefined, now, true, "off"), false, "off never asks");
-  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, false, "off"), true, "unprotected storage still asks weekly");
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL, now, true, "week"), true);
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL + 1, now, true, "week"), false);
+  assert.equal(backupDue(1, undefined, now, true, "off"), false, "off never asks");
+  assert.equal(backupDue(1, now - UNPROTECTED_BACKUP_INTERVAL, now, false, "off"), true, "unprotected storage still asks weekly");
+});
+
+test("changes count what was added or edited since the last backup, but not the example map", () => {
+  const place = (id: string, label: string, photos?: string[], created = 10) =>
+    ({ id, kind: "entrance" as const, label, description: "", point: { x: 1, y: 2 }, created, ...(photos ? { photos } : {}) });
+  const map = (markers: ReturnType<typeof place>[]) =>
+    ({ id: "east", created: 1, navigation: { ...defaultNavigation("east"), markers } });
+  const example = { id: "demo", created: 1, example: true as const, navigation: { ...defaultNavigation("demo"), markers: [place("d", "Demo")] } };
+  const before = [map([place("a", "Gate"), place("b", "Well")]), example];
+  assert.equal(unsavedChanges(before), 3, "never backed up: the map and its two places");
+  const snapshot = backupSnapshot(before);
+  assert.equal(unsavedChanges(before, snapshot, 5), 0);
+  const after = [map([place("a", "Gate"), place("b", "Old well", ["p1", "p2"]), place("c", "Shaft", undefined, 20)]), example];
+  assert.equal(unsavedChanges(after, snapshot, 5), 4, "one place edited, one added, two photos");
+  assert.equal(unsavedChanges(after, undefined, 15), 1, "an older backup counts what was created since: the new place");
+});
+
+test("a saved backup leaves nothing to back up", async () => {
+  await saveMap(record("north", "North quarry"));
+  await payloadStore("indexeddb").put("north", "original", image("north"));
+  await saveNavigation({ ...defaultNavigation("north"), markers: [{ id: "m", kind: "entrance", label: "Gate", description: "", point: { x: 1, y: 2 }, created: 1 }] });
+  assert.equal((await backupStatus()).changes, 2);
+  await recordBackup((await createBackup()).manifest);
+  const status = await backupStatus();
+  assert.equal(status.changes, 0);
+  assert.equal(status.due, false);
+  await deleteStoredMap(record("north", "North quarry"));
+});
+
+test("a put-away reminder waits for ten more changes or another interval", () => {
+  const now = 100 * 86_400_000, last = now - 2 * BACKUP_INTERVAL;
+  const dismissed = { at: now - 86_400_000, changes: 5 };
+  assert.equal(backupBannerShown(5, last, undefined, now), true);
+  assert.equal(backupBannerShown(14, last, dismissed, now), false);
+  assert.equal(backupBannerShown(5 + DISMISSED_CHANGES, last, dismissed, now), true, "ten more changes");
+  assert.equal(backupBannerShown(5, last, { ...dismissed, at: now - BACKUP_INTERVAL }, now), true, "another month");
+  assert.equal(backupBannerShown(0, last, undefined, now), false, "nothing to back up");
 });
 
 test("deleting everything removes every map with its data and the saved settings", async () => {

@@ -7,6 +7,10 @@ export interface Settings {
   "share-name": string;
   /** When a backup was last saved or shared. */
   "last-backup": number;
+  /** What the last backup held, to count what changed since. */
+  "backup-snapshot": Record<string, string>;
+  /** When the backup reminder was last put away, and how many changes it counted then. */
+  "backup-dismissed": { at: number; changes: number };
   /** Where the last map lined up with the streets is, so the next one starts there. */
   "streets-place": LonLat;
 }

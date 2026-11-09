@@ -7,7 +7,7 @@
   import { language, locale, t, errorMessage } from "../i18n";
   import { formatDistance } from "../viewer/measure";
   import { preference, setPreference, type Preferences } from "../preferences";
-  import { backupDue, backupSummary, createBackup, missingMaps, readBackup, type Backup } from "../storage/backup";
+  import { backupStatus, backupSummary, createBackup, missingMaps, readBackup, recordBackup, type Backup, type BackupManifest } from "../storage/backup";
   import { listMaps } from "../storage/database";
   import { loadNavigation } from "../storage/navigation";
   import { summarizeActivity, type Activity as ActivitySummary } from "./activity";
@@ -63,7 +63,9 @@
   const updateHint = $derived(debugHint ?? (updateReady
     ? t("Update ready to install")
     : release ? t("Version {name}", { name: release }) : t("See if a newer version is out")));
-  let backup: File | undefined;
+  // What the next backup would save that the last one doesn't hold.
+  let changes = 0;
+  let backup: { file: File; manifest: BackupManifest } | undefined;
   let version = 0;
   let restoreInput: HTMLInputElement, restoreDialog: HTMLDialogElement, eraseDialog: HTMLDialogElement;
 
@@ -106,7 +108,7 @@
       if (current !== version) return;
       const counts = backupSummary(prepared.manifest);
       if (!counts.maps) return (backupHint = t("No maps to back up yet"));
-      backup = prepared.file;
+      backup = prepared;
       backupReady = true;
       backupHint = [plural(counts.maps, "map"), counts.places && plural(counts.places, "place"),
         counts.routes && plural(counts.routes, "route"), counts.photos && plural(counts.photos, "photo"),
@@ -121,9 +123,9 @@
     const current = ++version;
     showError();
     void prepareBackup(current);
-    const [shareName, lastBackup, maps, use, estimate, persisted] = await Promise.all([
+    const [shareName, status, maps, use, estimate, persisted] = await Promise.all([
       loadSetting("share-name").catch(() => undefined),
-      loadSetting("last-backup").catch(() => undefined),
+      backupStatus().catch(() => undefined),
       listMaps().then((maps) => maps.filter((map) => map.status === "ready")).catch(() => []),
       storageUse().catch(() => undefined),
       navigator.storage?.estimate?.().then((estimate) => estimate.usage).catch(() => undefined),
@@ -133,7 +135,8 @@
     void showActivity(current, maps);
     nickname = shareName ?? "";
     kept = persisted !== false;
-    showLastBackup(lastBackup, backupDue(maps, lastBackup, Date.now(), kept, preference("backup-reminder")));
+    showLastBackup(status?.lastBackup, status?.due ?? false);
+    changes = status?.changes ?? 0;
     // Without its own count, the browser's rounder estimate stands in, with no parts to show.
     usage = use;
     const used = use ? use.maps + use.photos + use.notes : estimate;
@@ -191,11 +194,11 @@
     if (!backup) return;
     showError();
     try {
-      if (await shareOrDownload(backup, restoreInput.parentElement!) === "cancelled") return;
-      const now = Date.now();
-      await saveSetting("last-backup", now);
-      track("backup_saved");
-      showLastBackup(now, false);
+      if (await shareOrDownload(backup.file, restoreInput.parentElement!) === "cancelled") return;
+      await recordBackup(backup.manifest);
+      track("backup_saved", { from: "settings", changes });
+      changes = 0;
+      showLastBackup(backup.manifest.createdAt, false);
       return true;
     } catch (error) {
       showError(error);

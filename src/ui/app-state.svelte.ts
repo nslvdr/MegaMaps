@@ -10,8 +10,8 @@ export const app = $state({
   page: "" as Page,
   /** Ready maps, the most recently used first. */
   maps: [] as MapRecord[],
-  /** A dot on Settings while a backup is due. */
-  backupDue: false,
+  /** Changes not backed up yet; a dot on Settings while a backup is due, and the library's reminder. */
+  backup: { changes: 0, due: false, banner: false },
   /** Once there's a map of one's own, the example offers to go. */
   exampleOffer: false,
   /** The long task the progress dialog follows: an import, a restore, the example map. */
