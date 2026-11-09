@@ -41,7 +41,7 @@ export function initKeyboardInset(root = document.documentElement) {
       // iOS may still pan the page to reveal a field. Off the scrolling pages, nothing
       // else moves it, so undo that. Until it's undone the field rides along: a
       // panned page has that much less left to rise.
-      if (open && viewport.offsetTop > 0 && !field!.closest("#settings")) window.scrollBy(0, -viewport.offsetTop);
+      if (open && viewport.offsetTop > 0 && !field!.closest("#settings-general")) window.scrollBy(0, -viewport.offsetTop);
       const inset = open ? keyboardInset(root.clientHeight, viewport) : height;
       // Set on the root, it can restyle the whole page; scrolling sends the same value over and over.
       if (!height || inset === shown) return;

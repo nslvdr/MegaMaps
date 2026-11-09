@@ -124,7 +124,7 @@ test("only text fields in a form on a touch screen go above the keyboard", () =>
 
 test("the keyboard's height is kept for next time, and putting it away ends typing", (t) => {
   const { document } = new Window();
-  document.body.innerHTML = `<input id="name"><button id="save"></button><section id="settings"><input id="nickname"></section>`;
+  document.body.innerHTML = `<input id="name"><button id="save"></button><section id="settings-general"><input id="nickname"></section>`;
   const page = document as unknown as Document, root = page.documentElement;
   const field = page.getElementById("name")!, button = page.getElementById("save")!;
   let active: Element = field;

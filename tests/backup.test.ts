@@ -140,6 +140,15 @@ test("a backup is due weekly while the browser may clear the library", () => {
   assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, true), false, "protected storage waits a month");
 });
 
+test("the Backup reminder sets how often a backup is due, but never past a week while the library may be cleared", () => {
+  const now = 100 * 86_400_000;
+  const map = { created: now - 90 * 86_400_000, opened: now - 86_400_000 };
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, true, "week"), true);
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL + 1, now, true, "week"), false);
+  assert.equal(backupDue([map], undefined, now, true, "off"), false, "off never asks");
+  assert.equal(backupDue([map], now - UNPROTECTED_BACKUP_INTERVAL, now, false, "off"), true, "unprotected storage still asks weekly");
+});
+
 test("deleting everything removes every map with its data and the saved settings", async () => {
   for (const id of ["east", "west"]) {
     await saveMap(record(id, `${id} quarry`));
