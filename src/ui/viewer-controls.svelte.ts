@@ -20,6 +20,7 @@ import {
   routeColor,
   wrapNorth,
   NORTH_MIN,
+  streetsDark,
   type NavigationState,
   type Tool,
   type MapMarker,
@@ -1643,7 +1644,11 @@ export class ViewerControls {
   }
   streetsView() {
     const placed = !!this.state.geo;
-    return { placed, on: placed && !!this.state.streets, status: placed ? t("Lined up with OpenStreetMap") : t("Line up the map first") };
+    return { placed, on: placed && !!this.state.streets, dark: streetsDark(this.state), status: placed ? t("Lined up with OpenStreetMap") : t("Line up the map first") };
+  }
+  setDarkStreets(on: boolean) {
+    this.state.darkStreets = on;
+    this.changed(true);
   }
   setStreets(on: boolean) {
     this.state.streets = on;

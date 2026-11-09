@@ -25,6 +25,7 @@ import {
   captureView,
   restoreView,
   insideImage,
+  streetsDark,
   type NavigationState,
   type Tool,
   type MapMarker,
@@ -379,7 +380,7 @@ export class Viewer {
     this.tool = tool;
     // The streets stay as they were while a match is checked, for Undo to come back to.
     if (tool === "match" && this.options?.streetCanvas)
-      this.pane ??= new StreetPane(this.options.streetCanvas, this.streets, () => this.navigation.inverted);
+      this.pane ??= new StreetPane(this.options.streetCanvas, this.streets, () => streetsDark(this.navigation));
     else if (tool !== "check") {
       this.pane?.dispose();
       this.pane = undefined;
@@ -908,9 +909,9 @@ export class Viewer {
   private paint(viewport: Size) {
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
     const streets = this.streetsShown(),
-      // Streets multiply onto a light map and screen onto a dark one, like
+      // Light streets multiply onto the map and dark ones screen onto it, like
       // tracing paper, so both show; beyond the map they need a blank page.
-      blank = streets && !this.navigation.inverted ? "#fff" : "#000";
+      blank = streets && !streetsDark(this.navigation) ? "#fff" : "#000";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = blank;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1017,7 +1018,7 @@ export class Viewer {
       x: Math.round(this.camera.x * this.dpr) / this.dpr,
       y: Math.round(this.camera.y * this.dpr) / this.dpr,
     };
-    const dark = this.navigation.inverted,
+    const dark = streetsDark(this.navigation),
       layer = this.streetLayer ??= document.createElement("canvas");
     if (layer.width !== this.canvas.width) layer.width = this.canvas.width;
     if (layer.height !== this.canvas.height) layer.height = this.canvas.height;
