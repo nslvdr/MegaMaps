@@ -3,7 +3,8 @@ import { $, click, fire, render, settle } from "./dom";
 import test from "node:test";
 import assert from "node:assert/strict";
 import Settings, { DEBUG_HOLD, ERASE_STEP_PAUSE } from "../src/ui/Settings.svelte";
-import { saveMap } from "../src/storage/database";
+import { listMaps, removeRecord, saveMap, transact } from "../src/storage/database";
+import { loadSetting, saveSetting } from "../src/storage/settings";
 import { payloadStore } from "../src/storage/payloads";
 import { deleteMapPhotos, savePhoto } from "../src/storage/photos";
 import type { MapRecord } from "../src/types";
@@ -133,4 +134,20 @@ test("the activity card counts the user's own trips and places, not the example 
   for (let turn = 0; turn < 100 && document.getElementById("settings-activity")?.ariaBusy !== "false"; turn++) await settle();
   assert.equal($("settings-activity-trips").textContent, "1");
   assert.equal($("settings-activity-time").textContent, "1 h 00");
+});
+
+test("the user row shows the nickname and keeps the first join date it finds", async (t) => {
+  const created = new Date(2025, 2, 3).getTime();
+  for (const map of await listMaps()) await removeRecord(map.id);
+  await transact("settings", "readwrite", (store) => store.delete("joined"));
+  await saveMap({ id: "old", name: "old", width: 1, height: 1, bytes: 0, backend: "indexeddb", levels: [], created, status: "ready" });
+  await saveSetting("share-name", " nytro ");
+  const { instance, destroy } = render(Settings, options);
+  t.after(destroy);
+  await instance.refresh();
+  await settle();
+  assert.equal($("settings-user").firstElementChild!.textContent!.trim(), "N");
+  assert.match($("settings-user").textContent!, /nytro/);
+  assert.equal($("settings-user-joined").textContent, `Since ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(created)}`);
+  assert.equal(await loadSetting("joined"), created);
 });

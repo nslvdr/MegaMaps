@@ -46,8 +46,8 @@
 <section id="settings-activity" aria-labelledby="settings-activity-title" aria-busy={loading}
   class="mt-16 rounded-md border border-line bg-[radial-gradient(140%_70%_at_0%_0%,rgb(255_42_42/0.07),transparent_60%)] p-16">
   <div class="flex items-baseline justify-between gap-12">
-    <h2 id="settings-activity-title" class="m-0 text-heading font-bold tracking-tight">{t("Past year")}</h2>
-    <span id="settings-activity-days" class="text-small text-muted">{#if loading}{@render blank("72px")}{:else}{t("{days} on site", { days: plural(activity.daysOut, "day") })}{/if}</span>
+    <h2 id="settings-activity-title" class="m-0 text-heading font-bold tracking-tight">{t("Activity")}</h2>
+    <span id="settings-activity-days" class="text-small text-muted">{t("Past year")} · {#if loading}{@render blank("72px")}{:else}{t("{days} on site", { days: plural(activity.daysOut, "day") })}{/if}</span>
   </div>
 
   <!-- Columns of weeks, Monday on top; days still to come stay blank. -->

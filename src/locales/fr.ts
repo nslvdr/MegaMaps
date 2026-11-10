@@ -722,6 +722,9 @@ export const fr = {
   "Longest": "Le plus long",
   "{days} on site": "{days} sur place",
   "Past year": "12 derniers mois",
+  "Activity": "Activité",
+  "No nickname": "Aucun pseudo",
+  "Since {date}": "Depuis le {date}",
   // What’s new (src/changelog.ts)
   "Waiting for Mega Maps to finish in another window…": "En attente de Mega Maps dans une autre fenêtre…",
   "What’s new": "Nouveautés",

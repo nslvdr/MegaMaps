@@ -46,7 +46,8 @@
   // Settings, or one of its pages over it; none while the library shows.
   type Shown = "settings" | "map" | "data" | "general" | "about" | "reset";
   let shown = $state<Shown>();
-  let nickname = $state("");
+  let nickname = $state(""), joined = $state<number>();
+  const name = $derived(nickname.trim());
   let backupHint = $state(""), backupReady = $state(false), backupDot = $state<"due" | "">("");
   let backupNote = $state(""), backupError = $state<string>();
   let storage = $state(""), total = $state(""), protection = $state("");
@@ -123,8 +124,9 @@
     const current = ++version;
     showError();
     void prepareBackup(current);
-    const [shareName, status, maps, use, estimate, persisted] = await Promise.all([
+    const [shareName, joinedAt, status, maps, use, estimate, persisted] = await Promise.all([
       loadSetting("share-name").catch(() => undefined),
+      loadSetting("joined").catch(() => undefined),
       backupStatus().catch(() => undefined),
       listMaps().then((maps) => maps.filter((map) => map.status === "ready")).catch(() => []),
       storageUse().catch(() => undefined),
@@ -134,6 +136,7 @@
     if (current !== version) return;
     void showActivity(current, maps);
     nickname = shareName ?? "";
+    joined = joinedAt ?? rememberJoined(maps);
     kept = persisted !== false;
     showLastBackup(status?.lastBackup, status?.due ?? false);
     changes = status?.changes ?? 0;
@@ -143,6 +146,13 @@
     total = used !== undefined ? formatBytes(used) : t("Unknown");
     protection = persisted === undefined ? "" : persisted ? t("Protected") : t("Not protected");
     storage = protection ? `${total} · ${protection}` : total;
+  }
+
+  // Before the join date was kept, the oldest map stands in for it; the example map arrives on first launch.
+  function rememberJoined(maps: { created: number }[]) {
+    const at = Math.min(Date.now(), ...maps.map((map) => map.created));
+    void saveSetting("joined", at).catch(() => {});
+    return at;
   }
 
   // The example map is the app's, not the user's, so its places don't count.
@@ -326,6 +336,12 @@
   export const DEBUG_HOLD = 1500;
 </script>
 
+<!-- The nickname's first letter in place of the user icon. -->
+{#snippet initial()}
+  <span aria-hidden="true" class="grid size-32 shrink-0 place-items-center rounded-full border border-neon-add/40 tint-neon-add/16 font-bold text-neon-add">
+    {[...name][0]!.toLocaleUpperCase(locale)}</span>
+{/snippet}
+
 {#snippet heading(text: string)}
   <!-- Groups breathe apart; a heading sits close to its own card. -->
   <h2 class="mx-12 mt-32 mb-8 text-small font-strong tracking-[0] text-muted">{text}</h2>
@@ -344,23 +360,21 @@
   </Row>
 {/snippet}
 
-<!-- The hub: what the user has done, then the backup, since it's what loses data when missed, then a row for each page. -->
+<!-- The hub: what the user has done, then a row for each page; a due backup shows as a dot on Backup & storage. -->
 <Page id="settings" title={t("Settings")} hidden={shown !== "settings"} back={() => { shown = undefined; back(); }}>
   {#if activity !== null}<Activity {activity} />{/if}
+  <!-- Who uses this device: the nickname from General and when they started. Only read here. -->
   <Rows>
-    <Row id="settings-backup" icon={icons.backup} tone="var(--neon-saved)" label={t("Save a backup")} hint={backupHint}
-      hintId="settings-backup-status" dot={backupDot} arrow disabled={!backupReady} onclick={() => void saveBackup()} />
+    <Row tag="div" id="settings-user" label={name || t("No nickname")} value={joined ? t("Since {date}", { date: day(joined) }) : ""}
+      valueId="settings-user-joined" icon={icons.user} tone="var(--neon-add)" leading={name ? initial : undefined} />
   </Rows>
-  <!-- The backup note lines up with the row labels above it. -->
-  <p id="backup-note" class="mx-12 mt-8 text-small leading-roomy text-muted">{backupNote}</p>
-  <p id="backup-error" class="mx-12 mt-8 text-small leading-roomy text-danger" role="alert" hidden={backupError === undefined}>{backupError}</p>
 
   <Rows>
-    <Row id="settings-open-map" icon={icons.map} label={t("Map")} hint={t("Labels, menu bar, walking speed, screen")} arrow onclick={() => show("map")} />
-    <Row id="settings-open-data" icon={icons.storage} tone="var(--neon-saved)" label={t("Backup & storage")}
-      hint={storage} hintId="settings-storage-status" arrow onclick={() => show("data")} />
     <Row id="settings-open-general" icon={icons.user} tone="var(--neon-add)" label={t("General")}
       hint={t("Language, nickname, start-up")} arrow onclick={() => show("general")} />
+    <Row id="settings-open-map" icon={icons.map} label={t("Map")} hint={t("Labels, menu bar, walking speed, screen")} arrow onclick={() => show("map")} />
+    <Row id="settings-open-data" icon={icons.storage} tone="var(--neon-saved)" label={t("Backup & storage")}
+      hint={storage} hintId="settings-storage-status" dot={backupDot} arrow onclick={() => show("data")} />
     <Row id="settings-open-about" icon={icons.about} tone={updateReady ? "var(--neon-add)" : "var(--muted)"} label={t("About & help")}
       hint={updateHint} dot={updateReady ? "ready" : ""} arrow onclick={() => show("about")}
       class={updateReady ? "[&_small]:text-neon-add" : ""} />
@@ -408,10 +422,15 @@
   </div>
   {@render heading(t("Backups"))}
   <Rows class="mt-0!">
+    <Row id="settings-backup" icon={icons.backup} tone="var(--neon-saved)" label={t("Save a backup")} hint={backupHint}
+      hintId="settings-backup-status" dot={backupDot} arrow disabled={!backupReady} onclick={() => void saveBackup()} />
     <Row id="settings-restore" icon={icons.restore} tone="var(--neon-saved)" label={t("Restore a backup")}
       hint={t("Adds maps, keeps the ones here")} arrow onclick={() => restoreInput.click()} />
     {@render select(choices.reminder)}
   </Rows>
+  <!-- The backup note lines up with the row labels above it. -->
+  <p id="backup-note" class="mx-12 mt-8 text-small leading-roomy text-muted">{backupNote}</p>
+  <p id="backup-error" class="mx-12 mt-8 text-small leading-roomy text-danger" role="alert" hidden={backupError === undefined}>{backupError}</p>
   <input bind:this={restoreInput} type="file" id="restore-input" accept=".megabackup,application/octet-stream" hidden onchange={picked}>
   {@render heading(t("Photos"))}
   <Rows class="mt-0!">{@render select(choices.photoSize)}</Rows>
