@@ -61,25 +61,6 @@
   </form>
 </dialog>
 
-<dialog id="scale-ask-dialog" aria-labelledby="scale-ask-title" class="[--accent:var(--neon-measure)]">
-  <DialogHeader id="scale-ask-title" title={t("Set the map scale?")} icon={icons.scale} close={{ id: "scale-ask-close", onclick: () => close("scale-ask-dialog") }} />
-  <p>{t("Distances need the map’s scale. Tap both ends of a known length, like the scale bar, then enter that length.")}</p>
-  <Actions>
-    <Button id="scale-ask-start" icon={icons.scale} label={t("Set scale")} onclick={() => controls.startScale()} />
-    <Button id="scale-ask-later" variant="quiet" label={t("Not now")} onclick={() => close("scale-ask-dialog")} />
-  </Actions>
-</dialog>
-
-<dialog id="scale-dialog" aria-labelledby="scale-title" class="[--accent:var(--neon-measure)]" oncancel={keepFormOpen}>
-  <form id="scale-form" onsubmit={(event) => { event.preventDefault(); controls.saveScale(); }}>
-    <DialogHeader id="scale-title" title={t("Distance between the points")} icon={icons.scale}
-      close={{ id: "scale-cancel", onclick: () => close("scale-dialog") }} />
-    <label>{t("Metres")}<input id="scale-metres" type="number" inputmode="decimal" min="0.1" max="100000" step="any" required enterkeyhint="done"
-      bind:value={controls.scaleMetresValue} /></label>
-    <Actions><Button type="submit" id="scale-save" icon={icons.check} label={t("Save")} disabled={!controls.scaleMetres} /></Actions>
-  </form>
-</dialog>
-
 <dialog id="name-dialog" aria-labelledby="name-title" class="[--accent:var(--neon-saved)]" oncancel={keepFormOpen}>
   <form id="name-form" onsubmit={(event) => { event.preventDefault(); controls.saveName(); }}>
     <DialogHeader id="name-title" title={controls.nameTitle} icon={icons.edit} close={{ id: "name-cancel", onclick: () => close("name-dialog") }} />

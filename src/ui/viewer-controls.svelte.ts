@@ -207,7 +207,8 @@ export class ViewerControls {
   tripMark = $state<number>();
   nameTitle = $state("");
   nameValue = $state("");
-  scaleMetresValue = $state<number | null | undefined>(null);
+  /** What was typed for the scale's length; until then it follows the line by the current scale. */
+  scaleMetresText = $state<string>();
   entryDate = $state("");
   entryText = $state("");
   /** The long-press wheel, under the finger. */
@@ -232,6 +233,8 @@ export class ViewerControls {
   private measurePoints: Point[] = [];
   /** The two ends of a known length, while the scale is set. */
   private scalePoints: Point[] = [];
+  /** Where saving or cancelling the scale goes: back to Measure, or to the map. */
+  private scaleThen: "measure" | "browse" = "measure";
   /** Undo steps for the measure or scale line: its points before each tap or drag. */
   private measureHistory: Point[][] = [];
   /** The place being moved, and where it was. */
@@ -945,12 +948,12 @@ export class ViewerControls {
     this.viewer?.setMeasure?.(this.tape());
     this.tick++;
   }
-  /** The Measure button opens and closes the tool; a map without a scale asks for one first. */
+  /** The Measure button opens and closes the tool; a map without a scale sets one first. */
   toggleMeasure() {
     if (this.measuring()) return this.closeMeasure();
     if (this.tool !== "browse") return;
     this.closePlaceDetails();
-    if (!this.state.metresPerPixel) return void this.show("scale-ask-dialog");
+    if (!this.state.metresPerPixel) return this.startScale();
     this.measureHistory = [];
     this.mode("measure");
     track("measure_used");
@@ -962,41 +965,51 @@ export class ViewerControls {
     this.measureHistory = [];
     this.mode("browse");
   }
-  /** Tap both ends of a known length, like the scale bar, then say how long it is. */
-  startScale() {
-    this.close("scale-ask-dialog");
+  /** Tap both ends of a known length, like the scale bar, then type how long it is.
+   * From Measure it goes back to Measure; from the View panel, back to the map. */
+  startScale(then: "measure" | "browse" = "measure") {
+    if (then === "browse" && this.tool !== "browse") return;
+    this.closePlaceDetails();
+    this.scaleThen = then;
     this.scalePoints = [];
+    this.scaleMetresText = undefined;
     this.measureHistory = [];
     this.mode("scale");
   }
-  /** × goes back to measuring if the map already has a scale to measure with. */
+  /** × goes back to measuring if it came from there and there's a scale to measure with. */
   private cancelScale() {
-    if (!this.state.metresPerPixel) return this.closeMeasure();
+    if (this.scaleThen === "browse" || !this.state.metresPerPixel) return this.closeMeasure();
     this.scalePoints = [];
     this.measureHistory = [];
     this.mode("measure");
   }
-  private askScaleLength() {
-    const pixels = pathLength(this.scalePoints), known = this.state.metresPerPixel;
-    // Changing the scale starts from what the current one says.
-    this.scaleMetresValue = known ? Math.round(pixels * known * 10) / 10 : null;
-    this.show("scale-dialog");
-    this.el("scale-metres")?.focus();
+  /** The length field: what was typed, or what the current scale says the line is. */
+  get scaleMetresShown() {
+    if (this.scaleMetresText !== undefined) return this.scaleMetresText;
+    const known = this.state.metresPerPixel, pixels = pathLength(this.scalePoints);
+    return known && this.scalePoints.length > 1 ? String(Math.round(pixels * known * 10) / 10) : "";
   }
   get scaleMetres() {
-    const metres = Number(this.scaleMetresValue ?? 0);
+    const metres = Number(this.scaleMetresShown.replace(",", ".") || 0);
     return metres > 0 && metres <= 100_000 ? metres : undefined;
   }
   saveScale() {
     const metres = this.scaleMetres, pixels = pathLength(this.scalePoints);
-    if (!metres || !pixels) return;
+    if (!metres || !pixels || this.scalePoints.length < 2) return;
     this.state.metresPerPixel = this.state.measuredScale = metres / pixels;
-    this.close("scale-dialog");
-    this.scalePoints = [];
-    this.measureHistory = [];
     this.changed();
-    this.mode("measure");
+    if (this.scaleThen === "measure") {
+      this.scalePoints = [];
+      this.measureHistory = [];
+      this.mode("measure");
+    } else this.closeMeasure();
     this.showToast(t("Scale set"), "done");
+  }
+  /** Where the map's scale comes from, for the View panel and the Measure card. */
+  scaleSource() {
+    const state = this.state;
+    if (!state.metresPerPixel) return undefined;
+    return state.geo && state.metresPerPixel !== state.measuredScale ? "streets" : "measured";
   }
   private editRoute(route: PlannedRoute) {
     this.routeBefore = route.draft ? undefined : [...route.points];
@@ -1117,9 +1130,8 @@ export class ViewerControls {
     else if (this.tool === "match" || this.tool === "check") this.cancelMatch();
     else this.mode("browse");
   }
-  /** The task card's pencil: a route's name, or the scale Measure works with. */
+  /** The task card's pencil renames the route being drawn. */
   renameTool() {
-    if (this.tool === "measure") return this.startScale();
     const route = this.route();
     if (route)
       this.name(t("Rename route"), route.name, (name) => {
@@ -1129,7 +1141,7 @@ export class ViewerControls {
   }
   toolDone() {
     if (this.tool === "move") this.finishMove(true);
-    else if (this.tool === "scale") this.askScaleLength();
+    else if (this.tool === "scale") this.saveScale();
     else if (this.tool === "match") this.matchSpot();
     else if (this.tool === "check") this.finishMatch();
     else this.finishRoute();
@@ -1610,8 +1622,10 @@ export class ViewerControls {
       scale: [
         icons.scale,
         t("Set scale"),
-        tape.length > 1 ? t("Drag the ends to adjust, then tap Next")
-          : tape.length ? t("Tap the other end") : t("Tap one end of the scale bar or of a known length"),
+        tape.length > 1 ? t("Drag the ends to adjust, then enter the length")
+          : tape.length ? t("Tap the other end")
+          : scale ? t("Tap one end of the scale bar or of a known length")
+          : t("Distances need a scale. Tap one end of the scale bar or of a known length"),
       ],
       match: [icons.map, this.spots.length ? t("Spot 1 matched") : t("Match a spot"), this.matchMessage ||
         (this.spots.length ? t("Match a second spot to set the scale and rotation automatically, or use the rulers.")
@@ -1624,7 +1638,11 @@ export class ViewerControls {
       // Measuring, the big line is the total at one end and the walk at the other.
       distance: metres !== undefined ? formatDistance(metres) : undefined,
       walk: metres !== undefined ? t("~{time} on foot", { time: formatWalk(metres) }) : undefined,
-      rename: this.tool === "route" ? t("Rename route") : this.tool === "measure" ? t("Change scale") : undefined,
+      rename: this.tool === "route" ? t("Rename route") : undefined,
+      // Measuring names where its scale comes from, with a way to change it.
+      scaleSource: this.tool === "measure" ? this.scaleSource() : undefined,
+      // The scale's length is typed once both ends are down.
+      scaleLength: this.tool === "scale" && tape.length > 1,
       actions: this.tool !== "browse" && this.tool !== "marker" && this.tool !== "trail",
       undo: this.tool === "route" || measuring,
       canUndo: measuring ? !!tape.length || !!this.measureHistory.length : !!count || !!this.routeHistory.length,
@@ -1635,15 +1653,20 @@ export class ViewerControls {
       search: this.tool === "match" && !this.spots.length,
       // Measuring has nothing to save, so × is how it ends; the scale goes on to its length.
       done: this.tool !== "measure",
-      doneIcon: this.tool === "scale" ? icons.next : this.tool === "match" ? icons.pair : icons.check,
-      doneLabel: this.tool === "scale" ? t("Next")
+      doneIcon: this.tool === "match" ? icons.pair : icons.check,
+      doneLabel: this.tool === "scale" ? t("Save")
         : this.tool === "match" ? t("Match spot {number}", { number: this.spots.length + 1 }) : t("Done"),
-      canFinish: !((this.tool === "route" || this.tool === "scale") && (this.tool === "route" ? count : tape.length) < 2),
+      canFinish: this.tool === "scale" ? tape.length > 1 && !!this.scaleMetres : !(this.tool === "route" && count < 2),
     };
   }
   streetsView() {
     const placed = !!this.state.geo;
-    return { placed, on: placed && !!this.state.streets, status: placed ? t("Lined up with OpenStreetMap") : t("Line up the map first") };
+    const source = this.scaleSource();
+    return {
+      placed, on: placed && !!this.state.streets,
+      scale: source === "streets" ? t("From the streets, with north") : source === "measured" ? t("Measured on a known length")
+        : t("Not set yet. Distances need it."),
+    };
   }
   setStreets(on: boolean) {
     this.state.streets = on;

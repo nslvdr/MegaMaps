@@ -37,6 +37,27 @@
     </p>
   {/if}
   <p id="tool-message" role="status" class="m-0 text-body leading-normal text-muted">{tool.message}</p>
+  <!-- Measuring says where its scale comes from, and changes it from here. -->
+  {#if tool.scaleSource}
+    <p id="measure-scale" class="mt-8 mb-0 flex items-center gap-8 text-small text-muted">
+      <Icon svg={icons.scale} class="size-16 flex-none" />
+      <span class="min-w-0 flex-1">{tool.scaleSource === "streets" ? t("Scale from the streets") : t("Scale measured on a known length")}</span>
+      <button type="button" id="change-scale" onclick={() => controls.startScale()}
+        class="-my-12 min-h-44 cursor-pointer px-4 text-small font-semibold text-c">{t("Change")}</button>
+    </p>
+  {/if}
+  <!-- Both ends down, the length is typed here, with the line still in view. -->
+  {#if tool.scaleLength}
+    <form id="scale-form" data-bar class="mt-12 flex items-center gap-12" onsubmit={(event) => { event.preventDefault(); controls.saveScale(); }}>
+      <label for="scale-metres" class="text-body font-semibold">{t("Length")}</label>
+      <span class="relative min-w-0 flex-1">
+        <input id="scale-metres" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="0"
+          value={controls.scaleMetresShown} oninput={(event) => (controls.scaleMetresText = event.currentTarget.value)}
+          class="min-h-50 w-full rounded-sm border border-line bg-black py-12 pr-40 pl-16 text-body text-text tabular-nums outline-none focus:border-c" />
+        <span aria-hidden="true" class="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-body text-muted">m</span>
+      </span>
+    </form>
+  {/if}
   {#if tool.rulers}
     <Ruler id="calibrate-scale" label={t("Scale")} value={tool.rulers.scale} onstep={(steps) => controls.adjustGeo("scale", steps)}
       reset={tool.rulers.measured ? { label: t("Back to the measured scale"), onclick: () => controls.resetScale() } : undefined} />
