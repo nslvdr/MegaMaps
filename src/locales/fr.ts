@@ -88,7 +88,7 @@ export const fr = {
   "Floating": "Flottante",
   "Menu bar": "Barre de menu",
   "Segmented": "Segmentée",
-  "Keep screen on": "Écran allumé",
+  "Keep screen on": "Garder l’écran allumé",
   "Labels": "Étiquettes",
   "Labels, menu bar, walking speed, screen": "Étiquettes, barre de menu, vitesse de marche, écran",
   "Language, nickname, start-up": "Langue, pseudo, démarrage",
