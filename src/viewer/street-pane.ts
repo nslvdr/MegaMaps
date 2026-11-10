@@ -1,7 +1,7 @@
 import { cameraAt, screenToWorld, worldToScreen, type Camera, type Point } from "./camera";
 import { MAX_STREET_ZOOM, STREET_TILE_SIZE } from "./geo";
 import { attachInteractions } from "./interactions";
-import { DARK_STREETS, STREETS_STRENGTH, type StreetTiles } from "./street-tiles";
+import { STREETS_STRENGTH, type StreetTiles } from "./street-tiles";
 
 /** A few streets across: close enough to tell one corner from the next. */
 const START_SCALE = STREET_TILE_SIZE * 2 ** 16;
@@ -109,10 +109,8 @@ export class StreetPane {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = dark ? "#0e1013" : "#f2efe9";
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    if (dark) ctx.filter = DARK_STREETS;
     ctx.imageSmoothingEnabled = true;
-    this.tiles.draw(ctx, this.camera, { width: this.canvas.clientWidth, height: this.canvas.clientHeight }, this.dpr);
-    ctx.filter = "none";
+    this.tiles.draw(ctx, this.camera, { width: this.canvas.clientWidth, height: this.canvas.clientHeight }, this.dpr, dark);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalAlpha = 1 - STREETS_STRENGTH;
     ctx.fillStyle = "#000";
