@@ -1460,7 +1460,7 @@ test("Saved orders its lists and filters them by type", async (t) => {
   assert.equal(filtering(), false);
 });
 
-test("Measure asks for the map's scale once, then measures lines and gives routes a length", async (t) => {
+test("Measure sets the map's scale first, then measures lines and gives routes a length", async (t) => {
   const map = mapRecord("measure");
   await saveMap(map);
   const state = defaultNavigation(map.id);
@@ -1480,12 +1480,9 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   };
   assert.equal(routeDetail(), "2 points", "without a scale, a route has no length");
   click("open-measure");
-  assert.ok(isOpen("scale-ask-dialog"), "a map without a scale asks for one first");
-  assert.deepEqual(tools, [], "and does not start measuring");
-  click("scale-ask-start");
-  assert.ok(!isOpen("scale-ask-dialog"));
-  assert.equal(tools.at(-1), "scale");
+  assert.equal(tools.at(-1), "scale", "a map without a scale sets one first");
   assert.equal(text("tool-title"), "Set scale");
+  assert.equal(text("tool-message"), "Distances need a scale. Tap one end of the scale bar or of a known length");
   assert.ok($("dock").hidden, "setting the scale takes the pill's place");
   assert.ok($<HTMLButtonElement>("tool-done").disabled, "Next waits for both ends");
 
@@ -1496,13 +1493,10 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   click("route-undo");
   assert.deepEqual(tape, [{ x: 0, y: 0 }, { x: 100, y: 0 }], "Undo puts it back");
   tap(200, 0);
-  assert.equal(text("tool-done"), "Next");
-  click("tool-done");
-  assert.ok(isOpen("scale-dialog"), "Next asks how long the line is");
-  assert.equal(value("scale-metres"), "", "a first scale starts empty");
-  assert.ok($<HTMLButtonElement>("scale-save").disabled);
+  assert.equal(value("scale-metres"), "", "both ends down, the card asks for the length, empty for a first scale");
+  assert.ok($<HTMLButtonElement>("tool-done").disabled, "Save waits for it");
   type("scale-metres", "50");
-  assert.ok(!$<HTMLButtonElement>("scale-save").disabled);
+  assert.ok(!$<HTMLButtonElement>("tool-done").disabled);
   submit("scale-form");
   assert.equal(state.metresPerPixel, 0.25, "50 m over 200 pixels");
   assert.equal(tools.at(-1), "measure", "measuring starts right after");
@@ -1521,11 +1515,14 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   assert.equal(text("tool-message"), "Tap to add, drag to adjust");
   assert.equal(routeDetail(), "150 m · ~2 min on foot", "routes show their length once the map has a scale");
 
-  // The pencil changes the scale; × there goes back to the same line.
-  assert.equal($("tool-rename").getAttribute("aria-label"), "Change scale");
-  click("tool-rename");
+  // The card says where the scale comes from and changes it; × there goes back to the same line.
+  assert.equal(text("measure-scale"), "Scale measured on a known length Change");
+  click("change-scale");
   assert.equal(tools.at(-1), "scale");
   assert.deepEqual(tape, [], "a new scale starts from its first end");
+  tap(0, 0);
+  tap(100, 0);
+  assert.equal(value("scale-metres"), "25", "a new scale starts from what the current one says");
   click("tool-cancel");
   assert.equal(tools.at(-1), "measure");
   assert.equal(tape?.length, 3, "the line waited");
@@ -1536,12 +1533,36 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   assert.equal($("dock").hidden, false, "and the pill comes back");
   assert.equal(tape, undefined, "and the line goes with it");
   click("open-measure");
-  assert.ok(!isOpen("scale-ask-dialog"), "a map with a scale measures straight away");
   assert.equal(tools.at(-1), "measure");
   assert.deepEqual(tape, [], "starting from a clean line");
 
   await controls.flush();
   assert.equal((await loadNavigation(map.id))?.metresPerPixel, 0.25, "the scale is kept with the map");
+});
+
+test("the View panel shows where the scale comes from and sets it, back to the map", async (t) => {
+  const map = mapRecord("view-scale");
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  const tools: string[] = [];
+  const controls = openMap(t, map, state, { setTool(tool) { tools.push(tool); } });
+  const tap = (x: number, y: number) => controls.options().onTap({ x, y });
+  click("open-display");
+  assert.equal(text("scale-status"), "Not set yet. Distances need it.");
+  assert.ok(gone("streets"), "no streets switch before the map is lined up");
+  click("measure-length");
+  assert.equal(tools.at(-1), "scale");
+  tap(0, 0);
+  tap(0, 400);
+  type("scale-metres", "100");
+  click("tool-done");
+  assert.equal(state.metresPerPixel, 0.25);
+  assert.equal(tools.at(-1), "browse", "it goes back to the map, not to Measure");
+  click("open-display");
+  assert.equal(text("scale-status"), "Measured on a known length");
+  click("measure-length");
+  click("tool-cancel");
+  assert.equal(tools.at(-1), "browse", "× from there goes back to the map too");
 });
 
 test("the last mark: back to it from the wheel or the Trail panel, and read, moved or deleted from its dot", async (t) => {

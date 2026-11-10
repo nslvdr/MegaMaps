@@ -22,6 +22,7 @@
   };
   // Native radios and switches keep a full-size touch target under the tile.
   const fill = "absolute inset-0 m-0 size-full cursor-pointer opacity-0";
+  const setButton = "flex min-h-62 cursor-pointer flex-col items-center justify-center gap-4 rounded-sm border border-c/40 px-8 py-8 text-center text-small font-semibold text-c tint-c/12";
 </script>
 
 <div id="sheet-display" {hidden}>
@@ -63,16 +64,26 @@
       </label>
     {/each}
   </div>
-  <h3 class={panelHeading}>{t("Streets")}</h3>
+  <!-- Scale and north: where they come from, the two ways to set them, and the
+       streets once the map is lined up with them. -->
+  <h3 class={panelHeading}>{t("Scale and north")}</h3>
   <div class={panelCard}>
-    <div class={[panelRow, "flex-wrap gap-y-8"]}>
-      <label class="contents cursor-pointer">
+    <div class={panelRow}>
+      <span class={rowIcon}><Icon svg={icons.scale} /></span>
+      <span class={rowText}><strong>{t("Map scale")}</strong><small id="scale-status" class={rowHint}>{view.streets.scale}</small></span>
+    </div>
+    {#if view.streets.placed}
+      <label class={[panelRow, "cursor-pointer"]}>
         <span class={rowIcon}><Icon svg={icons.map} /></span>
-        <span class={rowText}><strong>{t("Streets on the map")}</strong><small id="streets-status" class={rowHint}>{view.streets.status}</small></span>
-        <Switch id="streets" checked={view.streets.on} disabled={!view.streets.placed} onchange={() => controls.setStreets(!view.streets.on)} />
+        <span class={rowText}><strong>{t("Streets on the map")}</strong><small class={rowHint}>{t("Lined up with OpenStreetMap")}</small></span>
+        <Switch id="streets" checked={view.streets.on} onchange={() => controls.setStreets(!view.streets.on)} />
       </label>
-      <button type="button" id="calibrate-streets" onclick={() => controls.calibrate()}
-        class="min-h-44 basis-full cursor-pointer rounded-sm border border-c/40 text-small font-semibold text-c tint-c/12">{t("Calibrate")}</button>
+    {/if}
+    <div class="grid grid-cols-2 gap-8 p-12">
+      <button type="button" id="calibrate-streets" onclick={() => controls.calibrate()} class={setButton}>
+        <Icon svg={icons.map} class="size-20" />{view.streets.placed ? t("Adjust on streets") : t("Line up with streets")}</button>
+      <button type="button" id="measure-length" onclick={() => controls.startScale("browse")} class={setButton}>
+        <Icon svg={icons.scale} class="size-20" />{t("Measure a length")}</button>
     </div>
   </div>
 </div>
