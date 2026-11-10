@@ -11,6 +11,8 @@ export interface Settings {
   "backup-snapshot": Record<string, string>;
   /** When the backup reminder was last put away, and how many changes it counted then. */
   "backup-dismissed": { at: number; changes: number };
+  /** When the user started with Mega Maps, shown under their activity. */
+  "joined": number;
   /** Where the last map lined up with the streets is, so the next one starts there. */
   "streets-place": LonLat;
 }
