@@ -120,11 +120,7 @@ export interface NavigationState {
   measuredScale?: number;
   /** Streets show through the map; only once it is lined up. */
   streets?: boolean;
-  /** Streets drawn dark; unset, they follow the dark map. */
-  darkStreets?: boolean;
 }
-/** Whether the streets are drawn dark: the person's choice, else as the map is. */
-export const streetsDark = (state: Pick<NavigationState, "inverted" | "darkStreets">) => state.darkStreets ?? state.inverted;
 /** Slightly dimmed by default so routes and places stand out from the map. */
 export const DEFAULT_DIMMING = 0.85;
 export const BRIGHTNESS_LEVELS = [1, DEFAULT_DIMMING, 0.75, 0.65, 0.55] as const;

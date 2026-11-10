@@ -74,11 +74,5 @@
       <button type="button" id="calibrate-streets" onclick={() => controls.calibrate()}
         class="min-h-44 basis-full cursor-pointer rounded-sm border border-c/40 text-small font-semibold text-c tint-c/12">{t("Calibrate")}</button>
     </div>
-    <label class={[panelRow, "cursor-pointer"]}>
-      <span class={rowIcon}><Icon svg={icons.moon} /></span>
-      <span class={rowText}><strong>{t("Dark streets")}</strong><small id="dark-streets-status" class={rowHint}
-        >{view.streets.dark ? t("OpenStreetMap in dark colors") : t("OpenStreetMap in its own colors")}</small></span>
-      <Switch id="dark-streets" checked={view.streets.dark} onchange={() => controls.setDarkStreets(!view.streets.dark)} />
-    </label>
   </div>
 </div>
