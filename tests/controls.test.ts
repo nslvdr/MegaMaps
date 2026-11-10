@@ -724,9 +724,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   assert.equal(text("toast"), "Exit plan deleted");
 
   // Layers hide/show.
-  assert.equal(text("layer-places-count"), "1");
+  assert.equal(text("layer-places-hint"), "1 place");
   pick("layer-places", false);
   assert.equal(state.layers.places, false);
+  assert.equal(text("layer-places-hint"), "Hidden", "a hidden layer says so");
 
   // Search stays usable while OCR runs, then reveals every matching location.
   t.mock.timers.enable({ apis: ["setTimeout"] });
