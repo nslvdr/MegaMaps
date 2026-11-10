@@ -46,7 +46,7 @@ import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
 import { compose, invert, type Spot } from "./geo";
 import { paintSpot, StreetPane } from "./street-pane";
-import { DARK_STREETS, STREETS_STRENGTH, StreetTiles } from "./street-tiles";
+import { STREETS_STRENGTH, StreetTiles } from "./street-tiles";
 import type { MapSearchMatch } from "./map-search";
 import { motion, reducedMotion } from "../ui/motion";
 /** How long the scale holds still before a sharper level loads. */
@@ -1025,8 +1025,7 @@ export class Viewer {
     const streets = layer.getContext("2d")!;
     streets.setTransform(1, 0, 0, 1, 0, 0);
     streets.clearRect(0, 0, layer.width, layer.height);
-    streets.filter = dark ? DARK_STREETS : "none";
-    this.streets.draw(streets, compose(camera, invert(this.navigation.geo!)), viewport, this.dpr);
+    this.streets.draw(streets, compose(camera, invert(this.navigation.geo!)), viewport, this.dpr, dark);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = STREETS_STRENGTH;
     ctx.globalCompositeOperation = dark ? "screen" : "multiply";
