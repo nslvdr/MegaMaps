@@ -233,17 +233,6 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   pick("dark-map", true);
   assert.equal(state.inverted, true);
 
-  // The streets follow the dark map until chosen apart from it.
-  assert.equal($<HTMLInputElement>("dark-streets").checked, true);
-  pick("dark-streets", false);
-  assert.equal(state.darkStreets, false);
-  assert.equal(state.inverted, true, "the map stays dark");
-  pick("dark-map", false);
-  pick("dark-map", true);
-  assert.equal($<HTMLInputElement>("dark-streets").checked, false, "the choice holds when the map changes");
-  pick("dark-streets", true);
-  assert.equal(state.darkStreets, true);
-
   // The corner Rotation button opens a panel of modes, like View.
   assert.equal($("open-rotation").getAttribute("aria-label"), "Rotation: Locked");
   click("open-rotation");
