@@ -43,9 +43,9 @@ import { Darkener } from "./darkener";
 import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
-import { compose, invert, type Spot } from "./geo";
+import { compose, geoMetresPerPixel, invert, type Spot } from "./geo";
 import { paintSpot, StreetPane } from "./street-pane";
-import { STREETS_STRENGTH, StreetTiles } from "./street-tiles";
+import { streetFade, StreetTiles } from "./street-tiles";
 import type { MapSearchMatch } from "./map-search";
 import { motion, reducedMotion } from "../ui/motion";
 /** How long the scale holds still before a sharper level loads. */
@@ -989,21 +989,22 @@ export class Viewer {
       drawn.push(tile);
     }
     const world = ctx.getTransform();
-    if (streets) this.paintStreets(ctx, viewport);
-    ctx.setTransform(world);
     // A faint 1px edge, just outside the map, shows where it ends on black.
     const edge = 1 / this.camera.scale;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
     ctx.lineWidth = edge;
     ctx.strokeRect(-edge / 2, -edge / 2, this.map.width + edge, this.map.height + edge);
     // Dimming is a black veil, the same as brightness(), drawn only on frames
-    // that change. Annotations are a separate layer and stay fully opaque.
+    // that change. It dims the map; the streets have their own brightness.
+    // Annotations are a separate layer and stay fully opaque.
     if (this.navigation.dimming < 1) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1 - this.navigation.dimming;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
     }
+    if (streets) this.paintStreets(ctx, viewport);
+    ctx.setTransform(world);
     if (this.spot && (this.tool === "match" || this.tool === "check")) {
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       paintSpot(ctx, worldToScreen(this.camera, this.spot.map), "1");
@@ -1024,9 +1025,10 @@ export class Viewer {
     const streets = layer.getContext("2d")!;
     streets.setTransform(1, 0, 0, 1, 0, 0);
     streets.clearRect(0, 0, layer.width, layer.height);
-    this.streets.draw(streets, compose(camera, invert(this.navigation.geo!)), viewport, this.dpr, dark);
+    const { geo, streetBrightness, streetColor, streetFade: fades } = this.navigation;
+    this.streets.draw(streets, compose(camera, invert(geo!)), viewport, this.dpr, { dark, color: streetColor });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = STREETS_STRENGTH;
+    ctx.globalAlpha = streetBrightness * (fades ? streetFade(geoMetresPerPixel(geo!, this.map) / camera.scale) : 1);
     ctx.globalCompositeOperation = dark ? "screen" : "multiply";
     ctx.drawImage(layer, 0, 0);
     ctx.globalCompositeOperation = "source-over";
