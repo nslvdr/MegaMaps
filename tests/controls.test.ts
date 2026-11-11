@@ -8,7 +8,7 @@ import { defaultNavigation, type NavigationState, type PlannedRoute } from "../s
 import { saveMap } from "../src/storage/database";
 import { loadNavigation } from "../src/storage/navigation";
 import { savePhoto } from "../src/storage/photos";
-import type { Point } from "../src/viewer/camera";
+import { worldToScreen, type Point } from "../src/viewer/camera";
 import type { MapRecord } from "../src/types";
 import type { MapSearchMatch } from "../src/viewer/map-search";
 
@@ -724,9 +724,10 @@ test("viewer controls: menu pill, panels, smart dark, layers, highlight, rotatio
   assert.equal(text("toast"), "Exit plan deleted");
 
   // Layers hide/show.
-  assert.equal(text("layer-places-count"), "1");
+  assert.equal(text("layer-places-hint"), "1 place");
   pick("layer-places", false);
   assert.equal(state.layers.places, false);
+  assert.equal(text("layer-places-hint"), "Hidden", "a hidden layer says so");
 
   // Search stays usable while OCR runs, then reveals every matching location.
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -1460,7 +1461,7 @@ test("Saved orders its lists and filters them by type", async (t) => {
   assert.equal(filtering(), false);
 });
 
-test("Measure asks for the map's scale once, then measures lines and gives routes a length", async (t) => {
+test("Measure on a map without a scale opens Map setup; the scale set there measures lines and routes", async (t) => {
   const map = mapRecord("measure");
   await saveMap(map);
   const state = defaultNavigation(map.id);
@@ -1479,13 +1480,14 @@ test("Measure asks for the map's scale once, then measures lines and gives route
     return document.querySelector('[data-row="gallery"] [data-detail]')!.textContent;
   };
   assert.equal(routeDetail(), "2 points", "without a scale, a route has no length");
+  click("close-sheet");
   click("open-measure");
-  assert.ok(isOpen("scale-ask-dialog"), "a map without a scale asks for one first");
-  assert.deepEqual(tools, [], "and does not start measuring");
-  click("scale-ask-start");
-  assert.ok(!isOpen("scale-ask-dialog"));
+  assert.deepEqual(tools, [], "a map without a scale doesn't measure");
+  assert.ok(!gone("sheet-setup"), "it opens Map setup");
+  click("setup-measure");
   assert.equal(tools.at(-1), "scale");
   assert.equal(text("tool-title"), "Set scale");
+  assert.equal(text("tool-message"), "Tap one end of the scale bar or of a known length");
   assert.ok($("dock").hidden, "setting the scale takes the pill's place");
   assert.ok($<HTMLButtonElement>("tool-done").disabled, "Next waits for both ends");
 
@@ -1496,17 +1498,18 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   click("route-undo");
   assert.deepEqual(tape, [{ x: 0, y: 0 }, { x: 100, y: 0 }], "Undo puts it back");
   tap(200, 0);
-  assert.equal(text("tool-done"), "Next");
-  click("tool-done");
-  assert.ok(isOpen("scale-dialog"), "Next asks how long the line is");
-  assert.equal(value("scale-metres"), "", "a first scale starts empty");
-  assert.ok($<HTMLButtonElement>("scale-save").disabled);
+  assert.equal(value("scale-metres"), "", "both ends down, the card asks for the length, empty for a first scale");
+  assert.ok($<HTMLButtonElement>("tool-done").disabled, "Save waits for it");
   type("scale-metres", "50");
-  assert.ok(!$<HTMLButtonElement>("scale-save").disabled);
+  assert.ok(!$<HTMLButtonElement>("tool-done").disabled);
   submit("scale-form");
   assert.equal(state.metresPerPixel, 0.25, "50 m over 200 pixels");
-  assert.equal(tools.at(-1), "measure", "measuring starts right after");
+  assert.equal(tools.at(-1), "browse");
+  assert.ok(!gone("sheet-setup"), "back in Map setup");
   assert.equal(text("toast"), "Scale set");
+  click("close-sheet");
+  click("open-measure");
+  assert.equal(tools.at(-1), "measure", "now Measure measures");
 
   assert.ok(gone("tool-total"), "nothing to read before two points");
   assert.ok(gone("tool-done"), "measuring has nothing to save");
@@ -1521,27 +1524,73 @@ test("Measure asks for the map's scale once, then measures lines and gives route
   assert.equal(text("tool-message"), "Tap to add, drag to adjust");
   assert.equal(routeDetail(), "150 m · ~2 min on foot", "routes show their length once the map has a scale");
 
-  // The pencil changes the scale; × there goes back to the same line.
-  assert.equal($("tool-rename").getAttribute("aria-label"), "Change scale");
-  click("tool-rename");
-  assert.equal(tools.at(-1), "scale");
-  assert.deepEqual(tape, [], "a new scale starts from its first end");
-  click("tool-cancel");
-  assert.equal(tools.at(-1), "measure");
-  assert.equal(tape?.length, 3, "the line waited");
-  assert.equal(text("tool-distance"), "140 m");
-
   click("tool-cancel");
   assert.equal(tools.at(-1), "browse", "X ends measuring");
   assert.equal($("dock").hidden, false, "and the pill comes back");
   assert.equal(tape, undefined, "and the line goes with it");
   click("open-measure");
-  assert.ok(!isOpen("scale-ask-dialog"), "a map with a scale measures straight away");
   assert.equal(tools.at(-1), "measure");
   assert.deepEqual(tape, [], "starting from a clean line");
+  click("tool-cancel");
+
+  // Changing the scale starts from what the current one says; × goes back to Map setup.
+  click("scale-chip");
+  click("setup-measure");
+  tap(0, 0);
+  tap(100, 0);
+  assert.equal(value("scale-metres"), "25");
+  click("tool-cancel");
+  assert.equal(tools.at(-1), "browse");
+  assert.ok(!gone("sheet-setup"));
+  assert.equal(state.metresPerPixel, 0.25, "nothing changed");
 
   await controls.flush();
   assert.equal((await loadNavigation(map.id))?.metresPerPixel, 0.25, "the scale is kept with the map");
+});
+
+test("the scale chip opens Map setup and turns into a scale bar that follows the zoom", async (t) => {
+  const map = mapRecord("scale-chip");
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  const controls = openMap(t, map, state, {});
+  const tap = (x: number, y: number) => controls.options().onTap({ x, y });
+  assert.equal(text("scale-chip"), "Set up map");
+  click("scale-chip");
+  assert.equal(text("setup-status"), "Distances and walk times need a scale.");
+  assert.ok($<HTMLButtonElement>("setup-place").disabled, "placing waits for a scale");
+  click("setup-measure");
+  tap(0, 0);
+  tap(0, 400);
+  type("scale-metres", "100");
+  click("tool-done");
+  assert.equal(text("setup-status"), "Scale measured. Place it on the streets to show them and set its orientation.");
+  assert.ok(!$<HTMLButtonElement>("setup-place").disabled);
+  click("close-sheet");
+  assert.equal(text("scale-chip-label"), "20 m", "0.25 m a pixel: 20 m is the longest round length that fits");
+  state.view = { center: { x: 0, y: 0 }, scale: 4, rotation: 0 };
+  controls.options().onView();
+  flushSync();
+  assert.equal(text("scale-chip-label"), "5 m", "zoomed in, the bar stands for less");
+});
+
+test("once set up, the scale chip opens the settings, with Set up again for the steps", async (t) => {
+  const map = mapRecord("setup-done");
+  await saveMap(map);
+  const state = { ...defaultNavigation(map.id), metresPerPixel: 0.25, northOffset: 12, geo: { x: 0.5, y: 0.34, scale: 2 ** -24, rotation: 0 } };
+  openMap(t, map, state, {});
+  click("scale-chip");
+  assert.equal(text("setup-scale"), "1 px = 0.25 m");
+  assert.equal(text("setup-north"), "12° clockwise");
+  assert.ok(text("setup-settings").includes("From the streets"));
+  click("setup-again");
+  assert.ok(gone("setup-settings"), "the steps take the settings' place");
+  // Leaving a step unfinished comes back to the steps.
+  click("setup-measure");
+  click("tool-cancel");
+  assert.ok(!gone("setup-status"));
+  click("close-sheet");
+  click("scale-chip");
+  assert.ok(!gone("setup-settings"), "opened anew, it reads the settings");
 });
 
 test("the last mark: back to it from the wheel or the Trail panel, and read, moved or deleted from its dot", async (t) => {
@@ -1831,9 +1880,9 @@ test("a map reopened in Compass mode asks for the compass again on the first tap
   assert.equal(asked, 1, "only the first tap asks");
 });
 
-test("dark map, brightness and layers restyle the map without rebuilding its places", async (t) => {
+test("dark map, brightness, layers and the streets' look restyle the map without rebuilding its places", async (t) => {
   const map = mapRecord("restyle");
-  const state = defaultNavigation(map.id);
+  const state = { ...defaultNavigation(map.id), geo: { x: 0.5, y: 0.34, scale: 1e-7, rotation: 0 }, streets: true };
   let rebuilds = 0, restyles = 0;
   openMap(t, map, state, {
     updateNavigation() { rebuilds++; },
@@ -1843,9 +1892,184 @@ test("dark map, brightness and layers restyle the map without rebuilding its pla
   toggle("dark-map");
   toggle("brightness-75");
   toggle("layer-labels");
-  assert.equal(restyles, 3);
+  toggle("street-brightness-40");
+  pick("street-color-violet");
+  toggle("street-fade");
+  assert.equal(restyles, 6);
   assert.equal(rebuilds, 0);
   assert.equal(state.inverted, !defaultNavigation(map.id).inverted);
   assert.equal(state.dimming, 0.75);
   assert.equal(state.layers.labels, false);
+  assert.equal(state.streetBrightness, 0.4);
+  assert.equal(state.dimming, 0.75, "the streets' brightness leaves the map's alone");
+  assert.equal(state.streetColor, "violet");
+  assert.equal(state.streetFade, false);
+  // Hidden streets keep their look; their settings stay, dimmed, until they're back.
+  toggle("streets");
+  assert.equal(state.streets, false);
+  assert.equal($<HTMLInputElement>("street-fade").disabled, true);
+  toggle("streets");
+  assert.equal($<HTMLInputElement>("street-fade").disabled, false);
+  assert.equal($<HTMLInputElement>("street-color-violet").checked, true);
+});
+
+test("calibrating matches a spot, then a second one or the rulers", async (t) => {
+  const searches: string[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    searches.push(url);
+    return new Response(JSON.stringify([{ lat: "48.8534", lon: "2.3488" }]));
+  });
+  const map = mapRecord("line-up");
+  await saveMap(map);
+  const state = defaultNavigation(map.id);
+  const tools: string[] = [], moved: Point[] = [];
+  // What the streets' cross is on, in Mercator; each step puts it where it needs.
+  let streets: Point = { x: 0.5, y: 0.34 };
+  const crosses = (x: number, y: number, place: Point, on = state) => {
+    on.view = { center: { x, y }, scale: 1, rotation: 0 };
+    streets = place;
+  };
+  const viewer = (into: Point[]) => ({
+    setTool(tool: string) { tools.push(tool); }, restyle() {},
+    streetsCenter: () => streets,
+    streetsScale: () => 2 ** 24,
+    moveStreets(center: Point) { into.push(center); },
+  });
+  const controls = openMap(t, map, state, viewer(moved));
+  const calibrate = () => { controls.calibrate(); flushSync(); };
+  // Lining up again: one spot, then the rulers, which turn the map about it.
+  const rulers = (x: number, y: number, place: Point) => {
+    calibrate();
+    crosses(x, y, place);
+    click("tool-done");
+    click("use-rulers");
+  };
+  const drag = (id: string, from: number, to: number) => {
+    $(id).setPointerCapture = () => {};
+    fire(id, "pointerdown", { clientX: from, pointerId: 1 });
+    fire(id, "pointermove", { clientX: to, pointerId: 1 });
+    fire(id, "pointerup", { clientX: to, pointerId: 1 });
+  };
+
+  calibrate();
+  assert.equal(tools.at(-1), "match", "no scale or north is asked for first");
+  await settle();
+  type("place-query", "Rue Saint-Jacques");
+  submit("place-search");
+  await settle();
+  await settle();
+  assert.match(searches[0]!, /q=Rue%20Saint-Jacques/);
+  assert.equal(moved.length, 1, "the streets go there");
+
+  crosses(100, 100, { x: 0.5, y: 0.34 });
+  click("tool-done");
+  assert.equal(tools.at(-1), "match", "the first spot asks what's next");
+  assert.ok(gone("place-search"));
+  assert.ok($("use-rulers"), "the rulers");
+  assert.equal(text("tool-done"), "Match spot 2", "or a second spot");
+
+  crosses(120, 100, { x: 0.501, y: 0.34 });
+  click("tool-done");
+  assert.equal(tools.at(-1), "match", "too close to the first spot");
+  assert.equal($("tool-message").textContent, "Pick a spot further from spot 1");
+
+  // East on the streets is down on the map, so the map's north is a quarter turn off.
+  crosses(100, 900, { x: 0.501, y: 0.34 });
+  click("tool-done");
+  assert.equal(tools.at(-1), "check", "the second spot places the map by itself");
+  assert.ok(state.geo);
+  assert.equal(text("calibrate-rotation-value"), "90°", "and the rulers show what it found");
+  assert.equal(state.streets, undefined, "nothing is kept yet");
+
+  click("match-spots");
+  assert.equal(tools.at(-1), "match", "going back keeps the first spot");
+  assert.equal(state.geo, undefined);
+  click("tool-done");
+  assert.equal(tools.at(-1), "check");
+
+  click("tool-done");
+  assert.equal(state.streets, true, "the streets stay on");
+  assert.equal(tools.at(-1), "browse");
+  assert.equal(state.northOffset, 90);
+  const metres = state.metresPerPixel!;
+  assert.ok(metres > 0);
+
+  const placed = () => state.geo!;
+  calibrate();
+  assert.equal(tools.at(-1), "match", "lining up again starts from the spots");
+  click("tool-cancel");
+  rulers(500, 500, { x: 0.6, y: 0.34 });
+  assert.equal(tools.at(-1), "check");
+  const pivot = worldToScreen(placed(), { x: 500, y: 500 }), { scale } = placed();
+  click("calibrate-rotation-more");
+  assert.equal(text("calibrate-rotation-value"), "90.1°", "+ is the smallest step you can read");
+  click("calibrate-rotation-less");
+  assert.equal(text("calibrate-rotation-value"), "90°");
+  click("calibrate-scale-more");
+  const nudged = placed().scale / scale;
+  assert.ok(nudged > 1 && nudged < 1.01, "a nudge barely changes the size");
+  drag("calibrate-scale", 300, 299);
+  const slow = placed().scale / scale / nudged;
+  drag("calibrate-scale", 300, 240);
+  assert.ok(slow > 1, "the ruler moving left counts up");
+  assert.ok(Math.log(placed().scale / scale / nudged / slow) > 60 * Math.log(slow), "a quick drag covers far more than a slow one");
+  drag("calibrate-rotation", 300, 260);
+  assert.equal(state.northOffset, 90, "nothing is kept yet");
+  const held = worldToScreen(placed(), { x: 500, y: 500 });
+  assert.ok(Math.hypot(held.x - pivot.x, held.y - pivot.y) < 1e-12, "the spot stays put");
+  click("tool-done");
+  assert.notEqual(state.northOffset, 90, "the north follows");
+  assert.ok(state.metresPerPixel! > metres, "and the scale");
+
+  // The scale set with the Measure tool can always be gone back to.
+  state.measuredScale = 0.5;
+  rulers(500, 500, { x: 0.6, y: 0.34 });
+  click("calibrate-scale-reset");
+  click("tool-done");
+  assert.ok(Math.abs(state.metresPerPixel! - 0.5) < 1e-9);
+  assert.equal(state.measuredScale, 0.5);
+
+  // One spot moves a lined-up map, keeping its scale and north.
+  const before = placed(), northBefore = state.northOffset, metresBefore = state.metresPerPixel;
+  rulers(500, 500, { x: 0.7, y: 0.34 });
+  assert.equal(tools.at(-1), "check");
+  assert.equal(placed().scale, before.scale);
+  assert.equal(placed().rotation, before.rotation);
+  click("tool-done");
+  assert.equal(state.metresPerPixel, metresBefore, "one spot says nothing new about the scale");
+  assert.equal(state.northOffset, northBefore);
+
+  // Another map starts where this one went, and the rulers start from how it looks.
+  await settle();
+  const other = defaultNavigation("other"), started: Point[] = [];
+  const next = openMap(t, { ...map, id: "other" }, other, viewer(started));
+  next.calibrate();
+  for (let waits = 0; waits < 20 && !started.length; waits++) await settle();
+  assert.equal(started.length, 1, "the streets start where the last map was");
+  assert.equal(searches.length, 1);
+  crosses(100, 100, { x: 0.5, y: 0.34 }, other);
+  click("tool-done");
+  click("use-rulers");
+  assert.equal(other.geo?.scale, 2 ** -24, "as big as it shows beside the streets");
+  click("tool-cancel");
+  assert.equal(other.geo, undefined, "× leaves the map as it was");
+  assert.ok(!gone("sheet-setup"), "back in Map setup");
+  click("close-sheet");
+
+  // Scale, then place: one spot places a measured map, and only its turn is set.
+  other.metresPerPixel = other.measuredScale = 0.25;
+  next.calibrate(true);
+  flushSync();
+  assert.equal(text("tool-title"), "Place on the streets");
+  crosses(100, 100, { x: 0.5, y: 0.34 }, other);
+  assert.equal(text("tool-done"), "Place here");
+  click("tool-done");
+  assert.equal(tools.at(-1), "check", "one spot is enough");
+  assert.ok(gone("calibrate-scale"), "the scale stays as measured");
+  drag("calibrate-rotation", 300, 260);
+  click("tool-done");
+  assert.equal(other.metresPerPixel, 0.25);
+  assert.equal(other.streets, true);
+  assert.notEqual(other.northOffset, 0, "the turn becomes north");
+  assert.equal(text("toast"), "Placed on the streets");
 });

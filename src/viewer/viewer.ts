@@ -43,6 +43,9 @@ import { Darkener } from "./darkener";
 import { SearchOverlay } from "./search-overlay";
 import { CalloutLayout, type CalloutBounds } from "./callout-layout";
 import { labelZoom } from "./measure";
+import { compose, geoMetresPerPixel, invert, type Spot } from "./geo";
+import { paintSpot, StreetPane } from "./street-pane";
+import { streetFade, StreetTiles } from "./street-tiles";
 import type { MapSearchMatch } from "./map-search";
 import { motion, reducedMotion } from "../ui/motion";
 /** How long the scale holds still before a sharper level loads. */
@@ -74,6 +77,8 @@ export interface ViewerOptions {
   onAppearance?(mode: DarkMode): void;
   /** Where the tiles come from, if not the map's own storage. */
   store?: PayloadStore;
+  /** The streets' half of the screen while matching spots. */
+  streetCanvas?: HTMLCanvasElement;
 }
 /** Screen distance from a point to the segment between a and b. */
 function segmentDistance(p: Point, a: Point, b: Point) {
@@ -88,6 +93,9 @@ export class Viewer {
   private overlay?: NavigationOverlay;
   private searchOverlay?: SearchOverlay;
   private tool: Tool = "browse";
+  /** Matching spots: the streets, moved apart from the map, and the first spot once found. */
+  private pane?: StreetPane;
+  private spot?: Spot;
   /** The route being edited or the place being moved. */
   private target?: string;
   // Where the finger held the point, so it moves with the finger instead of jumping under it.
@@ -124,6 +132,12 @@ export class Viewer {
   private base?: ImageBitmap;
   private disposed = false;
   private cache: TileCache;
+  /** The streets are painted here first, so faded they show no seams where tiles overlap. */
+  private streetLayer?: HTMLCanvasElement;
+  private streets = new StreetTiles(() => {
+    this.invalidate();
+    this.pane?.invalidate();
+  });
   private observer: ResizeObserver;
   private interactions;
   private frameTimes: number[] = [];
@@ -167,8 +181,9 @@ export class Viewer {
       animate: (camera) => this.animate(camera),
       stopAnimation: () => this.stopAnimation(),
       locked: () => this.navigation.touchLocked,
-      rotationLocked: () => this.navigation.rotationMode !== "free",
-      editing: () => this.tool !== "browse",
+      // Matching spots, a plan turned like the streets is easier to read.
+      rotationLocked: () => this.tool !== "match" && this.navigation.rotationMode !== "free",
+      editing: () => this.tool !== "browse" && this.tool !== "match",
       tap: (point) => this.tap(point),
       doubleTap: () => this.options?.onDoubleTap?.(),
       grab: (screen) => this.grab(screen),
@@ -229,6 +244,12 @@ export class Viewer {
   private limits(rotation = this.camera.rotation ?? 0) {
     const min = fitCamera(this.map, this.viewport(), rotation).scale;
     return { min, max: Math.max(4, min) };
+  }
+  /** Streets show through the map once it is lined up, and to check a match,
+   * but not while spots are matched: the map stays alone in its half. */
+  private streetsShown() {
+    if (!this.navigation.geo || this.tool === "match") return false;
+    return this.navigation.streets || this.tool === "check";
   }
   private resize() {
     const viewportWidth = Math.max(1, this.canvas.clientWidth),
@@ -356,12 +377,38 @@ export class Viewer {
     this.interactions.reset();
     this.dragging = undefined;
     this.tool = tool;
+    // The streets stay as they were while a match is checked, for Undo to come back to.
+    if (tool === "match" && this.options?.streetCanvas)
+      this.pane ??= new StreetPane(this.options.streetCanvas, this.streets, () => this.navigation.inverted);
+    else if (tool !== "check") {
+      this.pane?.dispose();
+      this.pane = undefined;
+      this.spot = undefined;
+    }
     this.target = targetId;
     this.canvas.style.cursor = "";
     this.overlay?.setEditing(
       tool === "route" ? targetId : undefined,
       tool === "move" ? targetId : undefined,
     );
+    this.invalidate();
+  }
+  /** Matching spots: brings a place under the streets' cross. */
+  moveStreets(center: Point) {
+    this.pane?.moveTo(center);
+  }
+  /** Matching spots: the Mercator point under the streets' cross. */
+  streetsCenter() {
+    return this.pane?.center();
+  }
+  /** Matching spots: screen pixels a Mercator unit spans on the streets. */
+  streetsScale() {
+    return this.pane?.scale();
+  }
+  /** Matching spots: the first one found, shown on the map and the streets. */
+  markSpot(spot?: Spot) {
+    this.spot = spot;
+    this.pane?.mark(spot?.place);
     this.invalidate();
   }
   /** Shows the measuring line; its array is edited in place by drags. */
@@ -784,7 +831,8 @@ export class Viewer {
   // Sensor readings jitter, so the map follows them smoothly instead of
   // jumping. Glides to a place or zoom finish first; their path is fixed.
   private turn(now: number) {
-    if (this.heading === undefined || this.destination) {
+    // Matching spots, only the fingers turn the map.
+    if (this.heading === undefined || this.destination || this.tool === "match" || this.tool === "check") {
       this.lastTurn = 0;
       return;
     }
@@ -859,9 +907,14 @@ export class Viewer {
   }
   private paint(viewport: Size) {
     const ctx = this.canvas.getContext("2d", { alpha: false })!;
+    const streets = this.streetsShown(),
+      // Light streets multiply onto the map and dark ones screen onto it, like
+      // tracing paper, so both show; beyond the map they need a blank page.
+      blank = streets && !this.navigation.inverted ? "#fff" : "#000";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = blank;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillStyle = "#000";
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     // Whole device pixels: a fling's slow tail moves less than a pixel a frame,
     // and sub-pixel offsets resample the tiles differently each time, so fine
@@ -935,21 +988,51 @@ export class Viewer {
       );
       drawn.push(tile);
     }
+    const world = ctx.getTransform();
     // A faint 1px edge, just outside the map, shows where it ends on black.
     const edge = 1 / this.camera.scale;
-    const world = ctx.getTransform();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
     ctx.lineWidth = edge;
     ctx.strokeRect(-edge / 2, -edge / 2, this.map.width + edge, this.map.height + edge);
     // Dimming is a black veil, the same as brightness(), drawn only on frames
-    // that change. Annotations are a separate layer and stay fully opaque.
+    // that change. It dims the map; the streets have their own brightness.
+    // Annotations are a separate layer and stay fully opaque.
     if (this.navigation.dimming < 1) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1 - this.navigation.dimming;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
     }
+    if (streets) this.paintStreets(ctx, viewport);
+    ctx.setTransform(world);
+    if (this.spot && (this.tool === "match" || this.tool === "check")) {
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      paintSpot(ctx, worldToScreen(this.camera, this.spot.map), "1");
+    }
     if (this.debug) this.paintDebug(ctx, world, level, tiles, drawn);
+  }
+  private paintStreets(ctx: CanvasRenderingContext2D, viewport: Size) {
+    // The same whole-pixel offset as the map, so the two never drift apart.
+    const camera = {
+      ...this.camera,
+      x: Math.round(this.camera.x * this.dpr) / this.dpr,
+      y: Math.round(this.camera.y * this.dpr) / this.dpr,
+    };
+    const dark = this.navigation.inverted,
+      layer = this.streetLayer ??= document.createElement("canvas");
+    if (layer.width !== this.canvas.width) layer.width = this.canvas.width;
+    if (layer.height !== this.canvas.height) layer.height = this.canvas.height;
+    const streets = layer.getContext("2d")!;
+    streets.setTransform(1, 0, 0, 1, 0, 0);
+    streets.clearRect(0, 0, layer.width, layer.height);
+    const { geo, streetBrightness, streetColor, streetFade: fades } = this.navigation;
+    this.streets.draw(streets, compose(camera, invert(geo!)), viewport, this.dpr, { dark, color: streetColor });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = streetBrightness * (fades ? streetFade(geoMetresPerPixel(geo!, this.map) / camera.scale) : 1);
+    ctx.globalCompositeOperation = dark ? "screen" : "multiply";
+    ctx.drawImage(layer, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
   }
   /** Each drawn tile's border and name: green at the wanted level, orange
    * for another one filling in, red dashed where a wanted tile is missing. */
@@ -1042,6 +1125,9 @@ export class Viewer {
     this.observer.disconnect();
     this.interactions.dispose();
     this.cache.dispose();
+    this.pane?.dispose();
+    this.streets.dispose();
+    if (this.streetLayer) this.streetLayer.width = this.streetLayer.height = 1;
     this.darkener.dispose();
     this.base?.close();
     this.overlay?.dispose();

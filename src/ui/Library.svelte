@@ -4,6 +4,7 @@
   import { app } from "./app-state.svelte";
   import { icons } from "./icons";
   import type { SheetIcon } from "./ActionSheet.svelte";
+  import BackupBanner from "./BackupBanner.svelte";
   import Button from "./kit/Button.svelte";
   import Icon from "./kit/Icon.svelte";
   import { dotClass } from "./kit/Row.svelte";
@@ -12,7 +13,7 @@
   import MapCard from "./MapCard.svelte";
 
   // The library: your maps, the way to import more, and the app's state at the foot.
-  let { dev = false, saving, open, more, openSettings, openImport, importFile, canDrop, answerExample, findUpdate, onupdate }: {
+  let { dev = false, saving, open, more, openSettings, openImport, importFile, canDrop, answerExample, backedUp, dismissBackup, findUpdate, onupdate }: {
     /** Dev builds say so in the title. */
     dev?: boolean;
     /** Leaving a map may still be writing its last edits. */
@@ -26,6 +27,10 @@
     canDrop: () => boolean;
     /** Removing the example goes through the usual delete; keeping it just hides the offer. */
     answerExample: (remove: boolean) => void;
+    /** A backup was saved from the reminder above the maps. */
+    backedUp: () => void;
+    /** Puts the backup reminder away for now. */
+    dismissBackup: () => void;
     findUpdate?: () => Promise<boolean>;
     onupdate: () => void;
   } = $props();
@@ -69,11 +74,11 @@
         <img src="/icons/icon.svg" alt="" width="48" height="48" draggable="false" class="block size-48 shrink-0" />
         <h1 class="m-0 text-heading font-bold tracking-tighter">Mega Maps{#if dev}{" "}<span class="text-neon-lock">Dev</span>{/if}</h1>
       </div>
-      <button type="button" id="settings-open" aria-label={t("Settings")} title={t("Settings")} data-state={app.backupDue ? "due" : ""}
+      <button type="button" id="settings-open" aria-label={t("Settings")} title={t("Settings")} data-state={app.backup.due ? "due" : ""}
         onclick={openSettings}
         class="relative grid size-44 place-items-center rounded-full border border-neon-view/40 bg-black text-neon-view
           enabled:active:tint-neon-view/18 enabled:hover:tint-neon-view/12 [&>svg]:size-20">
-        <Icon svg={icons.settings} /><span aria-hidden="true" class={dotClass(app.backupDue ? "due" : "")}></span>
+        <Icon svg={icons.settings} /><span aria-hidden="true" class={dotClass(app.backup.due ? "due" : "")}></span>
       </button>
     </header>
 
@@ -91,6 +96,7 @@
             dropping ? "border-neon-add/70 tint-neon-add/18" : "border-neon-add/40 tint-neon-add/10"]}
           ><Icon svg={icons.plus} /><span>{t("Import")}</span></button>
       </div>
+      <BackupBanner {shown} {backedUp} dismiss={dismissBackup} />
       <!-- Behind an open map the list is unseen; going home shows it afresh. -->
       {#if shown && app.maps.length}
         <div id="map-grid" class="grid gap-12">

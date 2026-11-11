@@ -21,8 +21,8 @@ import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText, ocrWorkerCount } from "./ocr/detect";
 import { ocrCrops } from "./ocr/scan";
-import { backupDue, isBackupFile, restoreBackup, type Backup } from "./storage/backup";
-import { loadSetting } from "./storage/settings";
+import { backupStatus, isBackupFile, restoreBackup, type Backup } from "./storage/backup";
+import { saveSetting } from "./storage/settings";
 import { protectStorage, storageProtected } from "./storage/protection";
 import { language, locale, t, errorMessage } from "./i18n";
 import { preference, resetPreferences, setPreference } from "./preferences";
@@ -97,6 +97,8 @@ const { parts } = mount(App, {
       importFile: (file) => void importFile(file),
       canDrop,
       answerExample,
+      backedUp: () => void showBackupReminder(),
+      dismissBackup: () => void dismissBackupReminder(),
       // The footer checks quietly while the library shows; Settings mirrors its answer.
       // Unless Settings asks first, a found update installs by itself once nothing else is going on.
       findUpdate: canUpdate
@@ -649,10 +651,17 @@ async function reset() {
     void settings.refresh();
   }
 }
-// A dot on Settings while a backup is due.
+// A dot on Settings and a reminder in the library while a backup is due.
 async function showBackupReminder() {
-  const [lastBackup, kept] = await Promise.all([loadSetting("last-backup").catch(() => undefined), storageProtected()]);
-  app.backupDue = backupDue(maps, lastBackup, Date.now(), kept !== false);
+  // Unreadable storage leaves the reminder as it was.
+  const status = await backupStatus().catch(() => undefined);
+  if (status) app.backup = { changes: status.changes, due: status.due, banner: status.banner };
+}
+// Put away, the reminder waits for more changes or another interval.
+async function dismissBackupReminder() {
+  app.backup.banner = false;
+  await saveSetting("backup-dismissed", { at: Date.now(), changes: app.backup.changes }).catch(() => {});
+  track("backup_reminder_dismissed", { changes: app.backup.changes });
 }
 channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data;
@@ -823,8 +832,8 @@ function rerunOcr() {
     .finally(() => void renderOcrSettings());
 }
 initKeyboardInset();
-initFieldLift("dialog, #settings, [data-bar]");
-initTapAway("dialog, #settings");
+initFieldLift("dialog, #settings-general, [data-bar]");
+initTapAway("dialog, #settings-general");
 lockPageZoom();
 void registerOfflineShell().then(refreshFooter);
 async function start() {
@@ -833,9 +842,9 @@ async function start() {
     for (const map of await listMaps())
       if (map.status !== "ready") await deleteStoredMap(map);
   }).catch(() => {}); // Another tab may legitimately be importing; don't touch its files.
-  // Reopening on the last map skips building the library beneath it, whose
+  // Reopening on the last map (unless Settings starts in the library) skips building the library beneath it, whose
   // previews and counts would compete with the map for storage.
-  const resume = await lastMap();
+  const resume = preference("start-page") === "map" ? await lastMap() : undefined;
   if (resume) app.page = "";
   await refresh();
   // Ask on every launch: Chrome may grant it later, once the app is installed or used more.
@@ -857,7 +866,9 @@ async function start() {
   if (!maps.length && preference("tour") !== "seen")
     preparingExample = addExample().finally(() => (preparingExample = undefined));
   const welcomed = welcome.atLaunch(maps.length > 0);
-  whatsNew.atLaunch(maps.length > 0, !welcomed);
+  // Answers go with the usage stats, so only where they run.
+  whatsNew.atLaunch(maps.length > 0, !welcomed,
+    released && !inTab ? (answer, release) => track("release_answered", { release, answer }) : undefined);
 }
 // New users get the example map to try, made quietly while the welcome
 // shows. Made again when opened from the welcome, it shows its progress.

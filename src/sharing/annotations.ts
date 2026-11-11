@@ -1,5 +1,5 @@
 import type { MapMarker, NavigationState } from "../viewer/navigation";
-import type { ShareManifest } from "./format";
+import type { Calibration, ShareManifest } from "./format";
 
 /** The same place from elsewhere: its own text stays, and every history entry not
  * deleted on either side adds up. Returns `local` when nothing is new. */
@@ -16,9 +16,15 @@ export function mergeHistory(local: MapMarker, other: MapMarker): MapMarker {
   return merged;
 }
 
+/** What calibrating a map found, as it travels in a share. */
+export const calibrationOf = ({ geo, metresPerPixel, measuredScale }: NavigationState): Calibration | undefined =>
+  geo || metresPerPixel || measuredScale
+    ? { ...(geo ? { geo } : {}), ...(metresPerPixel ? { metresPerPixel } : {}), ...(measuredScale ? { measuredScale } : {}) }
+    : undefined;
+
 /** Imported IDs survive local edits and deletion; new exports only add unseen items,
  * and places already here only gain new history entries.
- * A shared north fills in a map that has none, but never undoes local tuning. */
+ * A shared north or calibration fills in a map that has none, but never undoes local tuning. */
 export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   const shared = new Map(share.markers.map((item) => [item.id, item]));
   let updated = 0;
@@ -37,7 +43,7 @@ export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   for (const marker of share.markers) history.add(`marker:${marker.id}`);
   for (const route of share.routes) history.add(`route:${route.id}`);
   return {
-    state: { ...state, northOffset: state.northOffset || (share.northOffset ?? 0),
+    state: { ...state, ...share.calibration, ...calibrationOf(state), northOffset: state.northOffset || (share.northOffset ?? 0),
       markers: [...existing, ...structuredClone(markers)],
       routes: [...state.routes, ...structuredClone(routes)], importedItems: [...history] },
     added: markers.length + routes.length,
@@ -46,12 +52,12 @@ export function mergeAnnotations(state: NavigationState, share: ShareManifest) {
   };
 }
 
-/** Replace swaps every place and finished route for the shared ones, and north when the
- * share has one; unfinished drafts stay. */
+/** Replace swaps every place and finished route for the shared ones, and north and the
+ * calibration when the share has them; unfinished drafts stay. */
 export function replaceAnnotations(state: NavigationState, share: ShareManifest) {
   const removed = state.markers.length + state.routes.filter((route) => !route.draft).length;
   return {
-    state: { ...state, northOffset: share.northOffset ?? state.northOffset,
+    state: { ...state, ...share.calibration, northOffset: share.northOffset ?? state.northOffset,
       markers: structuredClone(share.markers),
       routes: [...state.routes.filter((route) => route.draft), ...structuredClone(share.routes)],
       annotationRevision: (state.annotationRevision ?? 0) + 1,
@@ -68,6 +74,7 @@ export function preserveUnseenImports(next: NavigationState, stored?: Navigation
   if (stored && (stored.annotationRevision ?? 0) > (next.annotationRevision ?? 0)) {
     return { ...next,
       northOffset: stored.northOffset,
+      ...calibrationOf(stored),
       markers: structuredClone(stored.markers),
       routes: [...next.routes.filter((route) => route.draft), ...structuredClone(stored.routes.filter((route) => !route.draft))],
       importedItems: [...(stored.importedItems ?? [])],

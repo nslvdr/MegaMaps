@@ -272,6 +272,35 @@ test("map north travels in shares, fills in an untuned map and never undoes loca
   assert.equal(replaceAnnotations(tuned, older).state.northOffset, 10);
 });
 
+test("a map's calibration travels in a share, and only fills in what the receiver hasn't set", async () => {
+  const original = image(512, 256, "north");
+  const source = record("calibrated-source");
+  await saveMap(source);
+  await payloadStore("indexeddb").put(source.id, "original", original);
+  const { manifest } = await fixture();
+  const geo = { x: 0.5, y: 0.34, scale: 1e-9, rotation: 0.4 };
+  const state = { ...defaultNavigation(source.id), markers: manifest.markers, geo, metresPerPixel: 0.26, measuredScale: 0.25 };
+  const shared = (await readShare(exportFile(await prepareExport(source, state),
+    { markers: ["place-a"], routes: [], includeImage: false }))).manifest;
+  assert.deepEqual(shared.calibration, { geo, metresPerPixel: 0.26, measuredScale: 0.25 });
+  for (const calibration of [{ geo: { ...geo, scale: 0 } }, { geo: { ...geo, x: Infinity } }, { metresPerPixel: -1 }, "north"])
+    assert.throws(() => validateManifest({ ...shared, calibration }), /invalid/);
+
+  const fresh = defaultNavigation("calibrated-destination");
+  const merged = mergeAnnotations(fresh, shared).state;
+  assert.deepEqual(merged.geo, geo);
+  assert.equal(merged.metresPerPixel, 0.26);
+  assert.equal(merged.measuredScale, 0.25);
+  const local = { ...fresh, geo: { ...geo, x: 0.1 }, metresPerPixel: 0.9 };
+  assert.equal(mergeAnnotations(local, shared).state.geo?.x, 0.1, "local tuning stays");
+  assert.equal(mergeAnnotations(local, shared).state.metresPerPixel, 0.9);
+  assert.equal(mergeAnnotations(local, shared).state.measuredScale, 0.25, "what's missing fills in");
+  assert.equal(replaceAnnotations(local, shared).state.geo?.x, 0.5);
+  // Files from before calibration was shared leave it alone.
+  const { calibration: _, ...older } = shared;
+  assert.equal(replaceAnnotations(local, older).state.geo?.x, 0.1);
+});
+
 test("pruning removes old photos no place uses and keeps fresh ones for unsaved forms", async () => {
   const map = record("photo-prune");
   await saveMap(map);

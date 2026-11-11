@@ -9,7 +9,7 @@ import { loadOcr } from "../storage/ocr";
 import { copyPhotos, loadPhotos, putPhotos } from "../storage/photos";
 import { needsOcr, type OcrIndex } from "../ocr/index";
 import { loadSetting } from "../storage/settings";
-import { mergeAnnotations, replaceAnnotations } from "./annotations";
+import { calibrationOf, mergeAnnotations, replaceAnnotations } from "./annotations";
 import { fingerprint, encodeShare, shareFilename, verifyImage, type SharedMap, type ShareManifest } from "./format";
 
 /** Cache on the latest record so hashing cannot undo a concurrent rename/deletion. */
@@ -85,6 +85,7 @@ export async function prepareExport(map: MapRecord, state: NavigationState) {
     photos,
     routes: routes.map(stored),
     northOffset: state.northOffset,
+    calibration: calibrationOf(state),
     from,
     image, original, ocr,
   };
@@ -105,6 +106,7 @@ export function exportFile(prepared: PreparedExport, selection: ShareSelection) 
     routes: chosenRoutes,
     ...(photos.length ? { photos } : {}),
     ...(prepared.northOffset ? { northOffset: prepared.northOffset } : {}),
+    ...(prepared.calibration ? { calibration: prepared.calibration } : {}),
     ...(prepared.from ? { from: prepared.from } : {}),
     ...(ocr ? { ocr: { bytes: ocr.size } } : {}),
     ...(selection.includeImage ? { image: prepared.image } : {}) };

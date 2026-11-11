@@ -1,11 +1,11 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sendStats, setPerson, startStats, track } from "../src/stats";
+import { sendStats, setPerson, startStats, summarize, track } from "../src/stats";
 import { saveSetting } from "../src/storage/settings";
 
 let online = false;
-const sent: { batch: { event: string; properties: Record<string, unknown> }[] }[] = [];
+const sent: { batch: { event: string; timestamp: string; properties: Record<string, unknown> }[] }[] = [];
 const sizes: number[] = [];
 let status = 200;
 Object.defineProperty(navigator, "onLine", { get: () => online, configurable: true });
@@ -101,11 +101,64 @@ test("a session lasts until the app is away for half an hour, and coming back af
   page.hidden = false;
   listeners.get("visibilitychange")!({});
   await sendStats();
-  const [before, after, resumed] = events();
+  const [before, after, resumed] = events().filter((entry) => entry.event !== "session_ended");
   assert.equal(before!.properties.$session_id, after!.properties.$session_id);
   assert.match(String(before!.properties.$session_id), /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(resumed!.event, "app_resumed");
   assert.notEqual(resumed!.properties.$session_id, before!.properties.$session_id);
+});
+
+test("a session that ended is summed up in one event, dated when it ended", async (t) => {
+  online = true;
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const away = () => {
+    page.hidden = true;
+    listeners.get("visibilitychange")!({});
+    t.mock.timers.tick(60 * 60_000);
+    page.hidden = false;
+    listeners.get("visibilitychange")!({});
+  };
+  away();
+  await sendStats();
+  sent.length = 0;
+  // Coming back online, then three minutes offline on the trail of one of their own maps.
+  online = false;
+  track("place_added", { kind: "pillar" });
+  track("place_opened", { kind: "pillar", photos: 0, from: "map" });
+  t.mock.timers.tick(3 * 60_000);
+  track("map_viewed", { seconds: 180, example: false, trail_marked: 2 });
+  const ended = Date.now();
+  away();
+  online = true;
+  await sendStats();
+  const summary = events().find((entry) => entry.event === "session_ended")!;
+  assert.equal(summary.timestamp, new Date(ended).toISOString());
+  assert.equal(summary.properties.$session_id, events()[0]!.properties.$session_id);
+  const keys = Object.keys(summarize({ id: "" }));
+  assert.deepEqual(Object.fromEntries(keys.map((key) => [key, summary.properties[key]])), {
+    seconds: 180, context: "on_site", real_use: true, own_map_seconds: 180, example_seconds: 0,
+    places_opened: 1, places_added: 1, edits: 1, trail_marked: 2, trips_ended: 0, searches: 0, offline_share: 0.75,
+  });
+});
+
+test("a session the app was killed in, still on screen, ends at its last event", async (t) => {
+  online = true;
+  // Later than the earlier tests' mocked clocks reached.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 24 * 60 * 60_000 });
+  track("measure_used");
+  const last = Date.now();
+  t.mock.timers.tick(2 * 60_000);
+  await sendStats();
+  sent.length = 0;
+  // Killed without a visibilitychange, then launched again a day later.
+  t.mock.timers.tick(24 * 60 * 60_000);
+  startStats("2026.10.27");
+  await sendStats();
+  const summary = events().find((entry) => entry.event === "session_ended")!;
+  assert.equal(summary.timestamp, new Date(last).toISOString());
+  track("measure_used");
+  await sendStats();
+  assert.notEqual(events().at(-1)!.properties.$session_id, summary.properties.$session_id);
 });
 
 test("uncaught errors go to error tracking, up to a limit", async () => {

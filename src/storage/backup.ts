@@ -1,6 +1,7 @@
 import { errorMessage, t } from "../i18n";
 import type { ImportProgress, MapRecord } from "../types";
 import { MAX_FILE_BYTES } from "../types";
+import { preference, type Preferences } from "../preferences";
 import { readOcrIndex, type OcrIndex } from "../ocr/index";
 import { readHeader } from "../processing/headers";
 import { importMap } from "../processing/import";
@@ -10,7 +11,8 @@ import { loadNavigation } from "./navigation";
 import { loadOcr } from "./ocr";
 import { deleteStoredMap, payloadStore } from "./payloads";
 import { copyPhotos, loadPhotos, putPhotos } from "./photos";
-import { loadSetting, saveSetting } from "./settings";
+import { storageProtected } from "./protection";
+import { loadSetting, saveSetting, type Settings } from "./settings";
 
 const MAGIC = "MEGABAK1";
 const HEADER_BYTES = 12;
@@ -62,14 +64,76 @@ export function backupSummary(manifest: BackupManifest) {
   };
 }
 
-/** A month after the last backup (or none), once a map was added or opened since;
- * a week when the browser may clear the library to free space. The example map
- * holds nothing to lose, so the first map of one's own is what asks for one. */
+/** A month after the last backup (or none), or the Backup reminder's interval; at most a week
+ * when the browser may clear the library to free space, whatever the reminder says. */
 export const BACKUP_INTERVAL = 30 * 86_400_000;
 export const UNPROTECTED_BACKUP_INTERVAL = 7 * 86_400_000;
-export function backupDue(maps: { created: number; opened?: number; example?: true }[], lastBackup = 0, now = Date.now(), kept = true) {
-  return maps.some((map) => !map.example && (map.opened ?? map.created) > lastBackup)
-    && now - lastBackup >= (kept ? BACKUP_INTERVAL : UNPROTECTED_BACKUP_INTERVAL);
+const intervals: Record<Preferences["backup-reminder"], number> = { month: BACKUP_INTERVAL, week: UNPROTECTED_BACKUP_INTERVAL, off: Infinity };
+export const backupInterval = (kept = true, reminder: Preferences["backup-reminder"] = "month") =>
+  kept ? intervals[reminder] : Math.min(intervals[reminder], UNPROTECTED_BACKUP_INTERVAL);
+/** Due once something isn't backed up and the interval has passed since the last backup. */
+export function backupDue(changes: number, lastBackup = 0, now = Date.now(), kept = true,
+  reminder: Preferences["backup-reminder"] = "month") {
+  return changes > 0 && now - lastBackup >= backupInterval(kept, reminder);
+}
+
+/** What a backup holds, one key per map, place, route, trip and photo, each with a hash
+ * of its content, so what changed since can be counted. */
+export type BackupSnapshot = Record<string, string>;
+type Snapshotted = { id: string; created: number; example?: true; navigation: NavigationState };
+function hash(text: string) {
+  let value = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) value = Math.imul(value ^ text.charCodeAt(index), 0x01000193);
+  return (value >>> 0).toString(36);
+}
+// The example map is the app's, so nothing in it asks for a backup.
+function snapshotItems(maps: Snapshotted[]) {
+  return maps.filter((map) => !map.example).flatMap((map) => {
+    const { markers, routes, trips } = map.navigation;
+    const items = [...markers, ...routes.filter((route) => !route.draft)];
+    return [
+      { key: map.id, hash: "", created: map.created },
+      ...items.map((item) => ({ key: `${map.id}/${item.id}`, hash: hash(JSON.stringify(item)), created: item.created })),
+      ...trips.map((trip) => ({ key: `${map.id}/trip/${trip.id}`, hash: hash(JSON.stringify(trip)), created: trip.ended })),
+      ...items.flatMap((item) => item.photos ?? []).map((id) => ({ key: `${map.id}/photo/${id}`, hash: "", created: undefined })),
+    ];
+  });
+}
+export const backupSnapshot = (maps: Snapshotted[]): BackupSnapshot =>
+  Object.fromEntries(snapshotItems(maps).map((item) => [item.key, item.hash]));
+/** Maps, places, routes, trips and photos added or changed since the last backup. Backups
+ * from before snapshots were kept count what was created since, and no photos. */
+export function unsavedChanges(maps: Snapshotted[], snapshot?: BackupSnapshot, lastBackup?: number) {
+  return snapshotItems(maps).filter((item) => snapshot
+    ? snapshot[item.key] !== item.hash
+    : !lastBackup || (item.created !== undefined && item.created > lastBackup)).length;
+}
+/** Remembers a saved backup: when, and what it holds. */
+export async function recordBackup(manifest: BackupManifest) {
+  await saveSetting("backup-snapshot", backupSnapshot(manifest.maps));
+  await saveSetting("last-backup", manifest.createdAt);
+}
+
+/** A dismissed reminder stays away until this many more changes, or another interval. */
+export const DISMISSED_CHANGES = 10;
+export function backupBannerShown(changes: number, lastBackup: number | undefined, dismissed: Settings["backup-dismissed"] | undefined,
+  now = Date.now(), kept = true, reminder: Preferences["backup-reminder"] = "month") {
+  if (!backupDue(changes, lastBackup, now, kept, reminder)) return false;
+  return !dismissed || dismissed.at < (lastBackup ?? 0) || changes >= dismissed.changes + DISMISSED_CHANGES ||
+    now - dismissed.at >= backupInterval(kept, reminder);
+}
+
+/** Where backups stand now: what isn't backed up, and whether to ask for a backup. */
+export async function backupStatus(now = Date.now()) {
+  const [records, snapshot, lastBackup, dismissed, kept] = await Promise.all([
+    listMaps(), loadSetting("backup-snapshot").catch(() => undefined), loadSetting("last-backup").catch(() => undefined),
+    loadSetting("backup-dismissed").catch(() => undefined), storageProtected().then((kept) => kept !== false),
+  ]);
+  const own = records.filter((map) => map.status === "ready" && !map.example);
+  const maps = await Promise.all(own.map(async (map) => ({ ...map, navigation: await loadNavigation(map.id) })));
+  const changes = unsavedChanges(maps, snapshot, lastBackup), reminder = preference("backup-reminder");
+  return { changes, lastBackup, kept, due: backupDue(changes, lastBackup, now, kept, reminder),
+    banner: backupBannerShown(changes, lastBackup, dismissed, now, kept, reminder) };
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");

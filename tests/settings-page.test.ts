@@ -3,11 +3,14 @@ import { $, click, fire, render, settle } from "./dom";
 import test from "node:test";
 import assert from "node:assert/strict";
 import Settings, { DEBUG_HOLD, ERASE_STEP_PAUSE } from "../src/ui/Settings.svelte";
-import { saveMap } from "../src/storage/database";
+import { listMaps, removeRecord, saveMap, transact } from "../src/storage/database";
+import { loadSetting, saveSetting } from "../src/storage/settings";
 import { payloadStore } from "../src/storage/payloads";
 import { deleteMapPhotos, savePhoto } from "../src/storage/photos";
 import type { MapRecord } from "../src/types";
 import { preference } from "../src/preferences";
+import { saveNavigation } from "../src/storage/navigation";
+import { defaultNavigation } from "../src/viewer/navigation";
 
 const options = {
   back() {}, checkUpdates() {}, openWhatsNew() {}, restore() {}, setLabelSize() {}, erase() {},
@@ -114,4 +117,37 @@ test("holding Check for updates turns the debug overlay on and off instead of ch
   assert.equal(checks, 1, "a hold doesn't check");
   press(DEBUG_HOLD);
   assert.equal(preference("debug"), "off");
+});
+
+test("the activity card counts the user's own trips and places, not the example map's", async (t) => {
+  const record = (id: string, example?: true) => ({ id, name: id, width: 1, height: 1, bytes: 0, backend: "indexeddb",
+    levels: [], created: 1, status: "ready", ...(example ? { example } : {}) }) satisfies MapRecord;
+  const started = Date.now() - 2 * 3_600_000;
+  for (const [id, example] of [["mine", undefined], ["example", true]] as const) {
+    await saveMap(record(id, example));
+    await saveNavigation({ ...defaultNavigation(id),
+      trips: [{ id: "t", points: [{ x: 0, y: 0, time: started }, { x: 1, y: 1, time: started + 60_000 }], ended: started + 3_600_000 }] });
+  }
+  const { instance, destroy } = render(Settings, options);
+  t.after(destroy);
+  await instance.refresh();
+  for (let turn = 0; turn < 100 && document.getElementById("settings-activity")?.ariaBusy !== "false"; turn++) await settle();
+  assert.equal($("settings-activity-trips").textContent, "1");
+  assert.equal($("settings-activity-time").textContent, "1 h 00");
+});
+
+test("the user row shows the nickname and keeps the first join date it finds", async (t) => {
+  const created = new Date(2025, 2, 3).getTime();
+  for (const map of await listMaps()) await removeRecord(map.id);
+  await transact("settings", "readwrite", (store) => store.delete("joined"));
+  await saveMap({ id: "old", name: "old", width: 1, height: 1, bytes: 0, backend: "indexeddb", levels: [], created, status: "ready" });
+  await saveSetting("share-name", " nytro ");
+  const { instance, destroy } = render(Settings, options);
+  t.after(destroy);
+  await instance.refresh();
+  await settle();
+  assert.equal($("settings-user").firstElementChild!.textContent!.trim(), "N");
+  assert.match($("settings-user").textContent!, /nytro/);
+  assert.equal($("settings-user-joined").textContent, `Since ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(created)}`);
+  assert.equal(await loadSetting("joined"), created);
 });

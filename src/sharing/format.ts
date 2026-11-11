@@ -2,7 +2,7 @@ import { t } from "../i18n";
 import { MAX_FILE_BYTES, MAX_PIXELS, MAX_SIDE } from "../types";
 import { mapSize, readHeader } from "../processing/headers";
 import { readOcrIndex, type OcrIndex } from "../ocr/index";
-import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, visitFromLastSeen, type MapMarker, type PlaceChange, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
+import { isDangerLevel, isWaterLevel, legacyMarkerKinds, markerKinds, normalizeMarkerKind, NORTH_MAX, NORTH_MIN, visitFromLastSeen, type MapMarker, type NavigationState, type PlaceChange, type PlaceLogEntry, type PlannedRoute } from "../viewer/navigation";
 
 export const SHARE_MIME = "application/octet-stream";
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -17,6 +17,7 @@ const MAX_LOG_PER_PLACE = 500;
 const MAX_OCR_BYTES = 64 * 1024 * 1024;
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export interface SharePhoto { id: string; type: string; bytes: number }
+export type Calibration = Partial<Pick<NavigationState, "geo" | "metresPerPixel" | "measuredScale">>;
 export interface ShareManifest {
   format: "megamap";
   version: 6;
@@ -30,6 +31,8 @@ export interface ShareManifest {
   ocr?: { bytes: number };
   /** Where north is on the map, in degrees clockwise from its top; absent means unknown. */
   northOffset?: number;
+  /** Where the map lies on Earth and its scale, once found. Older apps ignore it. */
+  calibration?: Calibration;
   /** The sender's name from their settings, when they gave one. */
   from?: string;
 }
@@ -75,6 +78,30 @@ function invalid(): never {
   throw new Error(t("This MegaMaps file contains invalid map or annotation data."));
 }
 
+/** Only what makes sense on a map: a geo within reach of the world, sizes above nothing. */
+function readCalibration(value: unknown): Calibration | undefined {
+  if (value === undefined) return undefined;
+  if (!object(value)) invalid();
+  const size = (item: unknown): item is number => finite(item) && item > 0;
+  const within = (item: unknown, limit: number): item is number => finite(item) && Math.abs(item) <= limit;
+  const { geo, metresPerPixel, measuredScale } = value;
+  const calibration: Calibration = {};
+  if (metresPerPixel !== undefined) {
+    if (!size(metresPerPixel)) invalid();
+    calibration.metresPerPixel = metresPerPixel;
+  }
+  if (measuredScale !== undefined) {
+    if (!size(measuredScale)) invalid();
+    calibration.measuredScale = measuredScale;
+  }
+  if (geo !== undefined) {
+    if (!object(geo)) invalid();
+    const { x, y, scale, rotation } = geo;
+    if (!within(x, 10) || !within(y, 10) || !size(scale) || (rotation !== undefined && !within(rotation, 1000))) invalid();
+    calibration.geo = { x, y, scale, ...(rotation !== undefined ? { rotation } : {}) };
+  }
+  return calibration;
+}
 /** Treat shared files as untrusted; construct only the fields this version accepts. */
 export function validateManifest(value: unknown): ShareManifest {
   if (!object(value) || value.format !== "megamap") invalid();
@@ -226,6 +253,7 @@ export function validateManifest(value: unknown): ShareManifest {
   if (ocr !== undefined && (version !== 6 || !object(ocr) || !integer(ocr.bytes, 1, MAX_OCR_BYTES))) invalid();
   const north = value.northOffset;
   if (north !== undefined && !integer(north, NORTH_MIN, NORTH_MAX)) invalid();
+  const calibration = readCalibration(value.calibration);
   if (value.from !== undefined && !name(value.from, 100)) invalid();
   if (!image && markers.length + routes.length === 0)
     throw new Error(t("Select at least one place or route, or include the map image."));
@@ -234,6 +262,7 @@ export function validateManifest(value: unknown): ShareManifest {
     ...(image ? { image } : {}), markers, routes, ...(photos.length ? { photos } : {}),
     ...(ocr ? { ocr: { bytes: ocr.bytes as number } } : {}),
     ...(north !== undefined ? { northOffset: north } : {}),
+    ...(calibration ? { calibration } : {}),
     ...(typeof value.from === "string" ? { from: value.from.trim() } : {}) };
 }
 const photoBytes = (manifest: ShareManifest) =>

@@ -2,18 +2,24 @@ import { flushSync } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { showDialog } from "./dialog";
 import type { MapRecord } from "../types";
-import type { Point } from "../viewer/camera";
+import { worldToScreen, type Point } from "../viewer/camera";
 import type { DarkMode } from "../viewer/appearance";
 import { NavigationPersistence, loadNavigation } from "../storage/navigation";
 import { loadPhoto, savePhoto } from "../storage/photos";
 import { preparePhoto } from "../processing/photo";
+import { keepScreenOn, screenWanted } from "./wake-lock";
 import { PhotoViewer } from "./photo-viewer";
 import { preserveUnseenImports } from "../sharing/annotations";
 import type { Viewer, ViewerOptions } from "../viewer/viewer";
 import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
+  DEFAULT_STREET_BRIGHTNESS,
+  DEFAULT_STREET_COLOR,
+  STREET_LEVELS,
   insideImage,
+  nearestLevel,
+  streetColors,
   markerKinds,
   placeColor,
   routeColor,
@@ -25,6 +31,7 @@ import {
   type PlaceLogEntry,
   type PlannedRoute,
   type RotationMode,
+  type StreetColor,
   type DangerLevel,
   type WaterLevel,
 } from "../viewer/navigation";
@@ -42,9 +49,11 @@ import type { SheetAction } from "./ActionSheet.svelte";
 import { normalizeText, ocrLabelAt, type OcrIndex } from "../ocr/index";
 import { matchPoints, searchMap, type MapSearchMatch } from "../viewer/map-search";
 import { track } from "../stats";
-import { formatDistance, formatMinutes, formatWalk, pathLength, travelSummary } from "../viewer/measure";
+import { formatDistance, formatMinutes, formatWalk, pathLength, scaleBar, travelSummary } from "../viewer/measure";
+import { geoMetresPerPixel, geoNorth, pinGeo, placeGeo, spotsGeo, spotsTooClose, toLonLat, toMercator, type Geo, type Spot } from "../viewer/geo";
+import { loadSetting, saveSetting } from "../storage/settings";
 
-export const sheets = ["trail", "display", "rotation", "saved", "add"] as const;
+export const sheets = ["trail", "display", "rotation", "saved", "add", "setup"] as const;
 export type Sheet = (typeof sheets)[number] | "search";
 /** The place card's Delete and the trail mark's, each armed by a first tap. */
 type CardDelete = "marker-delete" | "mark-delete";
@@ -103,6 +112,8 @@ const COMPASS_WAIT_MS = 3000;
 const COMPASS_STEP = 2;
 /** …and waits for readings to hold within this many degrees of their average. */
 const COMPASS_HOLD = 15;
+/** What one step of the Calibrate rulers changes: the map's size by a twentieth of a percent, its turn by a twentieth of a degree. */
+const SCALE_STEP = 0.0005, TURN_STEP = (0.05 * Math.PI) / 180;
 /** Height of one north wheel row, as the wheel draws it. */
 export const NORTH_ROW_PX = 32;
 const darkMessages: Record<DarkMode["kind"], string> = {
@@ -116,13 +127,33 @@ const darkMessages: Record<DarkMode["kind"], string> = {
 // map's saved navigation is read again each time `tick` moves.
 export class ViewerControls {
   private viewer?: Pick<Viewer, "setTool" | "updateNavigation" | "jumpTo" | "fitPoints"> &
-    Partial<Pick<Viewer, "setMeasure" | "restyle" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
+    Partial<Pick<Viewer, "setMeasure" | "moveStreets" | "streetsCenter" | "streetsScale" | "markSpot" | "restyle" | "orient" | "straighten" | "setSearch" | "refreshLabels" | "previewPlace" | "pulse" | "reveal" | "showing" | "cover" | "select" | "showTrip" | "showView">>;
   /** Bumped whenever the saved navigation changes, so whatever shows it is worked out again. */
   tick = $state(0);
   tool = $state<Tool>("browse");
   openSheet = $state<Sheet>();
   /** The Trail tool is moving the last mark rather than adding one. */
   movingMark = $state(false);
+  /** Where the map lay before lining up began, for × (cancel). */
+  private geoBefore?: Geo;
+  /** The spots matched so far, on the map and on the streets. */
+  spots = $state.raw<Spot[]>([]);
+  /** What the rulers turn and resize the map about. */
+  private pivot?: Spot;
+  /** The rulers changed the map's scale or turn. */
+  private adjusted = false;
+  /** Lining up keeps the measured scale: one spot places the map, a ruler turns it. */
+  placing = $state(false);
+  /** Map setup shows its steps rather than the settings, from Set up again until the scale chip opens it anew. */
+  settingUp = $state(false);
+  /** How far the map is zoomed in, in screen pixels per image pixel, for the scale bar. */
+  zoom = $state(1);
+  /** How the search or the last spot went, shown instead of the hint. */
+  matchMessage = $state("");
+  /** The town or street being searched for. */
+  placeQuery = $state("");
+  /** The task card's height: the map and the streets share what's above it. */
+  toolHeight = $state(0);
   /** A Delete or × waiting for its second tap. */
   confirming = $state<string>();
   cardDeleteArmed = $state<CardDelete>();
@@ -188,7 +219,8 @@ export class ViewerControls {
   tripMark = $state<number>();
   nameTitle = $state("");
   nameValue = $state("");
-  scaleMetresValue = $state<number | null | undefined>(null);
+  /** What was typed for the scale's length; until then it follows the line by the current scale. */
+  scaleMetresText = $state<string>();
   entryDate = $state("");
   entryText = $state("");
   /** The long-press wheel, under the finger. */
@@ -259,21 +291,20 @@ export class ViewerControls {
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
     // Older slider values use the nearest available preset.
-    this.state.dimming = BRIGHTNESS_LEVELS.reduce(
-      (closest, level) => Math.abs(level - state.dimming) < Math.abs(closest - state.dimming) ? level : closest,
-      DEFAULT_DIMMING,
-    );
+    this.state.dimming = nearestLevel(BRIGHTNESS_LEVELS, state.dimming, DEFAULT_DIMMING);
+    this.state.streetBrightness = nearestLevel(STREET_LEVELS, state.streetBrightness, DEFAULT_STREET_BRIGHTNESS);
+    if (!streetColors.includes(state.streetColor)) this.state.streetColor = DEFAULT_STREET_COLOR;
     this.bind();
     this.refresh();
     if (state.rotationMode === "compass") this.resumeCompass();
   }
   private static newVisit() {
-    return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false };
+    return { started: Date.now(), searched: false, measured: false, trip: false, place_added: false, trail_marked: 0 };
   }
   /** Leaving the app ends a visit as well as going back, since phones rarely go back. */
   private endVisit() {
     const { started, ...used } = this.visit;
-    track("map_viewed", { seconds: Math.round((Date.now() - started) / 1000), ...used });
+    track("map_viewed", { seconds: Math.round((Date.now() - started) / 1000), example: !!this.map.example, ...used });
   }
   private open(item: MapMarker | PlannedRoute, from: "map" | "saved") {
     if ("label" in item) track("place_opened", { kind: item.kind, photos: item.photos?.length ?? 0, from });
@@ -317,7 +348,10 @@ export class ViewerControls {
       navigation: this.state,
       overlay: this.root.querySelector<SVGSVGElement>("#map-overlay")!,
       searchOverlay: this.root.querySelector<SVGSVGElement>("#search-overlay")!,
+      streetCanvas: this.root.querySelector<HTMLCanvasElement>("#street-canvas")!,
       onView: () => {
+        const zoom = this.state.view?.scale;
+        if (zoom && zoom !== this.zoom) this.zoom = zoom;
         this.persistence.moved();
       },
       onTap: (point) => this.onTap(point),
@@ -396,6 +430,7 @@ export class ViewerControls {
     if ((this.rowMenu === "routes-order" && this.state.routes.length < 2) ||
         (this.rowMenu === "places-order" && this.state.markers.length < 2)) this.rowMenu = undefined;
     this.renderTripClock();
+    keepScreenOn(screenWanted(preference("screen-awake"), this.state.trail.length > 0));
     this.tick++;
     this.viewer?.refreshLabels?.();
   }
@@ -422,6 +457,7 @@ export class ViewerControls {
     // A card about the old last mark would now be about the wrong one.
     this.close("mark-dialog");
     this.state.trail.push(mark);
+    this.visit.trail_marked++;
     this.changed();
     // With trip_ended, tells trips left running from Trail opened only to look.
     if (this.state.trail.length === 1) track("trip_started");
@@ -923,12 +959,12 @@ export class ViewerControls {
     this.viewer?.setMeasure?.(this.tape());
     this.tick++;
   }
-  /** The Measure button opens and closes the tool; a map without a scale asks for one first. */
+  /** The Measure button opens and closes the tool; a map without a scale opens Map setup. */
   toggleMeasure() {
     if (this.measuring()) return this.closeMeasure();
     if (this.tool !== "browse") return;
     this.closePlaceDetails();
-    if (!this.state.metresPerPixel) return void this.show("scale-ask-dialog");
+    if (!this.state.metresPerPixel) return this.sheet("setup");
     this.measureHistory = [];
     this.mode("measure");
     track("measure_used");
@@ -940,41 +976,78 @@ export class ViewerControls {
     this.measureHistory = [];
     this.mode("browse");
   }
-  /** Tap both ends of a known length, like the scale bar, then say how long it is. */
+  /** From Map setup: tap both ends of a known length, like the scale bar, then
+   * type how long it is. Saving or × goes back to Map setup. */
   startScale() {
-    this.close("scale-ask-dialog");
+    if (this.tool !== "browse") return;
     this.scalePoints = [];
+    this.scaleMetresText = undefined;
     this.measureHistory = [];
     this.mode("scale");
   }
-  /** × goes back to measuring if the map already has a scale to measure with. */
   private cancelScale() {
-    if (!this.state.metresPerPixel) return this.closeMeasure();
-    this.scalePoints = [];
-    this.measureHistory = [];
-    this.mode("measure");
+    this.closeMeasure();
+    this.sheet("setup");
   }
-  private askScaleLength() {
-    const pixels = pathLength(this.scalePoints), known = this.state.metresPerPixel;
-    // Changing the scale starts from what the current one says.
-    this.scaleMetresValue = known ? Math.round(pixels * known * 10) / 10 : null;
-    this.show("scale-dialog");
-    this.el("scale-metres")?.focus();
+  /** The length field: what was typed, or what the current scale says the line is. */
+  get scaleMetresShown() {
+    if (this.scaleMetresText !== undefined) return this.scaleMetresText;
+    const known = this.state.metresPerPixel, pixels = pathLength(this.scalePoints);
+    return known && this.scalePoints.length > 1 ? String(Math.round(pixels * known * 10) / 10) : "";
   }
   get scaleMetres() {
-    const metres = Number(this.scaleMetresValue ?? 0);
+    const metres = Number(this.scaleMetresShown.replace(",", ".") || 0);
     return metres > 0 && metres <= 100_000 ? metres : undefined;
   }
   saveScale() {
     const metres = this.scaleMetres, pixels = pathLength(this.scalePoints);
-    if (!metres || !pixels) return;
-    this.state.metresPerPixel = metres / pixels;
-    this.close("scale-dialog");
-    this.scalePoints = [];
-    this.measureHistory = [];
+    if (!metres || !pixels || this.scalePoints.length < 2) return;
+    this.state.metresPerPixel = this.state.measuredScale = metres / pixels;
     this.changed();
-    this.mode("measure");
+    this.closeMeasure();
+    this.sheet("setup");
     this.showToast(t("Scale set"), "done");
+  }
+  /** Where the map's scale comes from: two matched spots, or a length measured by hand. */
+  private scaleSource() {
+    const state = this.state;
+    if (!state.metresPerPixel) return undefined;
+    return state.geo && state.metresPerPixel !== state.measuredScale ? "streets" : "measured";
+  }
+  /** The scale bar in the map's corner: a round length and how wide it draws. */
+  scaleBarView() {
+    const scale = this.state.metresPerPixel;
+    if (!scale) return undefined;
+    const { metres, width } = scaleBar(scale / this.zoom);
+    return { label: formatDistance(metres), width };
+  }
+  /** The scale chip opens Map setup on the settings once they're done. */
+  openSetup() {
+    this.settingUp = false;
+    this.sheet("setup");
+  }
+  /** Set up again: Map setup's steps, with the current settings kept until one is done. */
+  setUpAgain() {
+    this.settingUp = true;
+  }
+  /** Map setup: where the scale stands, and the two ways to set it. Once the map
+   * has a scale and is placed on the streets, it shows the settings instead. */
+  setupView() {
+    const source = this.scaleSource(), placed = !!this.state.geo, scale = this.state.metresPerPixel;
+    return {
+      settings: source && placed && scale && !this.settingUp ? {
+        scale: t("1 px = {metres} m", { metres: scale.toLocaleString(locale, { maximumSignificantDigits: 4 }) }),
+        source: source === "streets" ? t("From the streets") : t("Measured on a known length"),
+        north: t("{degrees}° clockwise", { degrees: this.state.northOffset }),
+      } : undefined,
+      status: source === "streets" ? t("Lined up with the streets: scale and orientation are set.")
+        : source && placed ? t("Measured scale, placed on the streets.")
+        : source ? t("Scale measured. Place it on the streets to show them and set its orientation.")
+        : t("Distances and walk times need a scale."),
+      lined: source === "streets",
+      measured: source === "measured",
+      placed: source === "measured" && placed,
+    };
   }
   private editRoute(route: PlannedRoute) {
     this.routeBefore = route.draft ? undefined : [...route.points];
@@ -1092,11 +1165,11 @@ export class ViewerControls {
     else if (this.tool === "measure") this.closeMeasure();
     else if (this.tool === "scale") this.cancelScale();
     else if (this.tool === "move") this.finishMove(false);
+    else if (this.tool === "match" || this.tool === "check") this.cancelMatch();
     else this.mode("browse");
   }
-  /** The task card's pencil: a route's name, or the scale Measure works with. */
+  /** The task card's pencil renames the route being drawn. */
   renameTool() {
-    if (this.tool === "measure") return this.startScale();
     const route = this.route();
     if (route)
       this.name(t("Rename route"), route.name, (name) => {
@@ -1106,7 +1179,9 @@ export class ViewerControls {
   }
   toolDone() {
     if (this.tool === "move") this.finishMove(true);
-    else if (this.tool === "scale") this.askScaleLength();
+    else if (this.tool === "scale") this.saveScale();
+    else if (this.tool === "match") this.matchSpot();
+    else if (this.tool === "check") this.finishMatch();
     else this.finishRoute();
   }
   /** Steps back through this session's taps and drags; once those run out, it keeps removing the last point. */
@@ -1556,6 +1631,7 @@ export class ViewerControls {
     const tape = measuring ? this.tape() : [];
     const metres = this.tool === "measure" && scale && tape.length > 1 ? pathLength(tape) * scale : undefined;
     const routeMetres = scale && count > 1 ? pathLength(route!.points) * scale : undefined;
+    const spotMatched = this.tool === "match" && !!this.spots.length;
     const texts: Record<Tool, [string, string, string]> = {
       browse: ["", "", ""],
       move: [icons.move, this.movingPlace()?.label ?? t("Place"), t("Drag the pin, or tap where it goes")],
@@ -1584,9 +1660,14 @@ export class ViewerControls {
       scale: [
         icons.scale,
         t("Set scale"),
-        tape.length > 1 ? t("Drag the ends to adjust, then tap Next")
+        tape.length > 1 ? t("Drag the ends to adjust, then enter the length")
           : tape.length ? t("Tap the other end") : t("Tap one end of the scale bar or of a known length"),
       ],
+      match: [icons.map, this.placing ? t("Place on the streets") : this.spots.length ? t("Spot 1 matched") : t("Match a spot"), this.matchMessage ||
+        (this.spots.length ? t("Match a second spot to set the scale and rotation automatically, or use the rulers.")
+          : t("Find a town or street, then put both crosses on the same corner"))],
+      check: this.placing ? [icons.map, t("Place on the streets"), t("Drag the ruler to turn your map onto the streets")]
+        : [icons.map, t("Line up"), t("Drag a ruler to resize or turn your map")],
     };
     const [icon, title, message] = texts[this.tool];
     return {
@@ -1594,15 +1675,208 @@ export class ViewerControls {
       // Measuring, the big line is the total at one end and the walk at the other.
       distance: metres !== undefined ? formatDistance(metres) : undefined,
       walk: metres !== undefined ? t("~{time} on foot", { time: formatWalk(metres) }) : undefined,
-      rename: this.tool === "route" ? t("Rename route") : this.tool === "measure" ? t("Change scale") : undefined,
+      rename: this.tool === "route" ? t("Rename route") : undefined,
+      // The scale's length is typed once both ends are down.
+      scaleLength: this.tool === "scale" && tape.length > 1,
       actions: this.tool !== "browse" && this.tool !== "marker" && this.tool !== "trail",
       undo: this.tool === "route" || measuring,
       canUndo: measuring ? !!tape.length || !!this.measureHistory.length : !!count || !!this.routeHistory.length,
+      undoSpot: spotMatched,
+      useSliders: spotMatched,
+      matchSpots: this.tool === "check" && !this.placing,
+      rulers: this.tool === "check" ? this.rulerValues() : undefined,
+      search: this.tool === "match" && !this.spots.length,
       // Measuring has nothing to save, so × is how it ends; the scale goes on to its length.
       done: this.tool !== "measure",
-      next: this.tool === "scale",
-      canFinish: !((this.tool === "route" || this.tool === "scale") && (this.tool === "route" ? count : tape.length) < 2),
+      doneIcon: this.tool === "match" ? icons.pair : icons.check,
+      doneLabel: this.tool === "scale" ? t("Save")
+        : this.tool === "match" ? (this.placing ? t("Place here") : t("Match spot {number}", { number: this.spots.length + 1 })) : t("Done"),
+      canFinish: this.tool === "scale" ? tape.length > 1 && !!this.scaleMetres : !(this.tool === "route" && count < 2),
     };
+  }
+  streetsView() {
+    const placed = !!this.state.geo;
+    return { placed, on: placed && !!this.state.streets };
+  }
+  setStreets(on: boolean) {
+    this.state.streets = on;
+    this.changed(true);
+  }
+  setStreetBrightness(level: number) {
+    this.state.streetBrightness = level;
+    this.changed(true);
+  }
+  setStreetColor(color: StreetColor) {
+    this.state.streetColor = color;
+    this.changed(true);
+  }
+  setStreetFade(on: boolean) {
+    this.state.streetFade = on;
+    this.changed(true);
+  }
+  /** What the rulers are at, in words. */
+  private rulerValues() {
+    const geo = this.state.geo;
+    if (!geo) return { scale: "", rotation: "", measured: false };
+    return {
+      measured: !!this.scaleToKeep(),
+      scale: t("1 px = {metres} m", { metres: geoMetresPerPixel(geo, this.map).toLocaleString(locale, { maximumSignificantDigits: 4 }) }),
+      rotation: `${geoNorth(geo).toLocaleString(locale, { maximumFractionDigits: 1 })}°`,
+    };
+  }
+  /** The map's point under the middle of its half, where the cross is. */
+  private viewCenter() {
+    return this.state.view?.center ?? { x: this.map.width / 2, y: this.map.height / 2 };
+  }
+  /** From Map setup: match two spots, which set the scale and orientation, or with
+   * `placing`, one spot that places a measured map, then a ruler to turn it. */
+  calibrate(placing = false) {
+    if (this.tool !== "browse" || (placing && !this.state.metresPerPixel)) return;
+    this.closePlaceDetails();
+    this.geoBefore = this.state.geo;
+    this.placing = placing;
+    this.spots = [];
+    this.adjusted = false;
+    this.matchMessage = "";
+    this.placeQuery = "";
+    this.mode("match");
+    this.findStreets();
+  }
+  /** The streets start where the map is, or where the last map went. */
+  private findStreets() {
+    const geo = this.state.geo;
+    if (geo) return this.viewer?.moveStreets?.(worldToScreen(geo, this.viewCenter()));
+    void loadSetting("streets-place").then((place) => {
+      if (place && this.tool === "match") this.viewer?.moveStreets?.(toMercator(place));
+    }, () => {});
+  }
+  /** Where one spot puts the map: as it lay, by its known scale and north, or
+   * failing those, as big and as turned as it shows beside the streets now. */
+  private oneSpotGeo(spot: Spot) {
+    const before = this.geoBefore, scale = this.state.metresPerPixel, view = this.state.view;
+    if (before) return pinGeo(spot, before.scale, before.rotation ?? 0);
+    if (scale) return placeGeo(spot, scale, this.state.northOffset);
+    return pinGeo(spot, (view?.scale ?? 1) / (this.viewer?.streetsScale?.() ?? 1), view?.rotation ?? 0);
+  }
+  /** Takes what's under the two crosses as a spot. The second places the map;
+   * after the first it's up to you: a second spot, or the rulers. */
+  private matchSpot() {
+    const place = this.viewer?.streetsCenter?.();
+    if (!place) return;
+    const spot = { map: { ...this.viewCenter() }, place }, [first] = this.spots;
+    this.matchMessage = first && spotsTooClose(first, spot, this.map) ? t("Pick a spot further from spot 1") : "";
+    if (this.matchMessage) return;
+    if (!first) {
+      this.spots = [spot];
+      // A measured map keeps its scale and the turn it had, so one spot places it.
+      const before = this.geoBefore, scale = this.state.metresPerPixel;
+      if (this.placing && scale) return this.showCalibrated(placeGeo(spot, scale, before ? geoNorth(before) : this.state.northOffset));
+      return this.viewer?.markSpot?.(spot);
+    }
+    this.spots = [first, spot];
+    this.showCalibrated(spotsGeo(first, spot));
+  }
+  /** One spot, and the rulers set the rest. */
+  useSliders() {
+    const [spot] = this.spots;
+    if (spot) this.showCalibrated(this.oneSpotGeo(spot));
+  }
+  private showCalibrated(geo: Geo) {
+    this.pivot = this.spots[0];
+    this.state.geo = geo;
+    this.matchMessage = "";
+    this.mode("check");
+    this.changed(true);
+  }
+  /** Back from the rulers to the spots, keeping the first; ruler changes are dropped. */
+  matchSpots() {
+    this.spots = this.spots.slice(0, 1);
+    this.state.geo = this.geoBefore;
+    this.adjusted = false;
+    this.mode("match");
+    if (!this.spots.length) {
+      this.viewer?.markSpot?.();
+      this.findStreets();
+    }
+    this.changed(true);
+  }
+  /** Takes the first spot back. */
+  undoSpot() {
+    this.spots = [];
+    this.matchMessage = "";
+    this.viewer?.markSpot?.();
+  }
+  /** Moves a ruler by `steps`, about the pivot: more steps, a bigger map or more degrees. */
+  adjustGeo(ruler: "scale" | "rotation", steps: number) {
+    const geo = this.state.geo, pivot = this.pivot;
+    if (!geo || !pivot) return;
+    const rotation = geo.rotation ?? 0;
+    this.adjusted = true;
+    this.state.geo = ruler === "scale"
+      ? pinGeo(pivot, geo.scale * Math.exp(steps * SCALE_STEP), rotation)
+      : pinGeo(pivot, geo.scale, rotation - steps * TURN_STEP);
+    this.changed(true);
+  }
+  /** Back to the scale set with the Measure tool, about the pivot. */
+  resetScale() {
+    const geo = this.state.geo, pivot = this.pivot, measured = this.scaleToKeep();
+    if (!geo || !pivot || !measured) return;
+    this.adjusted = true;
+    this.state.geo = pinGeo(pivot, (geo.scale * measured) / geoMetresPerPixel(geo, this.map), geo.rotation ?? 0);
+    this.changed(true);
+  }
+  /** The measured scale, even before the first calibration has set it aside. */
+  private scaleToKeep() {
+    return this.state.measuredScale ?? (this.geoBefore ? undefined : this.state.metresPerPixel);
+  }
+  /** Done keeps the streets on, and the scale and north, unless only the position
+   * changed. Placing keeps the measured scale and takes only north. */
+  private finishMatch() {
+    const geo = this.state.geo!, placing = this.placing,
+      measured = !placing && (this.spots.length > 1 || this.adjusted || !this.state.metresPerPixel);
+    this.state.streets = true;
+    if (placing) this.setNorth(geoNorth(geo));
+    if (measured) {
+      // A scale from before the first calibration was measured by hand.
+      if (!this.geoBefore) this.state.measuredScale ??= this.state.metresPerPixel;
+      this.state.metresPerPixel = geoMetresPerPixel(geo, this.map);
+      this.setNorth(geoNorth(geo));
+    }
+    void saveSetting("streets-place", toLonLat(worldToScreen(geo, { x: this.map.width / 2, y: this.map.height / 2 }))).catch(() => {});
+    this.leaveMatch();
+    this.showToast(placing ? t("Placed on the streets") : measured ? t("Lined up: scale and north now come from the streets") : t("Lined up with the streets"), "done");
+  }
+  /** × leaves the map as it was, back in Map setup. */
+  private cancelMatch() {
+    this.state.geo = this.geoBefore;
+    this.leaveMatch();
+    this.sheet("setup");
+  }
+  private leaveMatch() {
+    this.geoBefore = this.pivot = undefined;
+    this.spots = [];
+    this.placing = false;
+    this.mode("browse");
+    // The map was turned to read it against the streets; a locked one goes back.
+    if (this.state.rotationMode === "locked") this.viewer?.straighten?.();
+    this.changed(true);
+  }
+  /** Moves the streets to the place searched for. */
+  async findPlace() {
+    const query = this.placeQuery.trim();
+    if (!query || this.matchMessage === t("Searching…")) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    this.matchMessage = t("Searching…");
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=${locale}&q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error(String(response.status));
+      const [found] = (await response.json()) as { lat: string; lon: string }[];
+      this.matchMessage = found ? "" : t("Nothing found. Try a town nearby.");
+      if (found && this.tool === "match")
+        this.viewer?.moveStreets?.(toMercator({ lon: Number(found.lon), lat: Number(found.lat) }));
+    } catch {
+      this.matchMessage = t("Could not search. Check the connection.");
+    }
   }
   /** Saved rows open a place's or route's details; ⋯ opens its actions. */
   openRow(item: RowItem) {
@@ -1891,6 +2165,8 @@ export class ViewerControls {
   dispose() {
     // Leaving mid-route keeps a usable route rather than an orphan draft.
     if (this.tool === "route") this.finishRoute();
+    // Leaving a match unconfirmed keeps the map where it was.
+    if (this.tool === "check") this.state.geo = this.geoBefore;
     this.sheet(undefined);
     if (!document.hidden) this.endVisit();
     clearTimeout(this.searchTimer);
@@ -1900,6 +2176,7 @@ export class ViewerControls {
     clearTimeout(this.discardTimer);
     clearTimeout(this.tripClockTimer);
     this.stopCompass();
+    keepScreenOn(false);
     this.hideToast();
     const saved = this.flush();
     this.controller.abort();

@@ -7,6 +7,7 @@
   import Dock from "./Dock.svelte";
   import MapDialogs from "./MapDialogs.svelte";
   import PlaceCard from "./PlaceCard.svelte";
+  import ScaleChip from "./ScaleChip.svelte";
   import SavedMenu from "./SavedMenu.svelte";
   import SearchBar from "./SearchBar.svelte";
   import Sheet from "./Sheet.svelte";
@@ -39,7 +40,7 @@
   const toast = "motion m-0 flex min-h-44 max-w-full items-center gap-12 rounded-lg border border-c/70 bg-black py-8 pr-20 pl-16 text-body leading-snug shadow-glass [--enter-from:translateY(-8px)]";
 </script>
 
-<div id="display-chips" role="group" aria-label={t("Map view controls")} class="absolute top-(--hud-top) right-(--edge-r) z-5 flex gap-8">
+<div id="display-chips" role="group" aria-label={t("Map view controls")} hidden={controls.tool === "match" || controls.tool === "check"} class="absolute top-(--hud-top) right-(--edge-r) z-5 flex gap-8">
   <button type="button" id="open-rotation" aria-label={t("Rotation: {mode}", { mode: rotation.label })} title={t("Rotation: {mode}", { mode: rotation.label })}
     aria-controls="sheet" aria-expanded={controls.openSheet === "rotation"} disabled={editing} onclick={() => controls.toggleSheet("rotation")}
     class={[chip("rotation"), "[--c:var(--neon-lock)]"]}><Icon svg={rotation.icon} class="size-22" /></button>
@@ -73,6 +74,7 @@
 </div>
 
 <SearchBar {controls} />
+<ScaleChip {controls} />
 <Dock {controls} />
 <ToolCard {controls} />
 <Sheet {controls} />
