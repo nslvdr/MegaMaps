@@ -15,6 +15,7 @@ import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
   DEFAULT_STREET_BRIGHTNESS,
+  DEFAULT_STREET_COLOR,
   STREET_LEVELS,
   insideImage,
   nearestLevel,
@@ -290,7 +291,7 @@ export class ViewerControls {
     // Older slider values use the nearest available preset.
     this.state.dimming = nearestLevel(BRIGHTNESS_LEVELS, state.dimming, DEFAULT_DIMMING);
     this.state.streetBrightness = nearestLevel(STREET_LEVELS, state.streetBrightness, DEFAULT_STREET_BRIGHTNESS);
-    if (!streetColors.includes(state.streetColor)) this.state.streetColor = "pink";
+    if (!streetColors.includes(state.streetColor)) this.state.streetColor = DEFAULT_STREET_COLOR;
     this.bind();
     this.refresh();
     if (state.rotationMode === "compass") this.resumeCompass();
