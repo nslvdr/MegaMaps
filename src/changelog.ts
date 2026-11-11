@@ -9,6 +9,9 @@ export type Release = {
   added?: Message[];
   changed?: Message[];
   fixed?: Message[];
+  /** After the changes, What's new asks "What would you add to the app?";
+   *  answers reach PostHog as `release_answered`. */
+  ask?: true;
 };
 
 /** Newest first. */

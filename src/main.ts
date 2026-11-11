@@ -866,7 +866,9 @@ async function start() {
   if (!maps.length && preference("tour") !== "seen")
     preparingExample = addExample().finally(() => (preparingExample = undefined));
   const welcomed = welcome.atLaunch(maps.length > 0);
-  whatsNew.atLaunch(maps.length > 0, !welcomed);
+  // Answers go with the usage stats, so only where they run.
+  whatsNew.atLaunch(maps.length > 0, !welcomed,
+    released && !inTab ? (answer, release) => track("release_answered", { release, answer }) : undefined);
 }
 // New users get the example map to try, made quietly while the welcome
 // shows. Made again when opened from the welcome, it shows its progress.

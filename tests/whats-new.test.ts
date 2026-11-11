@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { $, fire, flushSync, render } from "./dom";
+import { $, click, fire, flushSync, render, type } from "./dom";
 import type { Release } from "../src/changelog";
 import WhatsNew, { unseenReleases } from "../src/ui/WhatsNew.svelte";
 
@@ -92,4 +92,34 @@ test("a drawn scroll indicator shows while there is more to read and follows the
   body.scrollTop = 1200;
   fire(body, "scroll");
   assert.equal(thumb.style.transform, "translateY(300px)");
+});
+
+test("a release that asks follows Got it with its question, and sends the answer", () => {
+  localStorage.setItem("megamaps:changelog-seen", "aaa");
+  const asking: Release[] = [releases[0]!, { ...releases[1]!, ask: true }, releases[2]!];
+  const { instance: whatsNew } = render(WhatsNew, { releases: asking });
+  const dialog = $<HTMLDialogElement>("whats-new");
+  const answers: [string, string][] = [];
+  whatsNew.atLaunch(true, true, (text: string, release: string) => answers.push([text, release]));
+  assert.ok(!$("whats-new-answer"));
+
+  click("whats-new-done");
+  assert.ok(dialog.hasAttribute("open"), "Got it leads to the question");
+  assert.ok($<HTMLButtonElement>("whats-new-send").disabled, "nothing to send yet");
+  type("whats-new-answer", "  Water levels on routes  ");
+  click("whats-new-send");
+  assert.deepEqual(answers, [["Water levels on routes", "bbb"]]);
+  assert.ok(!dialog.hasAttribute("open"));
+
+  whatsNew.openAll();
+  click("whats-new-done");
+  assert.ok(!dialog.hasAttribute("open"), "Settings never asks");
+});
+
+test("without somewhere to send the answer, Got it just closes", () => {
+  localStorage.setItem("megamaps:changelog-seen", "bbb");
+  const { instance: whatsNew } = render(WhatsNew, { releases: [{ ...releases[0]!, ask: true }, ...releases.slice(1)] });
+  whatsNew.atLaunch(true);
+  click("whats-new-done");
+  assert.ok(!$<HTMLDialogElement>("whats-new").hasAttribute("open"));
 });

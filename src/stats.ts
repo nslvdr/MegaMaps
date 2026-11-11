@@ -1,7 +1,8 @@
 import { loadSetting } from "./storage/settings";
 
 // Usage counts for PostHog: which features are used, on what device and by which
-// nickname, never what people write or where they go. Only the installed app counts.
+// nickname, never where people go or what they write, except an answer they send from
+// What’s new. Only the installed app counts.
 // Events wait on the device while it's offline underground and go out together once
 // there's a connection.
 const KEY = "phc_AixEBtZzy3mHfyJ7fUztrqikEr5FjrTY3r3taR75KNYw";
