@@ -17,6 +17,23 @@ export type Release = {
 /** Newest first. */
 export const changelog: Release[] = [
   {
+    date: "2026-11-11",
+    commit: "eb4ac12",
+    added: [
+      "See the streets above your map: tap Set up map and match two spots on your map with the same spots on the streets.",
+      "A scale bar on the map shows distances at the current zoom. Tap it to change the scale.",
+      "Choose the colour and brightness of the streets in View. They fade as you zoom in, so your map stays readable.",
+      "Settings starts with your year of trips, your records and totals, and is now split into pages.",
+      "New settings: keep the screen on, photo size, backup reminders, what opens at start-up, and the look of the menu bar.",
+      "The library reminds you how many changes aren’t backed up yet.",
+    ],
+    changed: [
+      "In View, the map and the streets each have their own brightness.",
+      "Settings shows your nickname and how long you’ve had Mega Maps.",
+    ],
+    ask: true,
+  },
+  {
     date: "2026-11-04",
     commit: "1f435e3",
     added: [
