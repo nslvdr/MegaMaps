@@ -143,6 +143,8 @@ export class ViewerControls {
   private adjusted = false;
   /** Lining up keeps the measured scale: one spot places the map, a ruler turns it. */
   placing = $state(false);
+  /** Map setup shows its steps rather than the settings, from Set up again until the scale chip opens it anew. */
+  settingUp = $state(false);
   /** How far the map is zoomed in, in screen pixels per image pixel, for the scale bar. */
   zoom = $state(1);
   /** How the search or the last spot went, shown instead of the hint. */
@@ -1018,10 +1020,25 @@ export class ViewerControls {
     const { metres, width } = scaleBar(scale / this.zoom);
     return { label: formatDistance(metres), width };
   }
-  /** Map setup: where the scale stands, and the two ways to set it. */
+  /** The scale chip opens Map setup on the settings once they're done. */
+  openSetup() {
+    this.settingUp = false;
+    this.sheet("setup");
+  }
+  /** Set up again: Map setup's steps, with the current settings kept until one is done. */
+  setUpAgain() {
+    this.settingUp = true;
+  }
+  /** Map setup: where the scale stands, and the two ways to set it. Once the map
+   * has a scale and is placed on the streets, it shows the settings instead. */
   setupView() {
-    const source = this.scaleSource(), placed = !!this.state.geo;
+    const source = this.scaleSource(), placed = !!this.state.geo, scale = this.state.metresPerPixel;
     return {
+      settings: source && placed && scale && !this.settingUp ? {
+        scale: t("1 px = {metres} m", { metres: scale.toLocaleString(locale, { maximumSignificantDigits: 4 }) }),
+        source: source === "streets" ? t("From the streets") : t("Measured on a known length"),
+        north: t("{degrees}° clockwise", { degrees: this.state.northOffset }),
+      } : undefined,
       status: source === "streets" ? t("Lined up with the streets: scale and orientation are set.")
         : source && placed ? t("Measured scale, placed on the streets.")
         : source ? t("Scale measured. Place it on the streets to show them and set its orientation.")

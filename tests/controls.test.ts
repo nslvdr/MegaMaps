@@ -1573,6 +1573,26 @@ test("the scale chip opens Map setup and turns into a scale bar that follows the
   assert.equal(text("scale-chip-label"), "5 m", "zoomed in, the bar stands for less");
 });
 
+test("once set up, the scale chip opens the settings, with Set up again for the steps", async (t) => {
+  const map = mapRecord("setup-done");
+  await saveMap(map);
+  const state = { ...defaultNavigation(map.id), metresPerPixel: 0.25, northOffset: 12, geo: { x: 0.5, y: 0.34, scale: 2 ** -24, rotation: 0 } };
+  openMap(t, map, state, {});
+  click("scale-chip");
+  assert.equal(text("setup-scale"), "1 px = 0.25 m");
+  assert.equal(text("setup-north"), "12° clockwise");
+  assert.ok(text("setup-settings").includes("From the streets"));
+  click("setup-again");
+  assert.ok(gone("setup-settings"), "the steps take the settings' place");
+  // Leaving a step unfinished comes back to the steps.
+  click("setup-measure");
+  click("tool-cancel");
+  assert.ok(!gone("setup-status"));
+  click("close-sheet");
+  click("scale-chip");
+  assert.ok(!gone("setup-settings"), "opened anew, it reads the settings");
+});
+
 test("the last mark: back to it from the wheel or the Trail panel, and read, moved or deleted from its dot", async (t) => {
   const map = mapRecord("mark");
   await saveMap(map);
