@@ -48,3 +48,12 @@ export function labelZoom(limits: { min: number; max: number }, viewport: Size, 
     : limits.min * LABEL_ZOOM;
   return Math.min(close, limits.max);
 }
+
+/** The map's scale bar: the longest round length (1, 2 or 5 × 10ⁿ metres)
+ * that fits in `maxWidth` screen pixels, and how wide it draws. */
+export function scaleBar(metresPerScreenPixel: number, maxWidth = 96) {
+  const most = metresPerScreenPixel * maxWidth;
+  const power = 10 ** Math.floor(Math.log10(most));
+  const metres = [5, 2, 1].map((step) => step * power).find((length) => length <= most) ?? power;
+  return { metres, width: metres / metresPerScreenPixel };
+}

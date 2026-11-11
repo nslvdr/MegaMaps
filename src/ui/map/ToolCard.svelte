@@ -37,15 +37,6 @@
     </p>
   {/if}
   <p id="tool-message" role="status" class="m-0 text-body leading-normal text-muted">{tool.message}</p>
-  <!-- Measuring says where its scale comes from, and changes it from here. -->
-  {#if tool.scaleSource}
-    <p id="measure-scale" class="mt-8 mb-0 flex items-center gap-8 text-small text-muted">
-      <Icon svg={icons.scale} class="size-16 flex-none" />
-      <span class="min-w-0 flex-1">{tool.scaleSource === "streets" ? t("Scale from the streets") : t("Scale measured on a known length")}</span>
-      <button type="button" id="change-scale" onclick={() => controls.startScale()}
-        class="-my-12 min-h-44 cursor-pointer px-4 text-small font-semibold text-c">{t("Change")}</button>
-    </p>
-  {/if}
   <!-- Both ends down, the length is typed here, with the line still in view. -->
   {#if tool.scaleLength}
     <form id="scale-form" data-bar class="mt-12 flex items-center gap-12" onsubmit={(event) => { event.preventDefault(); controls.saveScale(); }}>
@@ -59,8 +50,11 @@
     </form>
   {/if}
   {#if tool.rulers}
-    <Ruler id="calibrate-scale" label={t("Scale")} value={tool.rulers.scale} onstep={(steps) => controls.adjustGeo("scale", steps)}
-      reset={tool.rulers.measured ? { label: t("Back to the measured scale"), onclick: () => controls.resetScale() } : undefined} />
+    <!-- Placing a measured map only turns it; its scale stays. -->
+    {#if !controls.placing}
+      <Ruler id="calibrate-scale" label={t("Scale")} value={tool.rulers.scale} onstep={(steps) => controls.adjustGeo("scale", steps)}
+        reset={tool.rulers.measured ? { label: t("Back to the measured scale"), onclick: () => controls.resetScale() } : undefined} />
+    {/if}
     <Ruler id="calibrate-rotation" label={t("Rotation")} value={tool.rulers.rotation} onstep={(steps) => controls.adjustGeo("rotation", steps)} />
   {/if}
   <!-- Matching spots: where to start on the streets. -->
