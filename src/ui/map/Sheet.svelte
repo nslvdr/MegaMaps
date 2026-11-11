@@ -8,12 +8,13 @@
   import DisplayPanel from "./DisplayPanel.svelte";
   import RotationPanel from "./RotationPanel.svelte";
   import SavedPanel from "./SavedPanel.svelte";
+  import SetupPanel from "./SetupPanel.svelte";
   import { overMap } from "./styles";
   import TrailPanel from "./TrailPanel.svelte";
 
   // Like a task's card, an open panel takes the pill's place, each tinted with
   // its control's neon. View and Rotation open below their corner buttons;
-  // Saved, Trail and Add rise from the bottom. Leaving, it keeps its place and
+  // Saved, Trail, Add and Map setup rise from the bottom. Leaving, it keeps its place and
   // colour as it goes.
   let { controls }: { controls: ViewerControls } = $props();
   type Panel = (typeof sheets)[number];
@@ -26,10 +27,11 @@
     trail: { title: t("Trail"), neon: "[--c:var(--neon-trail)]" },
     saved: { title: t("Saved"), neon: "[--c:var(--neon-saved)]" },
     add: { title: t("Add"), neon: "[--c:var(--neon-add)]" },
+    setup: { title: t("Map setup"), neon: "[--c:var(--neon-add)]" },
   };
   const mode = $derived((controls.tick, controls.state.rotationMode));
   const icon = $derived(panel === "display" ? icons.sun : panel === "trail" ? icons.trail
-    : panel === "rotation" ? rotationModes[mode].icon : panel === "add" ? icons.add : icons.saved);
+    : panel === "rotation" ? rotationModes[mode].icon : panel === "add" ? icons.add : panel === "setup" ? icons.scale : icons.saved);
   const top = $derived(panel === "display" || panel === "rotation");
   const started = $derived(panel === "trail" ? (controls.tick, controls.tripStarted()) : undefined);
 </script>
@@ -63,5 +65,6 @@
     <TrailPanel {controls} hidden={shown !== "trail"} />
     <SavedPanel {controls} hidden={shown !== "saved"} />
     <AddPanel {controls} hidden={shown !== "add"} />
+    <SetupPanel {controls} hidden={shown !== "setup"} />
   </div>
 </section>

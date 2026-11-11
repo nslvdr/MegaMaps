@@ -7,8 +7,8 @@
   import { BRIGHTNESS_LEVELS, brightnessPercent, layerNames } from "../../viewer/navigation";
   import type { ViewerControls } from "../viewer-controls.svelte";
 
-  // View settings as tiles: Dark map, Brightness, a tile per layer saying
-  // whether it shows, and Scale and north with its two ways to set it.
+  // View settings as tiles: Dark map, Brightness, and a tile per layer saying
+  // whether it shows.
   let { controls, hidden }: { controls: ViewerControls; hidden: boolean } = $props();
   const view = $derived.by(() => {
     controls.tick;
@@ -51,7 +51,6 @@
   const tileText = "flex min-w-0 flex-1 flex-col [&>strong]:text-body [&>strong]:font-semibold [&>small]:text-small [&>small]:text-muted";
   // Native radios and switches keep a full-size touch target under the tile.
   const fill = "absolute inset-0 m-0 size-full cursor-pointer opacity-0";
-  const setButton = "flex min-h-44 cursor-pointer items-center justify-center gap-8 rounded-sm border border-glass-line bg-fill px-8 text-center text-small font-semibold text-text";
 </script>
 
 <div id="sheet-display" {hidden} class="grid gap-8">
@@ -97,19 +96,5 @@
           <small id="{layers[layer].id}-hint">{hint(layer)}</small></span>
       </label>
     {/each}
-  </div>
-
-  <!-- Scale and north: where they come from, and the two ways to set them. -->
-  <div class={[tile(), "px-12 pt-8 pb-12 [--k:var(--neon-add)]"]}>
-    <div class="flex min-h-48 items-center gap-12">
-      <span class={softIcon}><Icon svg={icons.scale} /></span>
-      <span class={tileText}><strong>{t("Scale and north")}</strong><small id="scale-status">{view.streets.scale}</small></span>
-    </div>
-    <div class="mt-8 grid grid-cols-2 gap-8">
-      <button type="button" id="calibrate-streets" onclick={() => controls.calibrate()} class={setButton}>
-        <Icon svg={icons.map} class="size-18 flex-none" />{view.streets.placed ? t("Adjust on streets") : t("Line up with streets")}</button>
-      <button type="button" id="measure-length" onclick={() => controls.startScale("browse")} class={setButton}>
-        <Icon svg={icons.scale} class="size-18 flex-none" />{t("Measure a length")}</button>
-    </div>
   </div>
 </div>

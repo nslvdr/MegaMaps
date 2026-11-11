@@ -7,6 +7,7 @@
   import Dock from "./Dock.svelte";
   import MapDialogs from "./MapDialogs.svelte";
   import PlaceCard from "./PlaceCard.svelte";
+  import ScaleChip from "./ScaleChip.svelte";
   import SavedMenu from "./SavedMenu.svelte";
   import SearchBar from "./SearchBar.svelte";
   import Sheet from "./Sheet.svelte";
@@ -73,6 +74,7 @@
 </div>
 
 <SearchBar {controls} />
+<ScaleChip {controls} />
 <Dock {controls} />
 <ToolCard {controls} />
 <Sheet {controls} />

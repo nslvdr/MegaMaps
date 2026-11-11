@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setPreference } from "../src/preferences";
-import { formatDistance, formatWalk, labelZoom, pathLength, travelSummary } from "../src/viewer/measure";
+import { formatDistance, formatWalk, labelZoom, pathLength, scaleBar, travelSummary } from "../src/viewer/measure";
 
 test("a line's length adds up its segments", () => {
   assert.equal(pathLength([]), 0);
@@ -49,4 +49,11 @@ test("names show once the screen's shorter side spans the distance set in Settin
   } finally {
     localStorage.removeItem("megamaps:label-distance");
   }
+});
+
+test("the scale bar shows the longest round length that fits", () => {
+  assert.deepEqual(scaleBar(0.25), { metres: 20, width: 80 }, "24 m fits, so 20 m");
+  assert.deepEqual(scaleBar(1), { metres: 50, width: 50 }, "96 m fits, so 50 m");
+  assert.deepEqual(scaleBar(0.01), { metres: 0.5, width: 50 });
+  assert.equal(scaleBar(30).metres, 2000);
 });
