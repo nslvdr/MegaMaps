@@ -136,6 +136,7 @@ export const STREET_LEVELS = [1, 0.8, DEFAULT_STREET_BRIGHTNESS, 0.4, 0.2] as co
 /** Streets in one colour, or "osm" for OpenStreetMap's own. */
 export const streetColors = ["pink", "violet", "grey", "osm"] as const;
 export type StreetColor = (typeof streetColors)[number];
+export const DEFAULT_STREET_COLOR: StreetColor = "osm";
 /** The level in `levels` closest to `value`, for older or odd saves. */
 export const nearestLevel = (levels: readonly number[], value: number, fallback: number) =>
   levels.reduce((closest, level) => Math.abs(level - value) < Math.abs(closest - value) ? level : closest, fallback);
@@ -152,7 +153,7 @@ export function defaultNavigation(mapId: string): NavigationState {
     inverted: true, // Underground use: start dark and save OLED battery.
     dimming: DEFAULT_DIMMING,
     streetBrightness: DEFAULT_STREET_BRIGHTNESS,
-    streetColor: "pink",
+    streetColor: DEFAULT_STREET_COLOR,
     streetFade: true,
     touchLocked: false,
     markers: [],
