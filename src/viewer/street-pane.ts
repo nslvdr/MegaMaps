@@ -110,7 +110,8 @@ export class StreetPane {
     ctx.fillStyle = dark ? "#0e1013" : "#f2efe9";
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.imageSmoothingEnabled = true;
-    this.tiles.draw(ctx, this.camera, { width: this.canvas.clientWidth, height: this.canvas.clientHeight }, this.dpr, dark);
+    // OSM's own colours here: names and landmarks help find the spot.
+    this.tiles.draw(ctx, this.camera, { width: this.canvas.clientWidth, height: this.canvas.clientHeight }, this.dpr, { dark, color: "osm" });
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalAlpha = 1 - STREETS_STRENGTH;
     ctx.fillStyle = "#000";

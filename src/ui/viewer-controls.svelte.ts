@@ -14,7 +14,11 @@ import type { Viewer, ViewerOptions } from "../viewer/viewer";
 import {
   BRIGHTNESS_LEVELS,
   DEFAULT_DIMMING,
+  DEFAULT_STREET_BRIGHTNESS,
+  STREET_LEVELS,
   insideImage,
+  nearestLevel,
+  streetColors,
   markerKinds,
   placeColor,
   routeColor,
@@ -26,6 +30,7 @@ import {
   type PlaceLogEntry,
   type PlannedRoute,
   type RotationMode,
+  type StreetColor,
   type DangerLevel,
   type WaterLevel,
 } from "../viewer/navigation";
@@ -283,10 +288,9 @@ export class ViewerControls {
     // Touch lock is no longer offered; never restore one from an older save.
     this.state.touchLocked = false;
     // Older slider values use the nearest available preset.
-    this.state.dimming = BRIGHTNESS_LEVELS.reduce(
-      (closest, level) => Math.abs(level - state.dimming) < Math.abs(closest - state.dimming) ? level : closest,
-      DEFAULT_DIMMING,
-    );
+    this.state.dimming = nearestLevel(BRIGHTNESS_LEVELS, state.dimming, DEFAULT_DIMMING);
+    this.state.streetBrightness = nearestLevel(STREET_LEVELS, state.streetBrightness, DEFAULT_STREET_BRIGHTNESS);
+    if (!streetColors.includes(state.streetColor)) this.state.streetColor = "pink";
     this.bind();
     this.refresh();
     if (state.rotationMode === "compass") this.resumeCompass();
@@ -1678,6 +1682,18 @@ export class ViewerControls {
   }
   setStreets(on: boolean) {
     this.state.streets = on;
+    this.changed(true);
+  }
+  setStreetBrightness(level: number) {
+    this.state.streetBrightness = level;
+    this.changed(true);
+  }
+  setStreetColor(color: StreetColor) {
+    this.state.streetColor = color;
+    this.changed(true);
+  }
+  setStreetFade(on: boolean) {
+    this.state.streetFade = on;
     this.changed(true);
   }
   /** What the rulers are at, in words. */

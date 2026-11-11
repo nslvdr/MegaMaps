@@ -1860,9 +1860,9 @@ test("a map reopened in Compass mode asks for the compass again on the first tap
   assert.equal(asked, 1, "only the first tap asks");
 });
 
-test("dark map, brightness and layers restyle the map without rebuilding its places", async (t) => {
+test("dark map, brightness, layers and the streets' look restyle the map without rebuilding its places", async (t) => {
   const map = mapRecord("restyle");
-  const state = defaultNavigation(map.id);
+  const state = { ...defaultNavigation(map.id), geo: { x: 0.5, y: 0.34, scale: 1e-7, rotation: 0 }, streets: true };
   let rebuilds = 0, restyles = 0;
   openMap(t, map, state, {
     updateNavigation() { rebuilds++; },
@@ -1872,11 +1872,25 @@ test("dark map, brightness and layers restyle the map without rebuilding its pla
   toggle("dark-map");
   toggle("brightness-75");
   toggle("layer-labels");
-  assert.equal(restyles, 3);
+  toggle("street-brightness-40");
+  pick("street-color-violet");
+  toggle("street-fade");
+  assert.equal(restyles, 6);
   assert.equal(rebuilds, 0);
   assert.equal(state.inverted, !defaultNavigation(map.id).inverted);
   assert.equal(state.dimming, 0.75);
   assert.equal(state.layers.labels, false);
+  assert.equal(state.streetBrightness, 0.4);
+  assert.equal(state.dimming, 0.75, "the streets' brightness leaves the map's alone");
+  assert.equal(state.streetColor, "violet");
+  assert.equal(state.streetFade, false);
+  // Hidden streets keep their look; their settings stay, dimmed, until they're back.
+  toggle("streets");
+  assert.equal(state.streets, false);
+  assert.equal($<HTMLInputElement>("street-fade").disabled, true);
+  toggle("streets");
+  assert.equal($<HTMLInputElement>("street-fade").disabled, false);
+  assert.equal($<HTMLInputElement>("street-color-violet").checked, true);
 });
 
 test("calibrating matches a spot, then a second one or the rulers", async (t) => {
