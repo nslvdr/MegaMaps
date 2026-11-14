@@ -38,5 +38,8 @@ export function errorMessage(error: unknown) {
     return t("This file can’t be read. If it’s in a cloud folder, save it to the device first, then try again.");
   if (name === "QuotaExceededError")
     return t("Not enough device storage. Delete a map or free space and try again.");
+  // iOS's word for running out of memory or storage mid-task.
+  if (name === "UnknownError")
+    return t("The device ran out of memory or storage while preparing the map. Close other apps, free some space or use a smaller image, then try again.");
   return error instanceof Error ? error.message : String(error);
 }
