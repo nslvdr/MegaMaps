@@ -19,6 +19,9 @@
     /** Its ⋯ actions, about what it takes on the device and shown with its preview. */
     more: (map: MapRecord, detail: string, icon: SheetIcon) => void;
   } = $props();
+  // The library's maps are Svelte state, deep proxies that workers and IndexedDB
+  // can't clone, so the app gets a plain copy to scan, delete or keep open.
+  const record = () => $state.snapshot(map);
 
   const name = $derived(displayName(map.name));
   let photos = $state(0), saved = $state<{ places: number; routes: number }>();
@@ -59,7 +62,7 @@
 
 <article data-map={map.id}
   class="flex min-h-104 items-stretch gap-4 overflow-hidden rounded-lg border border-neon-saved/22 bg-black pr-4">
-  <button type="button" onclick={() => open(map)}
+  <button type="button" onclick={() => open(record())}
     class="flex min-w-0 flex-1 items-stretch gap-12 bg-transparent p-0 text-left enabled:active:scale-100 enabled:active:bg-white/3">
     <!-- The preview stays square: as tall as it is wide. -->
     <div class="relative w-104 shrink-0 overflow-hidden border-r border-line bg-panel">
@@ -93,7 +96,7 @@
     </div>
   </button>
   <button type="button" aria-haspopup="dialog" title={t("Map options")} aria-label={t("Options for {name}", { name })}
-    onclick={() => more(map, storage, preview ?? icons.map)}
+    onclick={() => more(record(), storage, preview ?? icons.map)}
     class="grid size-44 shrink-0 place-items-center self-center rounded-full bg-transparent text-muted hover:tint-neon-saved/12
       hover:text-neon-saved active:tint-neon-saved/12 active:text-neon-saved [&>svg]:size-20"><Icon svg={icons.more} /></button>
 </article>
