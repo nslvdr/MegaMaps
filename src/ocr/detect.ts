@@ -3,6 +3,7 @@ import type { MapRecord, ImportProgress } from "../types";
 import type { OcrLine } from "./index";
 import { ocrCrops, scanMap } from "./scan";
 import { saveOcr } from "../storage/ocr";
+import { OcrError, type OcrStage } from "./failure";
 
 export interface OcrRequest {
   map: MapRecord;
@@ -11,7 +12,7 @@ export interface OcrRequest {
 export type OcrReply =
   | { type: "progress"; fraction: number }
   | { type: "lines"; lines: OcrLine[] }
-  | { type: "error"; message: string };
+  | { type: "error"; name: string; message: string; stage: OcrStage };
 
 // Each worker peaks around 330 MB with its own models, so the pool stays small,
 // and smaller still on phones that report little memory. Safari reports none:
@@ -63,7 +64,7 @@ export async function detectMapText(
           worker.onmessage = ({ data: reply }: MessageEvent<OcrReply>) => {
             if (reply.type === "progress") onPart(reply.fraction);
             else if (reply.type === "lines") resolve(reply.lines);
-            else reject(new Error(reply.message));
+            else reject(new OcrError(reply.message, reply.name, reply.stage));
           };
           worker.onerror = () =>
             reject(
