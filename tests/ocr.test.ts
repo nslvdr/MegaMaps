@@ -29,6 +29,7 @@ import { configureRuntime, createTextDetector } from "../src/ocr/detector";
 import { createTextRecognizer } from "../src/ocr/recognizer";
 import { OcrTileCache, OCR_TILE_CACHE_BYTES } from "../src/ocr/tiles";
 import { regionPoint } from "../src/ocr/regions";
+import { missingOffline, staged, type OcrError } from "../src/ocr/failure";
 import { pathToFileURL } from "node:url";
 import {
   detectMapText,
@@ -282,6 +283,22 @@ test("search callouts and mask holes track pan, zoom, and rotation independently
   overlay.dispose();
 });
 
+test("scan failures keep the step they first failed at and its error's name", async () => {
+  const failed = staged(
+    "runtime",
+    staged("detector", Promise.reject(new TypeError("Load failed"))),
+  );
+  const error = await failed.catch((error: OcrError) => error);
+  assert.deepEqual(
+    [error.name, error.message, error.stage],
+    ["TypeError", "Load failed", "detector"],
+  );
+  assert.equal(missingOffline(error, false), true, "offline, the files never downloaded");
+  assert.equal(missingOffline(error, true), false, "online, the cause is unknown");
+  const scanning = await staged("scan", Promise.reject(new Error("Unexpected"))).catch((error: unknown) => error);
+  assert.equal(missingOffline(scanning, false), false, "scanning needs no download");
+});
+
 test("OCR workers share a map's sections, merge them in map order and stop together", async () => {
   const workers: FakeWorker[] = [];
   class FakeWorker {
@@ -333,8 +350,8 @@ test("OCR workers share a map's sections, merge them in map order and stop toget
   await assert.rejects(crashed, /unexpectedly/);
   workers.length = 0;
   const failed = detectMapText(wide, () => {}, new AbortController().signal);
-  workers[0]!.reply({ type: "error", message: "Dictionary is missing." });
-  await assert.rejects(failed, /Dictionary is missing/);
+  workers[0]!.reply({ type: "error", name: "TypeError", message: "Load failed", stage: "dictionary" });
+  await assert.rejects(failed, { name: "TypeError", message: "Load failed", stage: "dictionary" });
   assert.ok(workers.every((worker) => worker.terminated));
   assert.deepEqual(await loadOcr(map.id), index);
   workers.length = 0;

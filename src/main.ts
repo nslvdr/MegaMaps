@@ -20,6 +20,7 @@ import { lockPageZoom } from "./ui/page-zoom";
 import { loadOcr } from "./storage/ocr";
 import { needsOcr, type OcrIndex } from "./ocr/index";
 import { detectMapText, ocrWorkerCount } from "./ocr/detect";
+import { missingOffline, OcrError } from "./ocr/failure";
 import { ocrCrops } from "./ocr/scan";
 import { backupStatus, isBackupFile, restoreBackup, type Backup } from "./storage/backup";
 import { saveSetting } from "./storage/settings";
@@ -739,11 +740,14 @@ async function runOcr(
     channel?.postMessage("changed");
     return index;
   } catch (error) {
-    track("text_scanned", { ok: false, ...controller.signal.aborted ? { stopped: true } : { error: failure(error) } });
+    track("text_scanned", { ok: false, ...controller.signal.aborted ? { stopped: true }
+      : { error: failure(error), ...error instanceof OcrError ? { stage: error.stage } : {} } });
     // A full device fails the save at the end; rerunning wouldn't help until there's room.
     const message = controller.signal.aborted
       ? t("Text detection stopped. Rerun it in Advanced settings.")
       : error instanceof Error && error.name === "QuotaExceededError" ? errorMessage(error)
+      : missingOffline(error, navigator.onLine)
+        ? t("Text detection needs a connection to download its files first. Connect and rerun it in Advanced settings.")
       : t("Text detection failed. Rerun it in Advanced settings.");
     ocrErrors.set(map.id, message);
     if (currentMap?.id === map.id) controls?.updateOcr(previous, message);

@@ -565,6 +565,7 @@ export const fr = {
   "Tap × again to undo your changes": "Touchez encore × pour annuler vos modifications",
   "Text detection": "Détection de texte",
   "Text detection failed. Rerun it in Advanced settings.": "La détection de texte a échoué. Relancez-la dans les paramètres avancés.",
+  "Text detection needs a connection to download its files first. Connect and rerun it in Advanced settings.": "La détection de texte doit d’abord télécharger ses fichiers. Connectez-vous et relancez-la dans les paramètres avancés.",
   "Text detection has not run yet.": "La détection de texte n’a pas encore été lancée.",
   "Text detection has improved since this map was scanned. Scanning again runs on this device and can take a while on large maps.": "La détection de texte s’est améliorée depuis la lecture de cette carte. Une nouvelle lecture tourne sur cet appareil et peut prendre un moment sur les grandes cartes.",
   "Text detection reads the labels printed on the map so search can find them. It runs on this device and can take a while on large maps.": "La détection de texte lit les inscriptions de la carte pour que la recherche les trouve. Elle tourne sur cet appareil et peut prendre un moment sur les grandes cartes.",

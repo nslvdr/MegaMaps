@@ -11,7 +11,7 @@ export class OcrTileCache {
 
   constructor(
     private map: MapRecord,
-    private store: PayloadStore,
+    private store: Pick<PayloadStore, "get">,
     private signal: AbortSignal,
   ) {}
 
