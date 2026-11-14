@@ -17,10 +17,11 @@ test("counts follow each language's plural rule", () => {
   assert.equal(pluralIn("en", 2, "match"), "2 matches");
 });
 
-test("a browser's unreadable-file and full-storage errors read as advice, others as they are", () => {
+test("a browser's unreadable-file, full-storage and out-of-memory errors read as advice, others as they are", () => {
   const error = (name: string, message: string) => Object.assign(new Error(message), { name });
   assert.match(errorMessage(error("NotReadableError", "The requested file could not be read")), /cloud folder/);
   assert.match(errorMessage(new DOMException("The quota has been exceeded.", "QuotaExceededError")), /Not enough device storage/);
+  assert.match(errorMessage(error("UnknownError", "The operation failed for an unknown transient reason (e.g. out of memory).")), /ran out of memory or storage/);
   assert.equal(errorMessage(new Error("Choose a JPEG, PNG, or WebP image.")), "Choose a JPEG, PNG, or WebP image.");
   assert.equal(errorMessage("offline"), "offline");
 });

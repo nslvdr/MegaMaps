@@ -491,7 +491,21 @@ async function importFile(file: File) {
   if (await isShareFile(file).catch(() => false)) void receive.openImport(file);
   else if (await isBackupFile(file).catch(() => false))
     void settings.review(file).catch((error) => showError(t("Couldn’t read this backup"), error));
+  else if (/\.(megamap|megabackup)$/i.test(file.name)) rejectDamaged(file);
   else importImage(file);
+}
+// Named as a backup or shared map without its header: empty or cut short, often
+// by iCloud or a download. It's no image, so image advice would mislead.
+function rejectDamaged(file: File) {
+  const backup = /\.megabackup$/i.test(file.name);
+  track("map_imported", { ok: false, ...fileKind(file), error: `Damaged file: ${file.size} bytes` });
+  showMessage(backup ? t("Couldn’t read this backup") : t("Couldn’t import this map"), backup
+    ? t("This backup is damaged or incomplete, perhaps cut short while saving or downloading. Save or download it again, then try again.")
+    : t("This shared map is damaged or incomplete, perhaps cut short while saving or downloading. Save or download it again, then try again."));
+}
+// Which kinds of file people pick, to see what fails; the name itself is never sent.
+function fileKind(file: File) {
+  return { type: file.type || "none", extension: /\.(\w{1,10})$/.exec(file.name)?.[1]?.toLowerCase() ?? "none" };
 }
 // Desktop: a map or .megamap file dropped on the library imports like Import.
 // Anywhere else, a dropped file must not replace the app with the raw image.
@@ -520,8 +534,7 @@ function importImage(file: File) {
   const controller = importing;
   startProgress(t("Preparing map"), icons.map, t("Keep Mega Maps open while your map is prepared."), file.name, t("Reading image metadata…"));
   const started = Date.now();
-  // Which kinds of file people pick, to see what fails; the name itself is never sent.
-  const kind = { type: file.type || "none", extension: /\.(\w{1,10})$/.exec(file.name)?.[1]?.toLowerCase() ?? "none" };
+  const kind = fileKind(file);
   // The map opens once its tiles are saved; text detection waits for a yes.
   void mutate(() =>
     importMap(
