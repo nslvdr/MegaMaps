@@ -190,7 +190,11 @@ export function startStats(appVersion: string) {
   if (firstLaunch) track("app_installed");
   else if (updatedFrom && updatedFrom !== appVersion) track("app_updated", { from: updatedFrom });
   addEventListener("online", () => void sendStats());
-  addEventListener("error", (event) => reportError(event.error ?? event.message));
+  addEventListener("error", (event) => {
+    // Browsers flag a resize that settles a frame late, as when the map's set-up opens: nothing broke.
+    if (!event.error && event.message.includes("ResizeObserver loop")) return;
+    reportError(event.error ?? event.message);
+  });
   addEventListener("unhandledrejection", (event) => reportError(event.reason));
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
